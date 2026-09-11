@@ -1,0 +1,11 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+/.idea
+/.vscode
+/.fleet
+*.swp
+
+# Os projetos têm .gitignore próprio: backend/.gitignore e frontend/.gitignore
