@@ -92,6 +92,7 @@ export default async function BillingsPage({ searchParams }: PageProps) {
                     </Link>
                   </th>
                 ))}
+                <th scope="col" className="px-4 py-3 font-medium">Atualizado</th>
                 <th scope="col" className="px-4 py-3 font-medium">Status</th>
                 <th scope="col" className="px-4 py-3 text-right font-medium">Ações</th>
               </tr>
@@ -100,7 +101,7 @@ export default async function BillingsPage({ searchParams }: PageProps) {
             <tbody className="divide-y divide-slate-100">
               {billings.data.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                     Nenhuma cobrança encontrada com esses filtros.
                   </td>
                 </tr>
@@ -126,6 +127,16 @@ export default async function BillingsPage({ searchParams }: PageProps) {
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {formatCurrency(billing.original_amount)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-slate-900">
+                        {formatCurrency(billing.updated_amount)}
+                      </span>
+                      {Number(billing.interest_amount) > 0 ? (
+                        <span className="block text-xs text-red-700">
+                          + {formatCurrency(billing.interest_amount)} de juros
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       {billing.is_overdue ? (

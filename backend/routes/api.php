@@ -20,4 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('billings', BillingController::class)
         ->only(['index', 'store', 'show', 'update']);
+
+    Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
+        ->name('billings.pay');
 });

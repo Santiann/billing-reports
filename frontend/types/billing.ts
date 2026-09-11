@@ -17,6 +17,17 @@ export type Billing = {
   is_overdue: boolean;
   paid_amount: string | null;
   paid_interest_amount: string | null;
+  /**
+   * Juros e valor atualizado calculados no backend.
+   *
+   * Na listagem vêm do próprio SELECT (face SQL do InterestCalculator); numa
+   * cobrança isolada, da face PHP. Há teste no backend afirmando que os dois
+   * caminhos dão o mesmo número até o centavo.
+   *
+   * Para cobrança paga são os valores congelados, nunca recalculados.
+   */
+  interest_amount: string;
+  updated_amount: string;
   customer?: Customer;
 };
 

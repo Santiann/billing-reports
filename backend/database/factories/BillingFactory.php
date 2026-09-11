@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Billing\BillingStatus;
+use App\Domain\Billing\RegisterPayment;
 use App\Models\Billing;
 use App\Models\Customer;
 use Carbon\CarbonImmutable;
@@ -59,43 +60,57 @@ class BillingFactory extends Factory
         });
     }
 
-    /** Paga antes de vencer: juros zero, e o congelamento reflete isso. */
+    /**
+     * Paga antes de vencer: juros zero.
+     *
+     * O congelamento passa pelo RegisterPayment, o mesmo serviço que a API
+     * usa. Escrever os valores à mão aqui faria a factory virar uma segunda
+     * implementação da regra, e os testes passariam a validar a cópia em vez
+     * do original.
+     */
     public function paid(): static
     {
-        return $this->state(function (array $attributes) {
-            $dueDate = CarbonImmutable::now()->startOfDay()->subDays(10);
+        return $this->paidOn(fn (CarbonImmutable $dueDate) => $dueDate->subDays(2))
+            ->state(function () {
+                $dueDate = CarbonImmutable::now()->startOfDay()->subDays(10);
 
-            return [
-                'issue_date' => $dueDate->subDays(30),
-                'due_date' => $dueDate,
-                'payment_date' => $dueDate->subDays(2),
-                'status' => BillingStatus::Paid,
-                'paid_amount' => $attributes['original_amount'],
-                'paid_interest_amount' => '0.00',
-            ];
-        });
+                return [
+                    'issue_date' => $dueDate->subDays(30),
+                    'due_date' => $dueDate,
+                ];
+            });
+    }
+
+    /** Paga com atraso: os juros congelam na data do pagamento. */
+    public function paidLate(int $daysLate = 30): static
+    {
+        return $this->paidOn(fn (CarbonImmutable $dueDate) => $dueDate->addDays($daysLate))
+            ->state(function () use ($daysLate) {
+                $dueDate = CarbonImmutable::now()->startOfDay()->subDays($daysLate + 5);
+
+                return [
+                    'issue_date' => $dueDate->subDays(30),
+                    'due_date' => $dueDate,
+                ];
+            });
     }
 
     /**
-     * Paga com atraso: os juros congelaram na data do pagamento.
+     * Registra o pagamento depois da criação, pelo serviço de produção.
      *
-     * `paid_amount` e `paid_interest_amount` ficam nulos aqui de propósito.
-     * Preenchê-los exigiria repetir a fórmula de juros dentro da factory, e a
-     * regra tem uma fonte só — o InterestCalculator, que nasce na etapa
-     * `feat: add overdue interest calculation`. É lá que este state passa a
-     * gravar os valores congelados.
+     * Precisa ser `afterCreating`: o RegisterPayment opera sobre um model já
+     * persistido, e o cálculo dos juros depende do vencimento que só existe
+     * quando a linha foi gravada.
+     *
+     * @param  callable(CarbonImmutable): CarbonImmutable  $paymentDate
      */
-    public function paidLate(int $daysLate = 30): static
+    private function paidOn(callable $paymentDate): static
     {
-        return $this->state(function (array $attributes) use ($daysLate) {
-            $dueDate = CarbonImmutable::now()->startOfDay()->subDays($daysLate + 5);
-
-            return [
-                'issue_date' => $dueDate->subDays(30),
-                'due_date' => $dueDate,
-                'payment_date' => $dueDate->addDays($daysLate),
-                'status' => BillingStatus::Paid,
-            ];
+        return $this->afterCreating(function (Billing $billing) use ($paymentDate): void {
+            app(RegisterPayment::class)(
+                $billing,
+                $paymentDate(CarbonImmutable::parse($billing->due_date)),
+            );
         });
     }
 }

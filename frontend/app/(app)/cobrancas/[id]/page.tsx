@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PaymentForm } from "@/components/billings/payment-form";
 import { Feedback } from "@/components/ui/feedback";
 import { ApiError } from "@/lib/api";
 import { getBilling } from "@/lib/billings";
@@ -121,10 +122,56 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
           </dl>
         </section>
       ) : (
-        <p className="mt-6 text-sm text-slate-500">
-          O registro de pagamento e o valor atualizado com juros entram na
-          próxima etapa.
-        </p>
+        <>
+          <section className="mt-6">
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">
+              Valor atualizado
+            </h2>
+
+            {/* Calculado em tempo real: juros compostos sobre os dias de
+                atraso, nunca gravado no banco enquanto não há pagamento. */}
+            <dl className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-3">
+              <div className="bg-white px-4 py-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Valor original
+                </dt>
+                <dd className="mt-1 text-slate-900">
+                  {formatCurrency(billing.original_amount)}
+                </dd>
+              </div>
+              <div className="bg-white px-4 py-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Juros até hoje
+                </dt>
+                <dd
+                  className={
+                    Number(billing.interest_amount) > 0
+                      ? "mt-1 text-red-700"
+                      : "mt-1 text-slate-900"
+                  }
+                >
+                  {formatCurrency(billing.interest_amount)}
+                </dd>
+              </div>
+              <div className="bg-white px-4 py-3">
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Total atualizado
+                </dt>
+                <dd className="mt-1 font-medium text-slate-900">
+                  {formatCurrency(billing.updated_amount)}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+            <h2 className="mb-4 text-sm font-semibold text-slate-900">
+              Registrar pagamento
+            </h2>
+
+            <PaymentForm billing={billing} />
+          </section>
+        </>
       )}
     </div>
   );

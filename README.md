@@ -401,12 +401,22 @@ curinga à esquerda. Aceitável para a tela de CRUD; a alternativa de produção
 Medições preliminares contra a base de milhões, **antes** da etapa de índices.
 Ficam registradas porque são elas que justificam o que vem lá:
 
-| Observação | Medido |
+Base de **2.000.000 de cobranças**, banco sem escrita concorrente:
+
+| Consulta | Tempo |
 |---|---|
-| Carga da listagem `/cobrancas` | 5,3 min, com 504 do nginx |
-| `SELECT COUNT(*) FROM billings` | mais de 120s sob escrita concorrente |
+| `SELECT COUNT(*) FROM billings` | **26,8s** |
+| `ORDER BY due_date DESC LIMIT 15` (sem índice) | **3,5s** |
+| `COUNT(*) WHERE status = 'paid'` | 1,2s |
+| `ORDER BY id DESC LIMIT 15` (chave primária) | 0,4s |
+
+| Ambiente | |
+|---|---|
 | Tabela `billings` | 149 MB |
 | `innodb_buffer_pool_size` | 128 MB (default) |
+
+Sob carga de escrita concorrente os números pioram muito: a listagem chegou a
+5,3 minutos e recebeu 504 do nginx, e o `COUNT(*)` passou de 120s.
 
 Dois problemas distintos aparecem aqui.
 
@@ -421,6 +431,69 @@ da carga.
 
 Ambos são endereçados em `feat: add report indexes`, com medição antes e
 depois.
+
+---
+
+## Cálculo de juros
+
+Juros **compostos**:
+
+```
+valor_atualizado = valor_original x (1 + taxa_mensal) ^ (dias_atraso / 30)
+```
+
+Só acumula quem está **vencida e não paga**. Cobrança em dia tem juros zero;
+cobrança paga lê os valores congelados.
+
+### A regra tem uma fonte só, com duas faces
+
+`App\Domain\Billing\InterestCalculator` existe porque o relatório precisa
+**ordenar por valor atualizado** e **somar juros sobre o conjunto filtrado
+inteiro**. Se o cálculo vivesse só em PHP, qualquer uma dessas operações
+obrigaria a carregar o resultado inteiro em memória.
+
+| Face | Onde é usada |
+|---|---|
+| `updatedAmountSql()` / `interestAmountSql()` | `selectRaw` na listagem e nas agregações |
+| `for(Billing)` | exibição de uma cobrança isolada |
+
+Duas implementações da mesma regra divergem em silêncio. Por isso
+`InterestCalculatorTest` roda **a mesma matriz de 12 casos pelas duas faces** e
+afirma igualdade até o centavo — em dia, vencida por 1, 30, 281 e 400 dias,
+taxa zero, taxa alta, centavos quebrados, paga em dia e paga em atraso.
+
+### Duas armadilhas que o desenho precisou resolver
+
+**`travelTo()` não move o relógio do MySQL.** Se a face SQL usasse `CURDATE()`,
+o teste de consistência compararia PHP em tempo congelado contra SQL em tempo
+real e nunca fecharia. A data de referência desce do PHP como literal — gerada
+a partir de um Carbon, nunca vinda da requisição. É também o que permite
+calcular juros *na data do pagamento*, que é o que o congelamento exige.
+
+**Divisão em MySQL devolve DECIMAL, não double.** `400 / 30` vira `13.3333`,
+truncado em quatro casas, enquanto em PHP é `13.333333…`. Expoentes diferentes,
+`POW` diferente, faces divergentes.
+
+Isso não é teórico: um varrimento de 900 dias x 6 taxas x 3 valores encontrou
+**78 combinações** em que a truncagem muda o centavo. Uma delas está na matriz
+do teste — R$ 987.654,31 a 3,5% com 281 dias de atraso, onde DECIMAL dá
+`1363158.13` e double dá `1363158.14`. O `/ 30e0` do `compoundSql()` força a
+divisão a virar double, e removê-lo faz esse caso falhar.
+
+### Congelamento no pagamento
+
+`App\Domain\Billing\RegisterPayment` calcula os juros **na data do
+pagamento**, não em hoje: pagamento retroativo produz o valor daquele dia. A
+partir daí a cobrança para de acumular — o `InterestCalculator` devolve as
+colunas gravadas em vez de recalcular, nas duas faces.
+
+O valor efetivamente recebido pode diferir do calculado (acordo, desconto);
+quando não informado, assume-se o valor atualizado. Os juros calculados ficam
+registrados de qualquer forma.
+
+A factory usa **o mesmo serviço** nos states `paid()` e `paidLate()`. Escrever
+os valores congelados à mão na factory faria dela uma segunda implementação da
+regra, e os testes passariam a validar a cópia em vez do original.
 
 ---
 
