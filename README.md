@@ -542,7 +542,7 @@ Envolver a coluna em `DATE()` impede o MySQL de usar o índice, e o relatório �
 exatamente onde isso não pode acontecer. As colunas já são do tipo `DATE`, e a
 comparação é direta.
 
-### Medição contra 2.000.000 de cobranças, ainda sem índices
+### Medição contra 2.000.000 de cobranças, antes dos índices
 
 | Consulta | Tempo |
 |---|---|
@@ -564,7 +564,112 @@ type: ALL      key: NULL      rows: 1989965
 
 Com `customer_id` junto, a chave estrangeira entra e o plano muda para
 `type: ref`, `rows: 418`. Ou seja: o filtro por cliente já tem índice, o filtro
-por data não. É o que `feat: add report indexes` resolve.
+por data não. É o que a seção seguinte resolve.
+
+---
+
+## Índices
+
+Sete índices, cada um com a consulta que serve. O princípio é um só: **coluna
+de igualdade antes da coluna de range**. O MySQL percorre um índice composto da
+esquerda para a direita e para de usá-lo na primeira coluna de range — tudo
+depois dela vira filtro pós-leitura, não busca.
+
+| Índice | Consulta que serve |
+|---|---|
+| `(issue_date)` | `WHERE issue_date BETWEEN ? AND ?` |
+| `(due_date)` | `WHERE due_date BETWEEN ? AND ?` |
+| `(payment_date)` | `WHERE payment_date BETWEEN ? AND ?` |
+| `(customer_id, issue_date)` | `WHERE customer_id = ? AND issue_date BETWEEN ? AND ?` |
+| `(customer_id, due_date)` | `WHERE customer_id = ? AND due_date BETWEEN ? AND ?` |
+| `(customer_id, payment_date)` | `WHERE customer_id = ? AND payment_date BETWEEN ? AND ?` |
+| `(status, due_date)` | `WHERE status = ? AND due_date BETWEEN ? AND ?` e o filtro "vencida" |
+
+As três datas precisam de índices separados porque o usuário escolhe qual
+delas define o período, e o MySQL não usa um índice de `due_date` para filtrar
+`issue_date`. As variantes com `customer_id` à frente existem porque a chave
+estrangeira sozinha encontra as linhas do cliente e depois testa a data linha a
+linha; com o par, a data também vira busca.
+
+`ReportIndexTest` afirma que os sete existem **com as colunas na ordem certa** e
+que são aplicáveis às consultas. Sem esse teste, remover um índice degradaria o
+relatório em silêncio.
+
+### Planos de execução, antes e depois
+
+| Consulta | Antes | Depois |
+|---|---|---|
+| período por vencimento | `ALL` · sem chave · **1.989.965 linhas** | `range` · `due_date_index` · **107.694** |
+| cliente + período | `ref` · FK · 418 | `range` · `customer_due_date_index` · **15** |
+| vencidas | `ALL` | `range` · `status_due_date_index` · 994.525 |
+
+### Tempo de resposta do relatório
+
+| Recorte | Antes | Depois | |
+|---|---|---|---|
+| 1 mês + cliente | — | **0,24s** | |
+| 1 mês + vencidas | 4,21s | **1,09s** | −74% |
+| 1 mês, ordenado por valor atualizado | 3,46s | **1,84s** | −47% |
+| 1 mês | 3,80s | **2,2s** | −42% |
+| **1 ano** | **4,34s** | **6,2s** | **+43%** |
+
+### O recorte de um ano piorou, e isso é esperado
+
+Não é regressão a esconder: é o limiar de seletividade.
+
+Um índice de range é lido em ordem e, para cada entrada, faz um acesso
+aleatório à chave primária para buscar o resto da linha. Isso compensa enquanto
+o recorte é pequeno. O período de um ano tem **518.170 linhas, 26% da tabela** —
+acima do limiar, e meio milhão de acessos aleatórios custam mais do que uma
+leitura sequencial da tabela inteira.
+
+Medido isoladamente, sem o ruído da API:
+
+| Agregação | Com índice | Sem índice (`IGNORE INDEX`) |
+|---|---|---|
+| 1 mês (5% da tabela) | **0,96s** | 1,47s |
+| 1 ano (26% da tabela) | 2,43s | **2,32s** |
+
+O outro fator é que os totalizadores são inerentemente O(n): somar juros exige
+calcular `POW` para cada linha do conjunto filtrado. Nenhum índice evita isso —
+índice acha as linhas, não dispensa a conta.
+
+Mitigações de produção, não aplicadas aqui por estarem fora do escopo do teste:
+cache dos totalizadores por combinação de filtros, tabela de agregados
+atualizada por evento, ou particionamento da tabela por data.
+
+### Custo em disco
+
+| | Antes | Depois |
+|---|---|---|
+| Dados | 107 MB | 177 MB |
+| Índices | 43 MB | **322 MB** |
+
+Os índices passaram a pesar quase o dobro dos dados. Com `innodb_buffer_pool_size`
+no default de 128 MB, nada disso cabe em memória — dimensionar o pool para o
+conjunto de trabalho é a primeira coisa a fazer em produção.
+
+A migration levou **9min38s** para construir os sete índices sobre dois milhões
+de linhas. Num ambiente limpo ela roda sobre tabela vazia e é instantânea; o
+custo aparece depois, no seeder, que passa a manter sete índices a cada insert.
+
+### O rollback tinha um defeito
+
+O índice que a chave estrangeira usava era criado automaticamente pelo InnoDB.
+Quando os compostos com `customer_id` à esquerda apareceram, **o InnoDB o
+descartou por redundância** e passou a apoiar a constraint num deles.
+
+Consequência: derrubar os compostos no `down()` falhava com
+
+```
+SQLSTATE[HY000] 1553 Cannot drop index
+'billings_customer_payment_date_index': needed in a foreign key constraint
+```
+
+O `down()` recria o índice de `customer_id` **antes** de remover os compostos.
+Verificado rodando o ciclo completo num banco descartável: depois do rollback
+restam exatamente `PRIMARY` e `billings_customer_id_foreign`, o estado
+pré-migration.
 
 ---
 
