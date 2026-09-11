@@ -10,16 +10,20 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // O teste dispensa cadastro público de usuários, então o acesso ao
+        // sistema nasce daqui. Credenciais documentadas no README.
+        //
+        // firstOrCreate em vez de factory()->create() para o seeder poder
+        // rodar duas vezes sem estourar a unique do e-mail.
+        User::query()->firstOrCreate(
+            ['email' => 'admin@billing.test'],
+            [
+                'name' => 'Administrador',
+                'password' => 'password',
+                'email_verified_at' => now(),
+            ],
+        );
     }
 }

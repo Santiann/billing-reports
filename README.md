@@ -35,6 +35,18 @@ Para acompanhar o boot:
 docker compose logs -f
 ```
 
+Na primeira subida, crie o usuário de acesso (o teste dispensa cadastro
+público, então ele nasce do seeder):
+
+```bash
+docker compose exec php php artisan db:seed
+```
+
+| Credencial | Valor |
+|---|---|
+| E-mail | `admin@billing.test` |
+| Senha | `password` |
+
 Com os quatro serviços de pé:
 
 | | URL |
@@ -159,7 +171,80 @@ UID=$(id -u) GID=$(id -g) docker compose up -d --build
 
 ---
 
-## Decisões técnicas desta etapa
+## Autenticação
+
+Sanctum com token bearer no backend; no browser, **o token nunca aparece**.
+
+```
+browser                Next (servidor)              Laravel
+   |  POST /api/auth/login   |                          |
+   |------------------------>|  POST /api/auth/login    |
+   |                         |------------------------->|
+   |                         |<-- { token, user } ------|
+   |<-- { user } ------------|                          |
+   |    Set-Cookie: httpOnly |                          |
+```
+
+O `POST /api/auth/login` que o formulário chama é um **Route Handler do
+Next**, não o Laravel. Ele recebe o token Sanctum, grava num cookie `httpOnly`
+e devolve só o usuário. Consequências:
+
+- Não há token em `localStorage`, então um XSS não tem o que roubar.
+- O browser não consegue chamar a API do Laravel diretamente — não tem
+  credencial. Quem anexa o `Authorization: Bearer` é sempre o servidor.
+- Por isso as exportações de PDF e CSV também vão passar por Route Handler,
+  nas etapas de relatório.
+
+`middleware.ts` protege as rotas pela **presença** do cookie. Ele não valida o
+token: validar é trabalho do Laravel, em toda requisição de dado. Um cookie
+forjado não abre nada — a API responde 401 e o Server Component redireciona.
+
+### O cookie que sobrevive ao token
+
+Se o cookie existe mas o token não vale mais (revogado, expirado, forjado), o
+caminho ingênuo entra em loop: o middleware vê cookie e manda para `/`, o
+Server Component recebe 401 e manda para `/login`, o middleware vê cookie de
+novo e manda para `/`.
+
+Por isso existe `GET /api/auth/expire`: ele apaga o cookie e só então
+redireciona para o login. Está fora do `matcher` do middleware, então responde
+mesmo com sessão aparente. Verificado: a cadeia termina em dois saltos.
+
+### Códigos de resposta
+
+Credencial errada responde **401**, não 422. O payload é válido; o que falhou
+foi autenticar. E-mail inexistente e senha errada devolvem a **mesma**
+mensagem, para a resposta não revelar quais e-mails existem. Payload malformado
+(campo faltando) é que responde 422, com os erros por campo.
+
+---
+
+## Testes
+
+```bash
+docker compose exec php php artisan test
+```
+
+A suíte roda **dentro do container** porque roda em **MySQL**, não em SQLite.
+O skeleton do Laravel vem apontado para `sqlite/:memory:`, e isso seria um
+problema grave neste projeto: a regra central é que o valor atualizado de uma
+cobrança seja calculável em SQL, e o teste de consistência obrigatório compara
+a face SQL do `InterestCalculator` com a face PHP. Em SQLite ele estaria
+validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
+precisão de `DECIMAL` divergem.
+
+O banco da suíte é o `faturamento_test`, separado do de desenvolvimento porque
+`RefreshDatabase` derruba e recria o schema a cada execução. Ele é criado no
+first-init do MySQL por `docker/mysql/init/01-create-test-database.sql`. Em um
+volume que já existe, o init script não roda — aplique o arquivo à mão:
+
+```bash
+docker compose exec -T mysql mysql -u root -proot < docker/mysql/init/01-create-test-database.sql
+```
+
+---
+
+## Decisões técnicas
 
 **Nginx na frente do PHP-FPM, em vez de `artisan serve`.** O servidor embutido
 do Laravel é single-threaded e não representa nada do comportamento real sob
@@ -191,6 +276,15 @@ docker compose exec mysql mysql -u faturamento -psecret faturamento
 interface não precisa de design avançado, mas precisa ser responsiva e
 componentizada, e o utilitário resolve isso sem introduzir uma biblioteca de
 componentes que não foi pedida.
+
+**Sem rate limit no login.** Deixado de fora de propósito nesta entrega: o
+`throttle` do Laravel resolveria, mas escolher um limite que não deixe a
+própria suíte intermitente exige cuidado que não agrega ao que o teste avalia.
+Fica registrado como melhoria de produção, junto das demais.
+
+**`UserResource` em vez de devolver o model.** Define desde já o formato da
+resposta e evita que um campo novo na tabela vaze para a API sem alguém
+decidir. Mesmo padrão que clientes e cobranças vão seguir.
 
 **Credenciais em claro no `docker-compose.yml` e no `.env.example`.** É um
 ambiente de avaliação local, e o critério de aceite exige que subir não dependa

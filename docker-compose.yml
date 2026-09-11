@@ -22,6 +22,9 @@ services:
       MYSQL_PASSWORD: secret
     volumes:
       - mysql_data:/var/lib/mysql
+      # Cria o banco da suíte de testes no first-init. Só roda com o datadir
+      # vazio — num volume já existente, aplicar o .sql à mão.
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
     # O first-init do MySQL 8 cria o datadir do zero e, em disco lento
     # (WSL2/virtiofs), é brutalmente demorado: 10m20s medidos nesta máquina,
     # do "Initializing database files" ao "ready for connections" na 3306.
