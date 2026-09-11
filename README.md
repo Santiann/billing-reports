@@ -1,3 +1,204 @@
+# Gerador de Relatórios de Faturamento
+
+Aplicação de faturamento com autenticação e relatório de cobranças projetado
+para tabelas na casa dos milhões de registros.
+
+| | |
+|---|---|
+| **Backend** | PHP 8.3 + Laravel 13 (API REST) |
+| **Frontend** | Next.js 16 (App Router) + TypeScript |
+| **Banco** | MySQL 8 |
+| **Infra** | Docker + Docker Compose |
+
+O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-técnico--desenvolvedor-fullstack).
+
+---
+
+## Como executar
+
+Pré-requisito único: **Docker com Compose v2**. Não é preciso ter PHP, Node ou
+MySQL instalados.
+
+```bash
+git clone https://github.com/Santiann/billing-reports.git
+cd billing-reports
+git checkout joao-santian
+docker compose up -d
+```
+
+É só isso — não há `.env` para copiar nem `composer install` para rodar à mão.
+O entrypoint do backend resolve os dois (ver [Bootstrap automático](#bootstrap-automático-do-backend)).
+
+Para acompanhar o boot:
+
+```bash
+docker compose logs -f
+```
+
+Com os quatro serviços de pé:
+
+| | URL |
+|---|---|
+| API (Laravel, via nginx) | <http://localhost:8000> |
+| Aplicação (Next.js) | <http://localhost:3000> |
+
+Conferindo:
+
+```bash
+curl -s -o /dev/null -w 'laravel: %{http_code}\n' http://localhost:8000
+curl -s -o /dev/null -w 'next:    %{http_code}\n' http://localhost:3000
+docker compose ps
+```
+
+Derrubar preservando o banco:
+
+```bash
+docker compose down
+```
+
+Derrubar apagando o banco (volume nomeado `mysql_data`):
+
+```bash
+docker compose down -v
+```
+
+### O primeiro boot é lento, e isso é esperado
+
+O MySQL 8 cria o datadir do zero na primeira subida, e em disco lento — WSL2 e
+virtiofs, principalmente — isso é bem mais demorado do que se espera. Medição
+real nesta máquina: **10 minutos e 20 segundos** entre `Initializing database
+files` e `ready for connections` na porta 3306. Nesse intervalo o backend fica
+parado esperando o healthcheck, e é o comportamento correto.
+
+Por isso o healthcheck tem `start_period` de 900s. O primeiro valor que tentei,
+600s, falhou por 20 segundos e derrubou a subida inteira com
+`dependency failed to start: container mysql is unhealthy`.
+
+Falhas dentro do `start_period` não consomem retries, então a janela larga não
+custa nada nos boots seguintes: com o volume já populado, o healthcheck passa
+na primeira sonda e a stack sobe em segundos.
+
+A sonda é por TCP (`mysqladmin ping -h 127.0.0.1`) de propósito. Durante o init
+o MySQL levanta um servidor temporário com `port: 0`, sem rede — uma sonda por
+socket Unix reportaria "pronto" enquanto o banco ainda não aceita conexão
+nenhuma, e o backend tentaria migrar contra um servidor sem o usuário da
+aplicação.
+
+Se quiser acompanhar: `docker compose logs -f mysql`.
+
+---
+
+## Serviços
+
+```
+docker compose ps
+```
+
+| Serviço | Imagem / build | Porta no host | Papel |
+|---|---|---|---|
+| `mysql` | `mysql:8.0` | — | Banco. Volume nomeado `mysql_data`. |
+| `php` | `backend/Dockerfile` | — | PHP-FPM 8.3. Fala FastCGI na 9000. |
+| `backend` | `nginx:1.27-alpine` | **8000** | Serve o Laravel por HTTP. |
+| `frontend` | `frontend/Dockerfile` (target `dev`) | **3000** | Next.js em modo desenvolvimento. |
+
+### Por que o nginx se chama `backend` e o PHP se chama `php`
+
+Essa é a decisão menos óbvia do arquivo, então ela fica explícita.
+
+Dentro do Compose o Next tem duas origens de API e elas não são
+intercambiáveis:
+
+| Contexto | Base | Variável |
+|---|---|---|
+| Server Components, Route Handlers, middleware | `http://backend` | `API_URL_INTERNAL` |
+| Código executando no browser | `http://localhost:8000` | `NEXT_PUBLIC_API_URL` |
+
+O nome do serviço que atende `API_URL_INTERNAL` precisa ser o de **quem responde
+HTTP**. PHP-FPM não responde HTTP — ele fala FastCGI na porta 9000. Se o
+serviço php-fpm fosse chamado de `backend`, todo `fetch('http://backend/...')`
+de Server Component falharia, e falharia **só dentro do Docker**, que é a pior
+categoria de bug deste projeto.
+
+Chamar o nginx de `backend` mantém `API_URL_INTERNAL=http://backend`
+literalmente verdadeiro. Quem faz o trabalho de PHP se chama `php`.
+
+### Bootstrap automático do backend
+
+`vendor/` e `backend/.env` são gitignored, ou seja: num clone novo **nenhum dos
+dois existe**. Sem tratamento, `docker compose up -d` entregaria um Laravel
+quebrado e exigiria passos manuais — exatamente o que o teste proíbe.
+
+O `backend/docker/entrypoint.sh` cobre isso a cada subida, de forma idempotente:
+
+1. Se `vendor/autoload.php` não existe, roda `composer install`. O bind mount do
+   Compose cobre o `/var/www/html` da imagem, então o vendor do build fica
+   invisível de qualquer jeito — instalar no entrypoint é o que dispensa ter
+   composer na máquina de quem avalia.
+2. Se `.env` não existe, copia de `.env.example`.
+3. Se `APP_KEY` está vazia, roda `php artisan key:generate`.
+4. Garante `storage/` e `bootstrap/cache/` com dono `www-data`.
+5. Roda `php artisan migrate --force`, com até 10 tentativas.
+
+O passo 5 tem retentativa porque o healthcheck do MySQL pode passar durante a
+fase de init, antes de o usuário da aplicação existir — `depends_on:
+service_healthy` reduz a janela, não a elimina. E a migration é necessária já
+nesta etapa: o Laravel está configurado com `SESSION_DRIVER=database` e
+`CACHE_STORE=database`, então sem as tabelas qualquer rota web responde 500.
+
+### Permissões de arquivo
+
+O `backend/Dockerfile` aceita `UID`/`GID` como build args (default `1000`) e
+alinha o `www-data` a esses valores. É isso que permite ao Laravel escrever em
+`storage/` através do bind mount sem recorrer a `chmod 777`. Em Docker Desktop
+(macOS/Windows) o valor é irrelevante — o mount já traduz o dono. Em Linux com
+UID diferente de 1000:
+
+```bash
+UID=$(id -u) GID=$(id -g) docker compose up -d --build
+```
+
+---
+
+## Decisões técnicas desta etapa
+
+**Nginx na frente do PHP-FPM, em vez de `artisan serve`.** O servidor embutido
+do Laravel é single-threaded e não representa nada do comportamento real sob
+carga. Como o projeto tem requisito explícito de exportação em streaming, o
+`default.conf` desliga `fastcgi_buffering` — com o buffer ligado o nginx
+seguraria o CSV inteiro antes de mandar a primeira linha, anulando o
+`StreamedResponse`.
+
+**Dockerfile do frontend em multi-stage, com o Compose usando o target `dev`.**
+Os quatro stages são `deps` (npm ci), `dev` (HMR, usado pelo Compose), `build`
+(gera o bundle) e `runner` (imagem de produção). O `runner` depende de
+`output: "standalone"` no `next.config.ts`, que emite um `server.js` com apenas
+as dependências realmente usadas. O target de produção existe e é construível,
+mas não é o que o Compose sobe.
+
+**`node_modules` e `.next` em volume anônimo.** O bind mount `./frontend:/app`
+esconderia os do container, e os binários nativos (`@next/swc`,
+`lightningcss`) compilados para o host não são os do Alpine.
+
+**Porta do MySQL não publicada.** Nada no critério de aceite precisa dela, e
+publicá-la é a forma mais fácil de colidir com um MySQL já rodando na máquina
+de quem avalia. Para inspecionar o banco:
+
+```bash
+docker compose exec mysql mysql -u faturamento -psecret faturamento
+```
+
+**Tailwind CSS no frontend.** Veio no scaffold padrão do `create-next-app`. A
+interface não precisa de design avançado, mas precisa ser responsiva e
+componentizada, e o utilitário resolve isso sem introduzir uma biblioteca de
+componentes que não foi pedida.
+
+**Credenciais em claro no `docker-compose.yml` e no `.env.example`.** É um
+ambiente de avaliação local, e o critério de aceite exige que subir não dependa
+de preencher segredo nenhum. Os valores do serviço `mysql` espelham os de
+`backend/.env.example`; mudar um exige mudar o outro.
+
+---
+
 # Teste Técnico — Desenvolvedor Fullstack
 
 ## Objetivo

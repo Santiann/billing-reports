@@ -1,0 +1,92 @@
+name: gerador-de-relatorios
+
+# Nomeação dos serviços — decisão deliberada, ver README:
+#
+#   backend  = nginx  (é quem responde HTTP)
+#   php      = php-fpm (fala FastCGI na 9000, não HTTP)
+#
+# O CLAUDE.md fixa API_URL_INTERNAL=http://backend para Server Components. Se
+# "backend" fosse o php-fpm, esse fetch falharia — php-fpm não serve HTTP.
+# Chamar o nginx de "backend" mantém aquele contrato literalmente verdadeiro.
+
+services:
+  mysql:
+    image: mysql:8.0
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: faturamento
+      MYSQL_USER: faturamento
+      MYSQL_PASSWORD: secret
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # O first-init do MySQL 8 cria o datadir do zero e, em disco lento
+    # (WSL2/virtiofs), é brutalmente demorado: 10m20s medidos nesta máquina,
+    # do "Initializing database files" ao "ready for connections" na 3306.
+    # Daí a janela de 900s — 600s chegaram a falhar por 20 segundos aqui.
+    #
+    # Falhas dentro do start_period não consomem retries, então a janela larga
+    # não custa nada nos boots seguintes: com o volume já populado o
+    # healthcheck passa na primeira sonda.
+    #
+    # A sonda é por TCP de propósito. Durante o init o MySQL sobe um servidor
+    # temporário com `port: 0`, sem rede — uma sonda por socket daria "pronto"
+    # cedo demais e o backend tentaria migrar contra um banco ainda sem o
+    # usuário da aplicação.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      start_period: 900s
+      start_interval: 5s
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  php:
+    build:
+      context: ./backend
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  backend:
+    image: nginx:1.27-alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      # Dentro da rede do Compose o Next fala com o nginx pelo nome do serviço.
+      API_URL_INTERNAL: http://backend
+      # No browser, pela porta publicada no host.
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      # node_modules e .next ficam em volume anônimo: o bind mount acima
+      # esconderia os do container, e os binários nativos (@next/swc,
+      # lightningcss) do host não são os do Alpine.
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
