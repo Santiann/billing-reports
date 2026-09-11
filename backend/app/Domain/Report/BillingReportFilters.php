@@ -62,6 +62,25 @@ final class BillingReportFilters
         return $value !== null && in_array($value, $allowed, true) ? $value : null;
     }
 
+    public function dateFieldLabel(): string
+    {
+        return match ($this->dateField) {
+            'issue_date' => 'Data de emissão',
+            'payment_date' => 'Data de pagamento',
+            default => 'Data de vencimento',
+        };
+    }
+
+    public function statusLabel(): string
+    {
+        return match ($this->status) {
+            'pending' => 'Pendente',
+            'paid' => 'Paga',
+            'overdue' => 'Vencida',
+            default => 'Todos',
+        };
+    }
+
     /**
      * Eco para a tela e para o cabeçalho dos arquivos exportados.
      *

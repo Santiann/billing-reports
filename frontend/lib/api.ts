@@ -43,6 +43,27 @@ function resolveBaseUrl(): string {
   return base.replace(/\/$/, "");
 }
 
+/**
+ * Resposta crua da API, sem parse.
+ *
+ * Para downloads: o corpo é repassado ao browser como stream, e lê-lo inteiro
+ * para converter em JSON anularia o streaming que o backend implementa.
+ * Continua passando por aqui para a resolução de origem ficar num lugar só.
+ */
+export async function apiFetchRaw(
+  path: string,
+  { token, headers, ...init }: Omit<ApiFetchOptions, "body"> = {},
+): Promise<Response> {
+  return fetch(`${resolveBaseUrl()}${path}`, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    },
+    cache: "no-store",
+  });
+}
+
 export type ApiFetchOptions = Omit<RequestInit, "body"> & {
   /** Token Sanctum. Em Server Component vem do cookie httpOnly. */
   token?: string | null;

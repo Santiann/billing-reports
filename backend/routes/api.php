@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\BillingReportController;
+use App\Http\Controllers\Api\BillingReportCsvController;
 use App\Http\Controllers\Api\CustomerController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,4 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('reports/billings', BillingReportController::class)
         ->name('reports.billings');
+
+    Route::get('reports/billings/csv', BillingReportCsvController::class)
+        ->name('reports.billings.csv');
 });

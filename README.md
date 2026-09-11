@@ -673,6 +673,87 @@ pré-migration.
 
 ---
 
+## Exportação em CSV
+
+`GET /api/reports/billings/csv`, e no frontend o botão **Exportar CSV** da tela
+do relatório.
+
+O arquivo traz, nesta ordem: período selecionado e filtros aplicados no topo,
+o cabeçalho das colunas, as linhas, e os totalizadores no rodapé.
+
+### Streaming, e a prova de que é streaming
+
+`lazy()` percorrendo o resultado em blocos de mil, escrevendo linha a linha em
+`php://output` dentro de um `StreamedResponse`. O conjunto nunca existe inteiro
+em memória.
+
+Alegar isso é fácil; a medição contra a base de dois milhões:
+
+| | |
+|---|---|
+| Recorte | 1 mês — 56.680 cobranças |
+| **Tempo até o primeiro byte** | **0,88s** |
+| Tempo total | 55,6s |
+| Arquivo | 4,96 MB, 56.692 linhas |
+
+O primeiro byte sai em menos de um segundo enquanto o arquivo inteiro leva
+quase um minuto. Numa implementação que montasse o conjunto antes de responder,
+os dois números seriam iguais — é essa distância que prova o streaming.
+
+A memória confirma. Amostrada a cada 12 segundos durante uma exportação de três
+meses (~170 mil linhas):
+
+```
+antes    70,9 MB
+t+12s    80,3 MB      t+48s    80,3 MB
+t+24s    80,7 MB      t+60s    80,1 MB
+t+36s    80,3 MB      t+72s    80,6 MB
+```
+
+Plana. Acumular em array mostraria a curva subindo até o fim.
+
+### Onde o tempo é gasto
+
+Não é o `OFFSET` da paginação interna — medido, ele custa o mesmo em qualquer
+profundidade, porque o índice de período já restringe o conjunto:
+
+| | |
+|---|---|
+| `LIMIT 1000 OFFSET 0` | 0,34s |
+| `LIMIT 1000 OFFSET 55000` | 0,31s |
+
+Os 57 blocos somam cerca de 18s de banco. O restante é PHP: hidratar 56 mil
+models Eloquent e instanciar Carbon para cada data. Dá cerca de mil linhas por
+segundo.
+
+A otimização de produção seria ler linhas cruas com `DB::table()` e um join, em
+vez de models — troca-se a conveniência do domínio (o enum de status, o
+`isOverdue()`) por velocidade. Não foi feita aqui porque o requisito é não
+estourar memória, e isso está cumprido e medido.
+
+### Formato do arquivo
+
+Delimitador **ponto e vírgula** e decimais com vírgula, mais BOM UTF-8. Quem
+abre um relatório de faturamento abre no Excel em português, onde a vírgula é
+separador decimal e o ponto e vírgula é o delimitador esperado. Sem o BOM, o
+Excel lê UTF-8 como Latin-1 e os acentos viram lixo.
+
+É uma escolha pelo destinatário, não pelo parser: para consumo programático, o
+CSV padrão com vírgula seria melhor.
+
+### O download passa por Route Handler
+
+O browser não tem o token — ele vive num cookie `httpOnly` — então não consegue
+chamar o endpoint de exportação por conta própria. O Route Handler do Next
+anexa o `Bearer` e repassa o corpo.
+
+O corpo é repassado **sem ser lido**: `upstream.body` é um `ReadableStream`, e
+consumi-lo para reenviar depois guardaria o arquivo inteiro na memória do Next,
+anulando o streaming do backend. Verificado: o download pelo Next mantém o
+primeiro byte em 0,69s contra 2,38s de total.
+
+---
+
 ## Gerando volume para teste
 
 ```bash

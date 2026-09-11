@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ReportExport } from "@/components/reports/report-export";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { ReportTotalsPanel } from "@/components/reports/report-totals";
 import { Pagination } from "@/components/ui/pagination";
@@ -67,6 +68,10 @@ export default async function ReportPage({ searchParams }: PageProps) {
         <h1 className="text-xl font-semibold text-slate-900">
           Relatório de faturamento
         </h1>
+
+        {/* Os filtros vêm do backend, já normalizados: o arquivo sai com o
+            mesmo recorte que a tela está mostrando. */}
+        <ReportExport filters={report.filters} />
       </div>
 
       <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
