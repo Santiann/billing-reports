@@ -219,6 +219,85 @@ mensagem, para a resposta não revelar quais e-mails existem. Payload malformado
 
 ---
 
+## Modelagem
+
+### `customers`
+
+| Coluna | Tipo | Nota |
+|---|---|---|
+| `name` | varchar | indexado — a listagem ordena por nome |
+| `document` | varchar(14) **unique** | CPF/CNPJ só com dígitos, sem máscara |
+| `email` | varchar | |
+| `status` | varchar(20) | `active` / `inactive` |
+
+### `billings`
+
+| Coluna | Tipo | Nota |
+|---|---|---|
+| `customer_id` | FK **restrict** | cobrança é registro financeiro; apagar cliente não evapora histórico |
+| `original_amount` | decimal(12,2) | |
+| `monthly_interest_rate` | decimal(6,4) | fração: `0.0200` = 2% ao mês |
+| `issue_date` · `due_date` · `payment_date` | date | as três datas que podem definir o período do relatório |
+| `status` | varchar(20) | `pending` / `paid` |
+| `paid_amount` · `paid_interest_amount` | decimal(12,2) nulos | congelamento no ato do pagamento |
+
+### "Vencida" não é um status armazenado
+
+O enum gravado tem dois valores: `pending` e `paid`. Vencida é uma **condição
+derivável** — `status = 'pending' AND due_date < CURDATE()`.
+
+Armazenar "overdue" exigiria um job diário virando linhas de pendente para
+vencida. Entre duas execuções desse job a coluna estaria mentindo, e num
+relatório financeiro isso é pior do que o custo de derivar. A derivação é
+sempre correta, roda em SQL e é indexável pelo par `(status, due_date)`.
+
+### Por que DECIMAL e não FLOAT
+
+Dinheiro em ponto flutuante acumula erro de arredondamento. O relatório soma
+juros sobre o conjunto filtrado inteiro — milhões de linhas — e o erro cresce
+com o número de parcelas somadas. Os casts do Eloquent são `decimal`, que
+devolve **string**, não float: é proposital, e há teste afirmando que
+`1234.56` volta do banco como `'1234.56'`.
+
+### As colunas de congelamento
+
+`paid_amount` e `paid_interest_amount` são gravadas no momento do pagamento e
+nunca recalculadas. Sem elas, uma cobrança paga com atraso mudaria de valor a
+cada dia que passasse, porque o cálculo de juros é função da data atual.
+
+---
+
+## Gerando volume para teste
+
+```bash
+docker compose exec php php artisan db:seed --class=BillingVolumeSeeder
+```
+
+Gera 5.000 clientes e **2.000.000 de cobranças**, com emissão espalhada por
+três anos para o filtro de período ter o que recortar. Para uma amostra menor:
+
+```bash
+docker compose exec -e BILLING_SEED_COUNT=100000 php     php artisan db:seed --class=BillingVolumeSeeder
+```
+
+Ele não roda no `DatabaseSeeder` de propósito — são minutos de execução, e não
+é o que se quer a cada `db:seed`.
+
+**Insert em lote, não factory registro a registro.** A factory instancia um
+model, dispara eventos e faz um INSERT por linha; em dois milhões de cobranças
+a diferença não é percentual, é de ordem de grandeza. O seeder monta arrays
+crus e insere em blocos de 2.000, com o query log desligado — sem isso o
+Laravel acumula cada INSERT em memória e o processo morre antes do fim.
+
+O seeder **trunca as tabelas antes de começar**. Os documentos dos clientes são
+sequenciais para garantir unicidade sem consultar o banco, o que tornaria uma
+segunda execução impossível sobre os dados da primeira; e medir consulta sobre
+volume acumulado de execuções anteriores não diria nada.
+
+Medição nesta máquina: 100.000 cobranças em 53s.
+
+---
+
 ## Testes
 
 ```bash
