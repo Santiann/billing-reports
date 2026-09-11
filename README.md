@@ -497,6 +497,77 @@ regra, e os testes passariam a validar a cópia em vez do original.
 
 ---
 
+## Relatório de faturamento
+
+`GET /api/reports/billings`, tela em `/relatorio`.
+
+| Filtro | Valores |
+|---|---|
+| `date_field` | `issue_date` · `due_date` · `payment_date` |
+| `start_date` / `end_date` | o período, sobre a data escolhida acima |
+| `customer_id` | |
+| `status` | `pending` · `paid` · **`overdue`** |
+| `sort` | as cinco colunas, incluindo `updated_amount` |
+
+`overdue` não é status gravado: é a condição derivada `pendente + vencimento no
+passado`, e vem da mesma classe que calcula os juros — a regra tem uma fonte
+só, vista de dois ângulos.
+
+### Totalizadores vêm de consulta separada
+
+Quantidade, valor original, juros, valor atualizado, recebido e pendente saem
+de **uma consulta de agregação sobre o conjunto filtrado inteiro**, nunca da
+soma da página exibida. Na página 3 de um relatório de mil cobranças, somar a
+página daria um número sem significado.
+
+O teste monta 25 cobranças numa página de 10 e afirma que o total é 25, não 10.
+
+`rows()` e `totals()` partem do **mesmo objeto de filtros** — é isso que
+garante que o rodapé fale do mesmo conjunto que as linhas, e é o que as
+exportações vão reusar para produzir arquivo idêntico ao que está na tela.
+
+### Ordenar por valor atualizado
+
+É a razão de o cálculo existir em SQL. Com ele apenas em PHP, ordenar por valor
+atualizado obrigaria a carregar o conjunto inteiro em memória — que é o que o
+teste proíbe. Há teste com uma cobrança de valor original menor porém muito
+mais atrasada, afirmando que o valor atualizado inverte a ordem.
+
+A paginação tem desempate por `id`: sem ele, duas páginas podem repetir ou
+pular linhas quando há empate na coluna ordenada.
+
+### `whereDate()` não é usado
+
+Envolver a coluna em `DATE()` impede o MySQL de usar o índice, e o relatório é
+exatamente onde isso não pode acontecer. As colunas já são do tipo `DATE`, e a
+comparação é direta.
+
+### Medição contra 2.000.000 de cobranças, ainda sem índices
+
+| Consulta | Tempo |
+|---|---|
+| 1 mês por vencimento (56.680 cobranças) | 3,8s |
+| 1 mês ordenado por valor atualizado | 3,5s |
+| 1 mês + filtro de vencidas | 4,2s |
+| 1 ano | 4,3s |
+
+Um mês custa o mesmo que um ano, e isso é o diagnóstico: o custo não vem do
+tamanho do recorte, vem de varrer a tabela toda para encontrá-lo. O `EXPLAIN`
+confirma:
+
+```
+EXPLAIN SELECT COUNT(*) FROM billings
+WHERE due_date >= '2026-01-01' AND due_date <= '2026-01-31'
+
+type: ALL      key: NULL      rows: 1989965
+```
+
+Com `customer_id` junto, a chave estrangeira entra e o plano muda para
+`type: ref`, `rows: 418`. Ou seja: o filtro por cliente já tem índice, o filtro
+por data não. É o que `feat: add report indexes` resolve.
+
+---
+
 ## Gerando volume para teste
 
 ```bash

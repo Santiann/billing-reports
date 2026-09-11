@@ -105,6 +105,20 @@ final class InterestCalculator
         return "GREATEST(DATEDIFF('{$reference}', {$table}.due_date), 0)";
     }
 
+    /**
+     * "Vencida" em SQL: pendente com vencimento no passado.
+     *
+     * Mora aqui, junto do cálculo, porque é a mesma regra vista de outro
+     * ângulo — e pela mesma razão usa a data vinda do PHP, não CURDATE().
+     */
+    public function overdueSql(string $table = 'billings'): string
+    {
+        $reference = $this->referenceDate()->toDateString();
+
+        return "({$table}.status = '".BillingStatus::Pending->value."'"
+            ." AND {$table}.due_date < '{$reference}')";
+    }
+
     public function updatedAmountSql(string $table = 'billings'): string
     {
         return "CASE WHEN {$table}.status = '".BillingStatus::Paid->value."'"
