@@ -336,6 +336,94 @@ precisa sobreviver ao redirect que a Action faz depois de salvar.
 
 ---
 
+## Módulo de cobranças
+
+| Método | Rota | |
+|---|---|---|
+| `GET` | `/api/billings` | lista paginada, com filtro por cliente, status e descrição |
+| `POST` | `/api/billings` | cadastro |
+| `GET` | `/api/billings/{id}` | visualização |
+| `PUT` | `/api/billings/{id}` | edição |
+
+Telas em `/cobrancas`, `/cobrancas/nova`, `/cobrancas/{id}` e
+`/cobrancas/{id}/editar`.
+
+### Status e pagamento não são campos de formulário
+
+`status`, `payment_date`, `paid_amount` e `paid_interest_amount` **não estão**
+nas regras do FormRequest. Só o que passa por `rules()` chega em `validated()`,
+então enviá-los não tem efeito — há teste postando `status: paid` e afirmando
+que a cobrança nasce pendente.
+
+O motivo é integridade: aceitar `status = paid` no cadastro criaria uma
+cobrança paga **sem os valores congelados**, e esses valores não são
+recuperáveis depois, porque o cálculo é função da data em que o pagamento
+ocorreu. A transição para paga pertence ao registro de pagamento.
+
+Pela mesma razão, **cobrança paga não pode ser editada**: alterar valor ou taxa
+invalidaria `paid_amount` e `paid_interest_amount`. A API responde 422, e a
+tela de edição redireciona antes de servir um formulário que só falharia no
+envio.
+
+### N+1
+
+A listagem exibe o nome do cliente, e sem eager loading isso seria um `SELECT`
+por linha na serialização. O controller usa `with('customer')`, e o
+`BillingResource` usa `whenLoaded` — assim a chave some quando a relação não
+foi carregada, em vez de disparar consulta durante a serialização.
+
+Há teste que **conta as consultas**: cria dez cobranças de dez clientes
+distintos e afirma no máximo três queries (count da paginação, select das
+cobranças, select dos clientes). Sem eager loading seriam treze.
+
+### Seletor de cliente
+
+A base de teste tem cinco mil clientes, então um `<select>` com todos está
+fora. O formulário usa um combobox que busca conforme se digita, com debounce
+de 300 ms, através de um Route Handler — o browser não tem o token, então quem
+consulta a API é o servidor. O id selecionado viaja num input escondido, de
+modo que o formulário continua sendo um form comum e a Server Action não
+precisa saber que existe um combobox.
+
+### Ordenação default por `id desc`
+
+É a chave primária: ordenar por ela não custa filesort. As demais colunas de
+ordenação (`due_date`, `issue_date`, `original_amount`) ainda não têm índice
+nesta etapa — eles entram em `feat: add report indexes`, cada um documentado
+junto da consulta que serve.
+
+A busca por descrição usa `LIKE '%termo%'`, que não é indexável por ter
+curinga à esquerda. Aceitável para a tela de CRUD; a alternativa de produção é
+índice FULLTEXT, registrado na lista de melhorias.
+
+### Observações de performance, ainda sem índices
+
+Medições preliminares contra a base de milhões, **antes** da etapa de índices.
+Ficam registradas porque são elas que justificam o que vem lá:
+
+| Observação | Medido |
+|---|---|
+| Carga da listagem `/cobrancas` | 5,3 min, com 504 do nginx |
+| `SELECT COUNT(*) FROM billings` | mais de 120s sob escrita concorrente |
+| Tabela `billings` | 149 MB |
+| `innodb_buffer_pool_size` | 128 MB (default) |
+
+Dois problemas distintos aparecem aqui.
+
+O primeiro é o `COUNT(*)` que o `paginate()` do Laravel dispara **a cada
+requisição** para calcular `last_page`. Ele não depende do `LIMIT`: percorre o
+conjunto filtrado inteiro, toda vez.
+
+O segundo é que a tabela não cabe no buffer pool. Com 149 MB de dados e 128 MB
+de pool, cada varredura completa vai ao disco — e foi isso que derrubou a taxa
+de inserção do seeder de ~1.900 para ~150 linhas por segundo na segunda metade
+da carga.
+
+Ambos são endereçados em `feat: add report indexes`, com medição antes e
+depois.
+
+---
+
 ## Gerando volume para teste
 
 ```bash

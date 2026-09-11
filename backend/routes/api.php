@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\CustomerController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,5 +16,8 @@ Route::prefix('auth')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('customers', CustomerController::class)
+        ->only(['index', 'store', 'show', 'update']);
+
+    Route::apiResource('billings', BillingController::class)
         ->only(['index', 'store', 'show', 'update']);
 });

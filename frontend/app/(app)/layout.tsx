@@ -48,6 +48,12 @@ export default async function AppLayout({
               >
                 Clientes
               </Link>
+              <Link
+                href="/cobrancas"
+                className="text-slate-600 transition hover:text-slate-900"
+              >
+                Cobranças
+              </Link>
             </nav>
           </div>
 
