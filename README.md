@@ -267,6 +267,75 @@ cada dia que passasse, porque o cálculo de juros é função da data atual.
 
 ---
 
+## Módulo de clientes
+
+| Método | Rota | |
+|---|---|---|
+| `GET` | `/api/customers` | lista paginada, com busca, filtro e ordenação |
+| `POST` | `/api/customers` | cadastro |
+| `GET` | `/api/customers/{id}` | visualização |
+| `PUT` | `/api/customers/{id}` | edição |
+
+Telas correspondentes em `/clientes`, `/clientes/novo`, `/clientes/{id}` e
+`/clientes/{id}/editar`.
+
+**Filtro, ordenação e paginação acontecem no banco.** Em nenhum ponto o
+conjunto é carregado para ser recortado em memória — o Next repassa os
+parâmetros e recebe já a página.
+
+### Duas guardas que a API precisa ter
+
+`sort` é validado contra allowlist (`name`, `document`, `email`,
+`created_at`). Ele entra no `ORDER BY`, e aceitar o valor cru seria injeção.
+Valor fora da lista responde 422.
+
+`per_page` tem teto de 100. Sem isso, `?per_page=999999` derruba a API com uma
+única requisição.
+
+Há teste para as duas.
+
+### Busca
+
+Um campo só, que casa contra nome, e-mail e documento. O documento só entra na
+cláusula se o termo tiver dígitos: sem essa guarda, buscar por "Aurora" viraria
+`document LIKE '%'` e traria a tabela inteira. O casamento do documento é por
+prefixo, que usa o índice unique; nome e e-mail usam `LIKE %termo%`, aceitável
+porque a tabela de clientes é pequena — a de cobranças, que não é, tem
+tratamento próprio na etapa do relatório.
+
+### Documento sem máscara
+
+Chega da tela como `123.456.789-01` e é gravado como `12345678901`. Guardar o
+que foi digitado faria a busca depender do formato escolhido por quem cadastrou.
+A normalização é no `prepareForValidation()` do FormRequest, antes da regra de
+unicidade rodar — senão o mesmo CPF com e sem pontuação passaria como dois
+clientes distintos.
+
+### Server Actions para as mutações
+
+Cadastro e edição usam **Server Actions**, não Route Handlers. O motivo é o
+mesmo do login: o browser não tem o token, então quem fala com o Laravel é o
+servidor. A Action lê o cookie httpOnly, anexa o `Bearer`, e devolve os erros
+de validação campo a campo para o formulário exibir — em vez de virarem uma
+mensagem genérica.
+
+Route Handler continua sendo a escolha onde o browser precisa de uma URL para
+navegar ou baixar: login, logout e, nas etapas de relatório, as exportações.
+
+Os filtros vivem na **URL**, não em estado de componente: a página fica
+compartilhável, sobrevive ao refresh, e o Server Component monta a consulta já
+filtrada. A confirmação de sucesso também vem por parâmetro de URL, porque
+precisa sobreviver ao redirect que a Action faz depois de salvar.
+
+### Mensagens de validação em português
+
+`lang/pt_BR/validation.php` cobre as regras efetivamente usadas, com
+`attributes` traduzindo os nomes de campo. Sem isso a tela misturaria
+"The name field is required." com as mensagens customizadas em português.
+`APP_LOCALE=pt_BR`.
+
+---
+
 ## Gerando volume para teste
 
 ```bash
