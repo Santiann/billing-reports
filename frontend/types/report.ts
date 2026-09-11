@@ -25,9 +25,19 @@ export type ReportFilters = {
   direction: "asc" | "desc";
 };
 
+/**
+ * O backend informa o teto do PDF e se o recorte atual cabe nele, para a tela
+ * avisar antes do clique em vez de mandar o usuário bater num 422.
+ */
+export type ReportExportInfo = {
+  pdf_max_rows: number;
+  pdf_available: boolean;
+};
+
 export type BillingReport = Paginated<Billing> & {
   totals: ReportTotals;
   filters: ReportFilters;
+  export: ReportExportInfo;
 };
 
 export const DATE_FIELDS: ReadonlyArray<{

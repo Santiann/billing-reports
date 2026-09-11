@@ -18,6 +18,9 @@ RUN apk add --no-cache git unzip shadow \
     && groupmod -o -g "${GID}" www-data \
     && usermod -o -u "${UID}" -g "${GID}" www-data
 
+# Ajustes de memória e tempo para a geração de PDF — ver o arquivo.
+COPY docker/php/app.ini /usr/local/etc/php/conf.d/app.ini
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 ENV COMPOSER_HOME=/tmp/composer
 ENV COMPOSER_ALLOW_SUPERUSER=1

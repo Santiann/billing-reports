@@ -1,14 +1,24 @@
-import type { ReportFilters } from "@/types/report";
+import type { ReportExportInfo, ReportFilters } from "@/types/report";
+
+type ReportExportProps = {
+  filters: ReportFilters;
+  info: ReportExportInfo;
+  count: number;
+};
 
 /**
  * Links de exportação.
  *
  * São âncoras comuns apontando para os Route Handlers do próprio Next: a
  * navegação do browser dispara o download, e o token é anexado no servidor.
- * Os filtros da tela viajam na query string, então o arquivo sai com o mesmo
- * recorte que está sendo exibido.
+ * Os filtros viajam na query string, então o arquivo sai com o mesmo recorte
+ * que está na tela.
+ *
+ * O PDF tem teto e o CSV não. Quando o recorte passa do teto, o botão vira
+ * texto explicativo apontando o CSV — avisar antes é melhor do que deixar o
+ * usuário clicar e receber um 422.
  */
-export function ReportExport({ filters }: { filters: ReportFilters }) {
+export function ReportExport({ filters, info, count }: ReportExportProps) {
   const params = new URLSearchParams();
 
   for (const [key, value] of Object.entries(filters)) {
@@ -19,12 +29,27 @@ export function ReportExport({ filters }: { filters: ReportFilters }) {
 
   const query = params.toString();
 
+  const buttonClass =
+    "rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
+
   return (
-    <div className="flex items-center gap-2">
-      <a
-        href={`/api/reports/billings/csv?${query}`}
-        className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-      >
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {info.pdf_available ? (
+        <a href={`/api/reports/billings/pdf?${query}`} className={buttonClass}>
+          Exportar PDF
+        </a>
+      ) : (
+        <span
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+          role="status"
+        >
+          PDF indisponível: {count.toLocaleString("pt-BR")} cobranças acima do
+          teto de {info.pdf_max_rows.toLocaleString("pt-BR")}. Use o CSV, que
+          não tem limite.
+        </span>
+      )}
+
+      <a href={`/api/reports/billings/csv?${query}`} className={buttonClass}>
         Exportar CSV
       </a>
     </div>

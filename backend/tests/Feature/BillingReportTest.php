@@ -272,6 +272,26 @@ class BillingReportTest extends TestCase
         $this->assertSame('paid', $response->json('filters.status'));
     }
 
+    public function test_resposta_informa_se_o_pdf_cabe_no_teto(): void
+    {
+        $this->actingAsUser();
+        config(['reports.pdf_max_rows' => 3]);
+
+        \App\Models\Billing::factory()->count(2)->create();
+        $this->getJson('/api/reports/billings')
+            ->assertOk()
+            ->assertJsonPath('export.pdf_available', true)
+            ->assertJsonPath('export.pdf_max_rows', 3);
+
+        \App\Models\Billing::factory()->count(2)->create();
+
+        // A tela usa isto para desabilitar o botão antes do clique, em vez de
+        // mandar o usuário bater num 422.
+        $this->getJson('/api/reports/billings')
+            ->assertOk()
+            ->assertJsonPath('export.pdf_available', false);
+    }
+
     public function test_listagem_nao_faz_consulta_n_mais_um(): void
     {
         $this->actingAsUser();

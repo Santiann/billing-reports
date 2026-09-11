@@ -71,7 +71,11 @@ export default async function ReportPage({ searchParams }: PageProps) {
 
         {/* Os filtros vêm do backend, já normalizados: o arquivo sai com o
             mesmo recorte que a tela está mostrando. */}
-        <ReportExport filters={report.filters} />
+        <ReportExport
+          filters={report.filters}
+          info={report.export}
+          count={report.totals.count}
+        />
       </div>
 
       <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">

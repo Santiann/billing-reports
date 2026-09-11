@@ -754,6 +754,78 @@ primeiro byte em 0,69s contra 2,38s de total.
 
 ---
 
+## Exportação em PDF
+
+`GET /api/reports/billings/pdf`, e o botão **Exportar PDF** na tela do
+relatório. Mesmo conteúdo do CSV: período e filtros no cabeçalho, as linhas, e
+os totalizadores.
+
+Biblioteca: **`barryvdh/laravel-dompdf`**. PHP puro, sem binário externo — o
+que evita embarcar um Chrome no container, como exigiria a alternativa baseada
+em Browsershot.
+
+### O PDF tem teto, e o teto saiu de medição
+
+Diferente do CSV, aqui **não existe streaming**, e isso é da natureza do
+formato: um PDF precisa ser paginado e montado inteiro antes de existir, porque
+não há como emitir a página 1 sem saber quantas páginas haverá.
+
+O plano inicial deste projeto previa teto de 5.000 linhas. **Ele não sobreviveu
+à medição.** Consumo real do dompdf neste relatório, com nove colunas:
+
+| Linhas | Pico de memória | Tempo | PDF gerado |
+|---|---|---|---|
+| 500 | 184 MB | 9,6s | 926 KB |
+| 1.000 | 420 MB | 17,9s | 994 KB |
+| 2.000 | 1.164 MB | 56,5s | 1.131 KB |
+| 3.500 | 2.965 MB | 210,0s | 1.337 KB |
+| 5.000 | **estourou 3 GB** | — | — |
+
+O crescimento é **superlinear**: dobrar as linhas quase triplica a memória. A
+causa é estrutural — o dompdf constrói uma árvore de frames e um *cellmap* da
+tabela inteira antes de paginar, então uma tabela de 5.000 linhas por 9 colunas
+vira 45.000 células como objetos vivos simultaneamente.
+
+Decisões que saíram daí:
+
+- **`pdf_max_rows` é 1.000**, não 5.000. É o maior valor que cabe com folga.
+- **`memory_limit` é 512M** e `max_execution_time` é 120s, em
+  `backend/docker/php/app.ini`. O default de 128M derrubava a geração com 1.810
+  linhas, e o de 30s a derrubava antes mesmo da memória acabar.
+
+Acima do teto a resposta é **422**, com uma mensagem que diz o que fazer:
+
+```json
+{
+  "message": "O relatório tem 1.810 cobranças e o limite do PDF é 1.000. Use a exportação em CSV, que não tem limite.",
+  "count": 1810,
+  "limit": 1000
+}
+```
+
+A contagem vem da consulta de agregação, então **nenhuma linha é carregada para
+descobrir que são linhas demais** — e os mesmos totais são reaproveitados no
+rodapé do documento, sem consulta extra.
+
+A tela não deixa o usuário descobrir isso batendo num erro: o relatório informa
+`export.pdf_available`, e o botão vira um aviso apontando o CSV quando o
+recorte não cabe.
+
+Se o PDF em volume fosse requisito real, o caminho seria trocar o renderizador
+por um que escreva página a página — `FPDF` ou `TCPDF` emitem linhas
+incrementalmente e não montam a árvore inteira. Ficaria mais feio e mais
+trabalhoso de estilizar, o que é a troca certa quando o volume manda.
+
+### Testes
+
+Nenhuma asserção sobre o binário: o conteúdo de um PDF gerado não é estável
+nem legível, e testar bytes seria teste que quebra sozinho. O que se afirma é o
+status, o `Content-Type`, a assinatura `%PDF-`, e sobretudo o comportamento do
+teto — inclusive que ele considera o **conjunto filtrado** e não o tamanho da
+tabela, senão a exportação seria inútil em qualquer base real.
+
+---
+
 ## Gerando volume para teste
 
 ```bash
