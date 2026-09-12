@@ -29,13 +29,15 @@ return new class extends Migration
             $table->date('due_date');
             $table->date('payment_date')->nullable();
 
-            // Apenas 'pending' e 'paid'.
+            // "Vencida" NÃO é status armazenado: é derivável de
+            // status = 'pending' AND due_date < a data de referência.
+            // Guardá-la exigiria um job diário virando linhas de pendente
+            // para vencida, e entre duas execuções a coluna estaria mentindo.
+            // Derivar é sempre correto e não custa escrita.
             //
-            // "Vencida" NÃO é status armazenado: é derivável em SQL com
-            // status = 'pending' AND due_date < CURDATE(). Guardá-la exigiria
-            // um job diário virando linhas de pendente para vencida, e entre
-            // duas execuções a coluna estaria mentindo. Derivar é sempre
-            // correto e não custa escrita.
+            // A data de referência desce do PHP, e não de CURDATE(): o relógio
+            // do MySQL não se move com travelTo(), e o teste de consistência
+            // nunca fecharia. Ver InterestCalculator::overdueSql().
             $table->string('status', 20)->default('pending');
 
             // Congelamento no ato do pagamento.

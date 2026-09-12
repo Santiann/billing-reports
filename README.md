@@ -315,7 +315,9 @@ mensagem, para a resposta não revelar quais e-mails existem. Payload malformado
 ### "Vencida" não é um status armazenado
 
 O enum gravado tem dois valores: `pending` e `paid`. Vencida é uma **condição
-derivável** — `status = 'pending' AND due_date < CURDATE()`.
+derivável** — `status = 'pending' AND due_date < ?`, com a data de referência
+descendo do PHP e não vindo de `CURDATE()` (o porquê está em
+[armadilhas do cálculo](#três-armadilhas-que-o-desenho-precisou-resolver)).
 
 Armazenar "overdue" exigiria um job diário virando linhas de pendente para
 vencida. Entre duas execuções desse job a coluna estaria mentindo, e num
@@ -1142,6 +1144,36 @@ mais — o custo não se paga.
 ---
 
 ## Decisões técnicas
+
+**Comentário responde POR QUE, nunca O QUE.** O código diz o que faz; quem lê
+consegue ler. O que não se recupera lendo é a alternativa que foi descartada, o
+número que decidiu um limite, ou a armadilha que já custou uma tarde. Por isso
+os comentários deste repositório são longos onde a decisão foi difícil —
+`InterestCalculator`, a migration dos índices, o teto do PDF — e ausentes onde o
+código é óbvio.
+
+A varredura que fechou a etapa passou por todos os comentários do backend, do
+frontend e dos testes. O que saiu foi boilerplate do skeleton do Laravel, que
+repetia a assinatura do método em inglês:
+
+```php
+/**
+ * Run the migrations.          <- o método se chama up()
+ */
+/**
+ * Define the model's default state.    <- o método se chama definition()
+ */
+```
+
+Junto saíram os `//` de corpo vazio e um `use` comentado que o skeleton deixa no
+`User`. Cinquenta e uma linhas, nenhuma delas com informação.
+
+Um comentário não foi removido, foi **corrigido**, e ele valia mais que todos os
+outros juntos: a migration de `billings` dizia que "vencida" se deriva com
+`due_date < CURDATE()`. É exatamente a função que a arquitetura deste projeto
+proíbe — a data de referência desce do PHP, senão o teste de consistência nunca
+fecha. Comentário errado é pior que comentário verboso: o verboso se ignora, o
+errado se acredita.
 
 **Nginx na frente do PHP-FPM, em vez de `artisan serve`.** O servidor embutido
 do Laravel é single-threaded e não representa nada do comportamento real sob
