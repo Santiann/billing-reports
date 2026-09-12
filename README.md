@@ -15,7 +15,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | | |
 |---|---|
 | **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
-| **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) |
+| **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
 | **Decisões** | [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
@@ -287,6 +287,68 @@ Credencial errada responde **401**, não 422. O payload é válido; o que falhou
 foi autenticar. E-mail inexistente e senha errada devolvem a **mesma**
 mensagem, para a resposta não revelar quais e-mails existem. Payload malformado
 (campo faltando) é que responde 422, com os erros por campo.
+
+---
+
+## Documentação da API
+
+A especificação vive em [`backend/resources/openapi.yaml`](backend/resources/openapi.yaml)
+— **OpenAPI 3.1**, escrita à mão, cobrindo os 15 endpoints com parâmetros,
+respostas, exemplos e os códigos de erro.
+
+### O que impede a spec de apodrecer
+
+Documentação de API escrita à mão apodrece em silêncio: alguém acrescenta um
+endpoint, esquece do arquivo, e a partir dali a spec descreve um sistema que não
+existe mais. Ninguém percebe, porque nada quebra.
+
+`OpenApiSpecTest` remove esse silêncio comparando a spec com o roteador do
+Laravel **nas duas direções**:
+
+| Situação | Resultado |
+|---|---|
+| Rota registrada sem entrada na spec | falha — documentação incompleta |
+| Entrada na spec sem rota registrada | falha — documentação fantasma |
+
+As rotas que ficam de fora de propósito — `/up`, `sanctum/csrf-cookie`, o
+servidor de arquivos do disco público e a raiz — estão numa lista explícita, com
+o motivo de cada uma. A lista existe justamente para que uma rota nova não
+escape por omissão: se aparecer uma que não está nem na spec nem na lista, o
+teste falha e alguém precisa decidir.
+
+O teste ainda cobra quatro coisas que separam documentação de índice:
+
+- toda operação tem `summary`, `tags` e respostas declaradas;
+- toda operação autenticada documenta o **401** — é a resposta mais provável de
+  quem experimenta a API pela primeira vez, e a que mais confunde sem
+  explicação;
+- toda resposta de sucesso em JSON traz **exemplo**;
+- o **422 do teto do PDF** está documentado, e o limite do exemplo é comparado
+  com `config/reports.php` — se o teto mudar e a spec não, o teste acusa.
+
+### Decisões
+
+**YAML e não JSON**, com `symfony/yaml` para o teste conseguir ler. JSON não
+precisaria de dependência nenhuma, mas a spec é um documento que alguém vai
+abrir e ler: YAML aceita comentário, e o arquivo começa explicando por que ele é
+verificado por teste. A dependência é pequena, é da Symfony e já convive com o
+Laravel.
+
+**Escrita à mão e não gerada do código.** Um gerador por anotação (Scramble,
+L5-Swagger) produziria a spec a partir dos controllers, e ela nunca divergiria —
+mas também nunca diria mais do que o código já diz. A parte útil desta
+documentação é a que o código não tem: por que cobrança paga é imutável, por que
+o dinheiro trafega como string, por que o PDF tem teto e o CSV não. O teste
+cobre a divergência; o texto cobre o resto.
+
+**Exemplos tirados de chamadas reais.** Todo exemplo da spec saiu de uma
+resposta de verdade da API, com os valores de juros conferidos contra o
+`InterestCalculator` — R$ 1.500,00 a 2% ao mês com 30 dias de atraso dá
+`1500 * 1,02 = 1530,00`. Exemplo inventado é a primeira coisa que fica errada.
+
+A spec foi validada com `npx @redocly/cli lint`: **válida**, com dois avisos
+aceitos de propósito — não declarar licença, e apontar o servidor para
+`localhost`, que neste projeto é o servidor certo.
 
 ---
 

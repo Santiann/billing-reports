@@ -1,0 +1,1471 @@
+# Especificação da API — OpenAPI 3.1
+#
+# Este arquivo é escrito à mão e verificado por teste. `OpenApiSpecTest` compara
+# as operações daqui com as rotas registradas no Laravel nas DUAS direções: rota
+# sem entrada falha, e entrada sem rota também. Documentação de API à mão
+# apodrece em silêncio, e é esse silêncio que o teste remove.
+#
+# Os exemplos não foram inventados: saíram de chamadas reais à API, com os
+# valores conferidos contra o InterestCalculator.
+
+openapi: 3.1.0
+
+info:
+  title: Gerador de Relatórios — API de faturamento
+  version: "1.0.0"
+  summary: Cobranças, clientes e relatório com juros compostos sobre atraso.
+  description: |
+    API REST do gerador de relatórios de faturamento. Cobre cadastro de clientes, cadastro e
+    pagamento de cobranças, e o relatório de faturamento com exportação.
+
+    ## Autenticação
+
+    Token Sanctum no cabeçalho `Authorization: Bearer <token>`, obtido em
+    `POST /api/auth/login`. Todas as rotas exigem o token, exceto o próprio
+    login.
+
+    Na aplicação web o token nunca chega ao browser: ele é guardado num cookie
+    httpOnly pelo Next.js, que fala com esta API a partir do servidor.
+
+    ## A regra de juros
+
+    Cobrança vencida e não paga acumula **juros compostos**:
+
+        valor_atualizado = valor_original * (1 + taxa_mensal) ^ (dias_atraso / 30)
+
+    Três consequências aparecem nas respostas:
+
+    - `interest_amount` e `updated_amount` vêm calculados do backend em toda
+      listagem e em toda cobrança isolada, sempre pela mesma regra.
+    - Cobrança **paga não acumula juros**. Os juros congelam na data do
+      pagamento, e `paid_amount` e `paid_interest_amount` guardam o valor
+      daquele dia — nunca um recálculo.
+    - "Vencida" não é status gravado: é `status = pending` com vencimento no
+      passado, e chega como o booleano `is_overdue`.
+
+    ## Valores monetários são string
+
+    Todo campo de dinheiro trafega como string decimal (`"1534.05"`), não como
+    número. Em JSON, número é ponto flutuante de dupla precisão, e o relatório
+    soma milhões de linhas: o centavo se perde na serialização antes mesmo de
+    chegar na tela.
+  contact:
+    name: João Santian
+    email: joaosantian1@gmail.com
+
+servers:
+  - url: http://localhost:8000
+    description: Ambiente do Docker Compose
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Autenticação
+    description: Login, logout e sessão corrente.
+  - name: Clientes
+    description: Cadastro de clientes. Documento é CPF ou CNPJ, só dígitos.
+  - name: Cobranças
+    description: Cadastro, edição e registro de pagamento.
+  - name: Relatório
+    description: |
+      Relatório de faturamento por período, com totalizadores sobre o conjunto
+      filtrado inteiro — nunca sobre a página exibida — e exportação em CSV e
+      PDF.
+
+paths:
+  # ----------------------------------------------------------------- auth ---
+
+  /api/auth/login:
+    post:
+      tags: [Autenticação]
+      summary: Autentica e devolve um token
+      description: |
+        Credenciais erradas respondem **401**, não 422: o payload é válido, o
+        que falhou foi a autenticação. A mensagem é a mesma para e-mail
+        inexistente e senha errada, para não revelar quais e-mails existem.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+            example:
+              email: admin@billing.test
+              password: password
+      responses:
+        200:
+          description: Token emitido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+              example:
+                token: 25|0NzEwjqYpQAmZcW1dg8kLjLaJ5dEtjBLGdq4AqpL9ff06cb3
+                user:
+                  id: 1
+                  name: Administrador
+                  email: admin@billing.test
+        401:
+          description: Credenciais inválidas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+              example:
+                message: Credenciais inválidas.
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+  /api/auth/logout:
+    post:
+      tags: [Autenticação]
+      summary: Revoga o token da sessão corrente
+      description: |
+        Revoga apenas o token usado nesta chamada. Os outros tokens do mesmo
+        usuário continuam valendo — sair no navegador não derruba o celular.
+      operationId: logout
+      responses:
+        200:
+          description: Sessão encerrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+              example:
+                message: Sessão encerrada.
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+
+  /api/auth/me:
+    get:
+      tags: [Autenticação]
+      summary: Devolve o usuário do token
+      description: |
+        Usada pelo layout autenticado do frontend para confirmar que o cookie
+        ainda corresponde a um token válido. O middleware do Next só olha a
+        presença do cookie; quem confirma que ele vale é esta rota.
+      operationId: me
+      responses:
+        200:
+          description: Usuário autenticado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+              example:
+                user:
+                  id: 1
+                  name: Administrador
+                  email: admin@billing.test
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+
+  # ------------------------------------------------------------- clientes ---
+
+  /api/customers:
+    get:
+      tags: [Clientes]
+      summary: Lista clientes
+      description: |
+        Busca, filtro, ordenação e paginação acontecem **no banco**. O termo de
+        busca casa nome e e-mail por `LIKE`, e casa documento apenas se o termo
+        tiver dígitos — sem essa guarda, um termo textual viraria
+        `document LIKE '%'` e traria a tabela inteira.
+      operationId: listarClientes
+      parameters:
+        - name: search
+          in: query
+          description: Nome, e-mail ou documento.
+          schema:
+            type: string
+            maxLength: 255
+          example: silva
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/StatusDoCliente'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, document, email, status, created_at]
+            default: name
+        - name: direction
+          in: query
+          schema:
+            $ref: '#/components/schemas/Direcao'
+        - name: per_page
+          in: query
+          description: Teto de 100. Sem teto, `per_page=999999` derrubaria a API.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        200:
+          description: Página de clientes.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Customer'
+                  - $ref: '#/components/schemas/Paginacao'
+              example:
+                data:
+                  - id: 1
+                    name: Comércio Silva LTDA
+                    document: "12345678000190"
+                    email: financeiro@silva.test
+                    status: active
+                    status_label: Ativo
+                    created_at: "2026-09-12T04:42:44+00:00"
+                links:
+                  first: http://localhost:8000/api/customers?page=1
+                  last: http://localhost:8000/api/customers?page=1
+                  prev: null
+                  next: null
+                meta:
+                  current_page: 1
+                  from: 1
+                  last_page: 1
+                  path: http://localhost:8000/api/customers
+                  per_page: 15
+                  to: 1
+                  total: 1
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+    post:
+      tags: [Clientes]
+      summary: Cadastra um cliente
+      description: |
+        O documento é gravado **só com dígitos**: guardar com máscara faria a
+        busca depender do formato digitado. CPF tem 11 dígitos e CNPJ tem 14;
+        nada entre os dois é aceito, e o documento é único na base.
+      operationId: criarCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerInput'
+            example:
+              name: Comércio Silva LTDA
+              document: "12345678000190"
+              email: financeiro@silva.test
+              status: active
+      responses:
+        201:
+          description: Cliente criado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+              example:
+                data:
+                  id: 1
+                  name: Comércio Silva LTDA
+                  document: "12345678000190"
+                  email: financeiro@silva.test
+                  status: active
+                  status_label: Ativo
+                  created_at: "2026-09-12T04:42:44+00:00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          description: |
+            Validação falhou. Os erros vêm campo a campo, que é o que permite ao
+            formulário marcar o campo errado em vez de mostrar um aviso solto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: O campo nome é obrigatório. (and 3 more errors)
+                errors:
+                  name:
+                    - O campo nome é obrigatório.
+                  document:
+                    - O documento deve ser um CPF (11 dígitos) ou CNPJ (14 dígitos).
+                  email:
+                    - O campo e-mail deve ser um e-mail válido.
+                  status:
+                    - O valor selecionado em status é inválido.
+
+  /api/customers/{customer}:
+    parameters:
+      - $ref: '#/components/parameters/IdDoCliente'
+    get:
+      tags: [Clientes]
+      summary: Exibe um cliente
+      operationId: exibirCliente
+      responses:
+        200:
+          description: Cliente encontrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+              example:
+                data:
+                  id: 1
+                  name: Comércio Silva LTDA
+                  document: "12345678000190"
+                  email: financeiro@silva.test
+                  status: active
+                  status_label: Ativo
+                  created_at: "2026-09-12T04:42:44+00:00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+
+    put:
+      tags: [Clientes]
+      summary: Atualiza um cliente
+      description: |
+        A unicidade do documento ignora o próprio registro — sem isso ninguém
+        salvaria uma edição sem antes trocar de documento.
+      operationId: atualizarCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerInput'
+            example:
+              name: Comércio Silva LTDA
+              document: "12345678000190"
+              email: contato@silva.test
+              status: inactive
+      responses:
+        200:
+          description: Cliente atualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+              example:
+                data:
+                  id: 1
+                  name: Comércio Silva LTDA
+                  document: "12345678000190"
+                  email: contato@silva.test
+                  status: inactive
+                  status_label: Inativo
+                  created_at: "2026-09-12T04:42:44+00:00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+    patch:
+      tags: [Clientes]
+      summary: Atualiza um cliente (mesmo contrato do PUT)
+      description: |
+        A rota aceita os dois verbos e aplica as mesmas regras: os campos
+        continuam todos obrigatórios. Está documentado porque está registrado —
+        `PATCH` aqui não é atualização parcial.
+      operationId: atualizarClienteParcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerInput'
+            example:
+              name: Comércio Silva LTDA
+              document: "12345678000190"
+              email: contato@silva.test
+              status: inactive
+      responses:
+        200:
+          description: Cliente atualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+              example:
+                data:
+                  id: 1
+                  name: Comércio Silva LTDA
+                  document: "12345678000190"
+                  email: contato@silva.test
+                  status: inactive
+                  status_label: Inativo
+                  created_at: "2026-09-12T04:42:44+00:00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+  # ------------------------------------------------------------ cobranças ---
+
+  /api/billings:
+    get:
+      tags: [Cobranças]
+      summary: Lista cobranças
+      description: |
+        `interest_amount` e `updated_amount` saem do próprio `SELECT`, pela face
+        SQL do cálculo de juros. É isso que permite ordenar por valor atualizado
+        sem carregar o conjunto em memória.
+
+        O cliente vem junto por eager loading: sem isso, serializar uma página
+        de 15 linhas dispararia 15 consultas.
+      operationId: listarCobrancas
+      parameters:
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+          example: 1
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/StatusDaCobranca'
+        - name: search
+          in: query
+          description: Trecho da descrição.
+          schema:
+            type: string
+            maxLength: 255
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [id, due_date, issue_date, original_amount, created_at]
+            default: id
+        - name: direction
+          in: query
+          schema:
+            $ref: '#/components/schemas/Direcao'
+            default: desc
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        200:
+          description: Página de cobranças.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Billing'
+                  - $ref: '#/components/schemas/Paginacao'
+              example:
+                data:
+                  - id: 1
+                    description: Mensalidade de agosto
+                    original_amount: "1500.00"
+                    monthly_interest_rate: "0.0200"
+                    issue_date: "2026-07-10"
+                    due_date: "2026-08-09"
+                    payment_date: null
+                    status: pending
+                    status_label: Pendente
+                    is_overdue: true
+                    paid_amount: null
+                    paid_interest_amount: null
+                    interest_amount: "34.05"
+                    updated_amount: "1534.05"
+                    customer:
+                      id: 1
+                      name: Comércio Silva LTDA
+                      document: "12345678000190"
+                      email: financeiro@silva.test
+                      status: active
+                      status_label: Ativo
+                      created_at: "2026-09-12T04:42:44+00:00"
+                links:
+                  first: http://localhost:8000/api/billings?page=1
+                  last: http://localhost:8000/api/billings?page=1
+                  prev: null
+                  next: null
+                meta:
+                  current_page: 1
+                  from: 1
+                  last_page: 1
+                  path: http://localhost:8000/api/billings
+                  per_page: 15
+                  to: 1
+                  total: 1
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+    post:
+      tags: [Cobranças]
+      summary: Cadastra uma cobrança
+      description: |
+        `status` e os campos de pagamento **não são aceitos** aqui, mesmo que
+        enviados. Toda cobrança nasce pendente: aceitar `status: paid` criaria
+        uma cobrança paga sem os valores congelados, e quem faz essa transição é
+        `POST /api/billings/{billing}/payment`.
+
+        A taxa é fração mensal, não porcentagem: `0.02` é 2% ao mês.
+      operationId: criarCobranca
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingInput'
+            example:
+              customer_id: 1
+              description: Mensalidade de agosto
+              original_amount: 1500.00
+              monthly_interest_rate: 0.02
+              issue_date: "2026-07-10"
+              due_date: "2026-08-09"
+      responses:
+        201:
+          description: Cobrança criada, sempre pendente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Billing'
+              example:
+                data:
+                  id: 1
+                  description: Mensalidade de agosto
+                  original_amount: "1500.00"
+                  monthly_interest_rate: "0.0200"
+                  issue_date: "2026-07-10"
+                  due_date: "2026-08-09"
+                  payment_date: null
+                  status: pending
+                  status_label: Pendente
+                  is_overdue: true
+                  paid_amount: null
+                  paid_interest_amount: null
+                  interest_amount: "34.05"
+                  updated_amount: "1534.05"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          description: Validação falhou.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: O campo data de vencimento deve ser uma data posterior ou igual a data de emissão.
+                errors:
+                  due_date:
+                    - O campo data de vencimento deve ser uma data posterior ou igual a data de emissão.
+
+  /api/billings/{billing}:
+    parameters:
+      - $ref: '#/components/parameters/IdDaCobranca'
+    get:
+      tags: [Cobranças]
+      summary: Exibe uma cobrança
+      description: |
+        Numa cobrança isolada os juros são calculados em PHP, e não pelo
+        `SELECT` como na listagem. Existe teste afirmando que os dois caminhos
+        devolvem o mesmo valor até o centavo — é o que sustenta a exigência de
+        resultado consistente entre telas e relatório.
+      operationId: exibirCobranca
+      responses:
+        200:
+          description: Cobrança encontrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Billing'
+              example:
+                data:
+                  id: 1
+                  description: Mensalidade de agosto
+                  original_amount: "1500.00"
+                  monthly_interest_rate: "0.0200"
+                  issue_date: "2026-07-10"
+                  due_date: "2026-08-09"
+                  payment_date: "2026-09-08"
+                  status: paid
+                  status_label: Paga
+                  is_overdue: false
+                  paid_amount: "1530.00"
+                  paid_interest_amount: "30.00"
+                  interest_amount: "30.00"
+                  updated_amount: "1530.00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+
+    put:
+      tags: [Cobranças]
+      summary: Atualiza uma cobrança pendente
+      description: |
+        **Cobrança paga é imutável.** Alterar valor ou taxa depois do pagamento
+        invalidaria `paid_amount` e `paid_interest_amount`, que foram congelados
+        na data do pagamento e não são recalculáveis — o cálculo é função da
+        data de então. A tentativa responde 422.
+      operationId: atualizarCobranca
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingInput'
+            example:
+              customer_id: 1
+              description: Mensalidade de agosto (revisada)
+              original_amount: 1600.00
+              monthly_interest_rate: 0.02
+              issue_date: "2026-07-10"
+              due_date: "2026-08-09"
+      responses:
+        200:
+          description: Cobrança atualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Billing'
+              example:
+                data:
+                  id: 1
+                  description: Mensalidade de agosto (revisada)
+                  original_amount: "1600.00"
+                  monthly_interest_rate: "0.0200"
+                  issue_date: "2026-07-10"
+                  due_date: "2026-08-09"
+                  payment_date: null
+                  status: pending
+                  status_label: Pendente
+                  is_overdue: true
+                  paid_amount: null
+                  paid_interest_amount: null
+                  interest_amount: "36.32"
+                  updated_amount: "1636.32"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+        422:
+          description: Validação falhou, ou a cobrança já está paga.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: Uma cobrança paga não pode ser editada.
+                errors:
+                  status:
+                    - Uma cobrança paga não pode ser editada.
+
+    patch:
+      tags: [Cobranças]
+      summary: Atualiza uma cobrança pendente (mesmo contrato do PUT)
+      description: |
+        A rota aceita os dois verbos e aplica as mesmas regras, inclusive a de
+        que cobrança paga é imutável.
+      operationId: atualizarCobrancaParcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingInput'
+            example:
+              customer_id: 1
+              description: Mensalidade de agosto (revisada)
+              original_amount: 1600.00
+              monthly_interest_rate: 0.02
+              issue_date: "2026-07-10"
+              due_date: "2026-08-09"
+      responses:
+        200:
+          description: Cobrança atualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Billing'
+              example:
+                data:
+                  id: 1
+                  description: Mensalidade de agosto (revisada)
+                  original_amount: "1600.00"
+                  monthly_interest_rate: "0.0200"
+                  issue_date: "2026-07-10"
+                  due_date: "2026-08-09"
+                  payment_date: null
+                  status: pending
+                  status_label: Pendente
+                  is_overdue: true
+                  paid_amount: null
+                  paid_interest_amount: null
+                  interest_amount: "36.32"
+                  updated_amount: "1636.32"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+  /api/billings/{billing}/payment:
+    parameters:
+      - $ref: '#/components/parameters/IdDaCobranca'
+    post:
+      tags: [Cobranças]
+      summary: Registra o pagamento e congela os juros
+      description: |
+        Os juros são calculados **na data do pagamento**, não em hoje: pagar com
+        data retroativa produz o valor daquele dia. A partir daqui a cobrança
+        para de acumular, e o valor exibido vem das colunas gravadas.
+
+        Os dois campos são opcionais:
+
+        - `payment_date` ausente assume hoje. Não pode ser futura — juros são
+          função da data, e aceitar data futura gravaria um congelamento que
+          ainda não ocorreu — nem anterior à emissão.
+        - `paid_amount` ausente assume o valor atualizado. Informá-lo cobre
+          acordo e desconto; os juros calculados continuam registrados em
+          `paid_interest_amount` de qualquer forma.
+      operationId: registrarPagamento
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_date:
+                  type: [string, "null"]
+                  format: date
+                  description: Data do pagamento. Ausente assume hoje.
+                paid_amount:
+                  type: [string, "null"]
+                  description: Valor recebido. Ausente assume o valor atualizado.
+            example:
+              payment_date: "2026-09-08"
+      responses:
+        200:
+          description: |
+            Pagamento registrado. No exemplo, R$ 1.500,00 a 2% ao mês com 30
+            dias de atraso: `1500 * 1.02^1 = 1530,00`, dos quais R$ 30,00 são
+            juros — e esses números não mudam mais.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Billing'
+              example:
+                data:
+                  id: 1
+                  description: Mensalidade de agosto
+                  original_amount: "1500.00"
+                  monthly_interest_rate: "0.0200"
+                  issue_date: "2026-07-10"
+                  due_date: "2026-08-09"
+                  payment_date: "2026-09-08"
+                  status: paid
+                  status_label: Paga
+                  is_overdue: false
+                  paid_amount: "1530.00"
+                  paid_interest_amount: "30.00"
+                  interest_amount: "30.00"
+                  updated_amount: "1530.00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+        422:
+          description: Data inválida, valor inválido, ou a cobrança já está paga.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: Esta cobrança já está paga.
+                errors:
+                  status:
+                    - Esta cobrança já está paga.
+
+  # ------------------------------------------------------------ relatório ---
+
+  /api/reports/billings:
+    get:
+      tags: [Relatório]
+      summary: Relatório de faturamento por período
+      description: |
+        Além da página de cobranças, a resposta traz três blocos:
+
+        - **`totals`** — agregação sobre o conjunto filtrado **inteiro**, de
+          consulta própria. Não é a soma da página: quem está na página 3 de um
+          relatório de mil cobranças precisa do total do relatório.
+        - **`filters`** — eco do recorte aplicado, já normalizado. A tela
+          reexibe e as exportações imprimem no cabeçalho do arquivo a partir
+          desta mesma fonte.
+        - **`export`** — o teto do PDF e se o recorte corrente cabe nele, para a
+          tela desabilitar o botão **antes** do clique em vez de mandar o
+          usuário para um 422.
+
+        O período pode ser recortado por emissão, vencimento ou pagamento, à
+        escolha de quem consulta — cada uma tem índice próprio.
+      operationId: relatorioDeFaturamento
+      parameters:
+        - $ref: '#/components/parameters/BaseDaData'
+        - $ref: '#/components/parameters/InicioDoPeriodo'
+        - $ref: '#/components/parameters/FimDoPeriodo'
+        - $ref: '#/components/parameters/ClienteDoRelatorio'
+        - $ref: '#/components/parameters/StatusDoRelatorio'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [issue_date, due_date, payment_date, original_amount, interest_amount, updated_amount]
+            default: due_date
+          description: |
+            Ordenar por `updated_amount` ou `interest_amount` só é possível
+            porque o cálculo existe em SQL.
+        - name: direction
+          in: query
+          schema:
+            $ref: '#/components/schemas/Direcao'
+            default: desc
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        200:
+          description: Página do relatório, com totalizadores do conjunto inteiro.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Billing'
+                      totals:
+                        $ref: '#/components/schemas/Totais'
+                      filters:
+                        $ref: '#/components/schemas/Filtros'
+                      export:
+                        type: object
+                        properties:
+                          pdf_max_rows:
+                            type: integer
+                          pdf_available:
+                            type: boolean
+                  - $ref: '#/components/schemas/Paginacao'
+              example:
+                data:
+                  - id: 1
+                    description: Mensalidade de agosto
+                    original_amount: "1500.00"
+                    monthly_interest_rate: "0.0200"
+                    issue_date: "2026-07-10"
+                    due_date: "2026-08-09"
+                    payment_date: null
+                    status: pending
+                    status_label: Pendente
+                    is_overdue: true
+                    paid_amount: null
+                    paid_interest_amount: null
+                    interest_amount: "34.05"
+                    updated_amount: "1534.05"
+                    customer:
+                      id: 1
+                      name: Comércio Silva LTDA
+                      document: "12345678000190"
+                      email: financeiro@silva.test
+                      status: active
+                      status_label: Ativo
+                      created_at: "2026-09-12T04:42:44+00:00"
+                links:
+                  first: http://localhost:8000/api/reports/billings?page=1
+                  last: http://localhost:8000/api/reports/billings?page=1
+                  prev: null
+                  next: null
+                meta:
+                  current_page: 1
+                  from: 1
+                  last_page: 1
+                  path: http://localhost:8000/api/reports/billings
+                  per_page: 25
+                  to: 1
+                  total: 1
+                totals:
+                  count: 1
+                  original_amount: "1500.00"
+                  interest_amount: "34.05"
+                  updated_amount: "1534.05"
+                  paid_amount: "0.00"
+                  pending_amount: "1534.05"
+                filters:
+                  date_field: due_date
+                  start_date: null
+                  end_date: null
+                  customer_id: null
+                  status: null
+                  sort: due_date
+                  direction: desc
+                export:
+                  pdf_max_rows: 1000
+                  pdf_available: true
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          description: Filtro inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: A data final não pode ser anterior à inicial.
+                errors:
+                  end_date:
+                    - A data final não pode ser anterior à inicial.
+
+  /api/reports/billings/csv:
+    get:
+      tags: [Relatório]
+      summary: Exporta o relatório em CSV
+      description: |
+        **Sem limite de linhas.** O arquivo é escrito linha a linha enquanto o
+        resultado é percorrido, e em nenhum momento o conjunto existe inteiro em
+        memória — é o que permite exportar centenas de milhares de cobranças.
+
+        Aceita exatamente os mesmos filtros da tela, validados pelo mesmo
+        objeto: o arquivo é o relatório que está na tela, não uma segunda
+        consulta parecida. Período, filtros e totalizadores são impressos no
+        próprio arquivo.
+
+        Separador `;` e BOM UTF-8, porque o destino é o Excel — sem o BOM ele
+        abre o arquivo como Latin-1 e os acentos viram lixo.
+      operationId: exportarRelatorioCsv
+      parameters:
+        - $ref: '#/components/parameters/BaseDaData'
+        - $ref: '#/components/parameters/InicioDoPeriodo'
+        - $ref: '#/components/parameters/FimDoPeriodo'
+        - $ref: '#/components/parameters/ClienteDoRelatorio'
+        - $ref: '#/components/parameters/StatusDoRelatorio'
+      responses:
+        200:
+          description: Arquivo CSV, em stream.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="relatorio-faturamento-2026-09-12-044244.csv"
+          content:
+            text/csv:
+              schema:
+                type: string
+              example: |
+                Relatório de faturamento
+                Base do período;Data de vencimento
+                Status;Todos
+                Cliente;Descrição;Emissão;Vencimento;Pagamento;Valor original;Juros;Valor atualizado;Status
+                Comércio Silva LTDA;Mensalidade de agosto;10/07/2026;09/08/2026;;1500,00;34,05;1534,05;Vencida
+                TOTAIS;;;;;1500,00;34,05;1534,05;
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          $ref: '#/components/responses/ErroDeValidacao'
+
+  /api/reports/billings/pdf:
+    get:
+      tags: [Relatório]
+      summary: Exporta o relatório em PDF
+      description: |
+        **Tem teto de linhas, e isso é decisão de projeto.** PDF precisa ser
+        paginado e montado inteiro antes de ser entregue, então não existe
+        versão em streaming como a do CSV. Acima do teto a API responde 422
+        orientando o CSV, em vez de estourar a memória do processo.
+
+        O teto saiu de medição contra a base real, com nove colunas:
+
+        | Linhas | Memória | Tempo |
+        |---|---|---|
+        | 500 | 184 MB | 9,6s |
+        | 1.000 | 420 MB | 17,9s |
+        | 2.000 | 1.164 MB | 56,5s |
+        | 3.500 | 2.965 MB | 210,0s |
+        | 5.000 | estourou 3 GB | — |
+
+        O crescimento é superlinear: dobrar as linhas quase triplica a memória.
+        Daí o teto em 1.000.
+
+        A contagem que decide isso vem da consulta de totalizadores, antes de
+        qualquer linha ser carregada — descobrir que são linhas demais não custa
+        carregar linha nenhuma.
+      operationId: exportarRelatorioPdf
+      parameters:
+        - $ref: '#/components/parameters/BaseDaData'
+        - $ref: '#/components/parameters/InicioDoPeriodo'
+        - $ref: '#/components/parameters/FimDoPeriodo'
+        - $ref: '#/components/parameters/ClienteDoRelatorio'
+        - $ref: '#/components/parameters/StatusDoRelatorio'
+      responses:
+        200:
+          description: Documento PDF.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="relatorio-faturamento-2026-09-12-044244.pdf"
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          description: |
+            O recorte excede o teto de linhas do PDF. A resposta traz a
+            contagem e o limite para a tela poder explicar o que houve, e a
+            mensagem indica o caminho que funciona.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+                  limit:
+                    type: integer
+              example:
+                message: O relatório tem 56.680 cobranças e o limite do PDF é 1.000. Use a exportação em CSV, que não tem limite.
+                count: 56680
+                limit: 1000
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token Sanctum obtido em `POST /api/auth/login`.
+
+  parameters:
+    IdDoCliente:
+      name: customer
+      in: path
+      required: true
+      description: ID do cliente.
+      schema:
+        type: integer
+      example: 1
+
+    IdDaCobranca:
+      name: billing
+      in: path
+      required: true
+      description: ID da cobrança.
+      schema:
+        type: integer
+      example: 1
+
+    BaseDaData:
+      name: date_field
+      in: query
+      description: |
+        Qual das três datas define o período. Cada uma tem índice próprio, e a
+        escolha muda o recorte: a mesma cobrança entra num período por emissão e
+        em outro por vencimento.
+      schema:
+        type: string
+        enum: [issue_date, due_date, payment_date]
+        default: due_date
+
+    InicioDoPeriodo:
+      name: start_date
+      in: query
+      schema:
+        type: string
+        format: date
+      example: "2026-01-01"
+
+    FimDoPeriodo:
+      name: end_date
+      in: query
+      description: Não pode ser anterior a `start_date`.
+      schema:
+        type: string
+        format: date
+      example: "2026-12-31"
+
+    ClienteDoRelatorio:
+      name: customer_id
+      in: query
+      schema:
+        type: integer
+      example: 1
+
+    StatusDoRelatorio:
+      name: status
+      in: query
+      description: |
+        `overdue` não é status gravado: é a condição derivada de pendente com
+        vencimento no passado. `pending` traz as vencidas junto, porque vencida
+        é um caso de pendente.
+      schema:
+        type: string
+        enum: [pending, paid, overdue]
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou revogado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Mensagem'
+          example:
+            message: Unauthenticated.
+
+    NaoEncontrado:
+      description: O registro não existe.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Mensagem'
+          example:
+            message: Registro não encontrado.
+
+    ErroDeValidacao:
+      description: |
+        Validação falhou. Os erros vêm campo a campo, que é o que permite ao
+        formulário marcar o campo errado em vez de mostrar um aviso solto.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroDeValidacao'
+          example:
+            message: O campo nome é obrigatório.
+            errors:
+              name:
+                - O campo nome é obrigatório.
+
+  schemas:
+    Dinheiro:
+      type: string
+      description: |
+        Decimal com dois dígitos, como string. Número em JSON é ponto flutuante,
+        e o centavo se perde na serialização.
+      pattern: '^-?\d+\.\d{2}$'
+      examples: ["1534.05"]
+
+    Direcao:
+      type: string
+      enum: [asc, desc]
+      default: asc
+
+    StatusDoCliente:
+      type: string
+      enum: [active, inactive]
+
+    StatusDaCobranca:
+      type: string
+      description: Os dois valores gravados. "Vencida" é derivada, não gravada.
+      enum: [pending, paid]
+
+    Mensagem:
+      type: object
+      properties:
+        message:
+          type: string
+
+    ErroDeValidacao:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        document:
+          type: string
+          description: CPF (11 dígitos) ou CNPJ (14), só dígitos.
+        email:
+          type: string
+          format: email
+        status:
+          $ref: '#/components/schemas/StatusDoCliente'
+        status_label:
+          type: string
+          description: Rótulo em português, vindo do enum do backend para não duplicar tradução no frontend.
+        created_at:
+          type: [string, "null"]
+          format: date-time
+
+    CustomerInput:
+      type: object
+      required: [name, document, email, status]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        document:
+          type: string
+          pattern: '^(\d{11}|\d{14})$'
+          description: Só dígitos. Único na base.
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        status:
+          $ref: '#/components/schemas/StatusDoCliente'
+
+    Billing:
+      type: object
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        original_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        monthly_interest_rate:
+          type: string
+          description: Fração mensal, não porcentagem. `"0.0200"` é 2% ao mês.
+        issue_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        payment_date:
+          type: [string, "null"]
+          format: date
+        status:
+          $ref: '#/components/schemas/StatusDaCobranca'
+        status_label:
+          type: string
+        is_overdue:
+          type: boolean
+          description: Derivado — pendente com vencimento no passado. Não existe como coluna.
+        paid_amount:
+          oneOf:
+            - $ref: '#/components/schemas/Dinheiro'
+            - type: "null"
+          description: Congelado no ato do pagamento. Nulo enquanto pendente.
+        paid_interest_amount:
+          oneOf:
+            - $ref: '#/components/schemas/Dinheiro'
+            - type: "null"
+          description: Juros congelados na data do pagamento. Nulo enquanto pendente.
+        interest_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        updated_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        customer:
+          $ref: '#/components/schemas/Customer'
+
+    BillingInput:
+      type: object
+      required: [customer_id, description, original_amount, monthly_interest_rate, issue_date, due_date]
+      properties:
+        customer_id:
+          type: integer
+        description:
+          type: string
+          maxLength: 255
+        original_amount:
+          type: number
+          minimum: 0.01
+          maximum: 9999999999.99
+        monthly_interest_rate:
+          type: number
+          minimum: 0
+          maximum: 9.9999
+          description: Fração mensal. `0.02` é 2% ao mês.
+        issue_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+          description: Não pode ser anterior à emissão.
+
+    Totais:
+      type: object
+      description: |
+        Agregação sobre o conjunto filtrado inteiro, de consulta própria — nunca
+        a soma da página exibida.
+      properties:
+        count:
+          type: integer
+        original_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        interest_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        updated_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        paid_amount:
+          $ref: '#/components/schemas/Dinheiro'
+          description: Soma das colunas congeladas das cobranças pagas.
+        pending_amount:
+          $ref: '#/components/schemas/Dinheiro'
+          description: Soma do valor atualizado das não pagas.
+
+    Filtros:
+      type: object
+      description: Eco do recorte aplicado, já normalizado.
+      properties:
+        date_field:
+          type: string
+        start_date:
+          type: [string, "null"]
+        end_date:
+          type: [string, "null"]
+        customer_id:
+          type: [integer, "null"]
+        status:
+          type: [string, "null"]
+        sort:
+          type: string
+        direction:
+          type: string
+
+    Paginacao:
+      type: object
+      description: Envelope de paginação do Laravel.
+      properties:
+        links:
+          type: object
+          properties:
+            first:
+              type: [string, "null"]
+            last:
+              type: [string, "null"]
+            prev:
+              type: [string, "null"]
+            next:
+              type: [string, "null"]
+        meta:
+          type: object
+          properties:
+            current_page:
+              type: integer
+            from:
+              type: [integer, "null"]
+            last_page:
+              type: integer
+            path:
+              type: string
+            per_page:
+              type: integer
+            to:
+              type: [integer, "null"]
+            total:
+              type: integer
