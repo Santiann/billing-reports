@@ -18,7 +18,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Importação CSV](#importação-por-csv) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
-| **Decisões** | [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
+| **Decisões** | [Página pública](#página-pública) · [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
 
 ---
 
@@ -1453,6 +1453,46 @@ O que fica de fora, e por quê: `global-error.tsx`. Ele cobriria erro lançado
 pelo layout raiz, mas precisa reconstruir `<html>` e `<body>` e não herda o
 CSS global. O layout raiz deste projeto monta a página e carrega a fonte, nada
 mais — o custo não se paga.
+
+---
+
+## Página pública
+
+A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
+sempre. **Sem sessão**, ela mostra a apresentação do sistema em vez de empurrar
+para o login — quem chega pela primeira vez precisa saber o que é isto antes de
+ver um formulário de senha.
+
+O middleware faz isso com **`rewrite`, não `redirect`**, e a diferença importa:
+o endereço continua `/`. Um redirect para `/apresentacao` mudaria a URL na barra
+e faria o botão "voltar" do browser brigar com o login.
+
+A tabela de roteamento, verificada:
+
+| Rota | Sem sessão | Com sessão |
+|---|---|---|
+| `/` | 200, apresentação | 200, dashboard |
+| `/apresentacao` | 200 | 200 — é página pública |
+| `/login` | 200 | 307 para `/` |
+| `/clientes`, `/relatorio`, … | 307 para `/login?redirect=…` | 200 |
+
+### Nenhum número da página é inventado
+
+A skill de copywriting é explícita sobre estatística fabricada, e aqui a regra é
+fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
+de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
+medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
+0,84s para o painel, 188 testes.
+
+A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
+mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados
+pelo `InterestCalculator` do próprio sistema, não desenhados a olho. Inventar a
+curva seria mentir sobre a única coisa que a página tem para provar.
+
+Também não há imagem gerada: a skill de landing page sugere hero com foto de
+pessoa satisfeita, e uma curva de juros real diz mais sobre este produto do que
+um banco de imagens diria — além de não acrescentar megabytes de binário ao
+repositório.
 
 ---
 

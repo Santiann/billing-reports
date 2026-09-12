@@ -10,14 +10,42 @@ import { SESSION_COOKIE } from "@/lib/session";
  * aplicação. Um cookie forjado não abre nada: a API responde 401 e o Server
  * Component manda de volta para o login.
  */
-const PUBLIC_ROUTES = ["/login"];
+
+/** Abertas a quem não tem sessão. */
+const PUBLIC_ROUTES = ["/login", "/apresentacao"];
+
+/**
+ * Abertas SÓ para quem não tem sessão.
+ *
+ * A tela de login não faz sentido para quem já entrou. A apresentação faz:
+ * é página pública, e quem está logado pode querer abri-la.
+ */
+const GUEST_ONLY = ["/login"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
-  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
-  if (!hasSession && !isPublicRoute) {
+  /*
+   * A raiz atende duas plateias.
+   *
+   * Com sessão, `/` é a aplicação — o dashboard, protegido como sempre. Sem
+   * sessão, ela mostra a apresentação em vez de empurrar para o login: quem
+   * chega pela primeira vez precisa saber o que é isto antes de ver um
+   * formulário de senha.
+   *
+   * `rewrite` e não `redirect`, e a diferença importa: o endereço continua `/`.
+   * Um redirect para `/apresentacao` mudaria a URL na barra e faria o botão
+   * "voltar" do browser brigar com o login.
+   */
+  if (pathname === "/" && !hasSession) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/apresentacao";
+
+    return NextResponse.rewrite(url);
+  }
+
+  if (!hasSession && !PUBLIC_ROUTES.includes(pathname)) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
@@ -29,7 +57,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && isPublicRoute) {
+  if (hasSession && GUEST_ONLY.includes(pathname)) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/";
     homeUrl.search = "";
