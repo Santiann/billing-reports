@@ -1351,7 +1351,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (208 tests, 738 assertions)
+OK (219 tests, 769 assertions)
 ```
 
 ### Cobertura
@@ -1522,6 +1522,142 @@ já operava o sistema.
 
 ---
 
+## Idempotência no pagamento
+
+Registrar pagamento é a única operação da API em que repetir **cobra duas
+vezes**. Criar dois clientes iguais esbarra no índice único do documento;
+reimportar um CSV devolve o relatório do que gravou. Pagar duas vezes grava dois
+valores congelados, e o segundo é o de outro dia.
+
+O usuário não precisa fazer nada de errado para isso acontecer: um clique duplo,
+uma conexão que cai depois de o servidor ter processado, um `F5` na tela de
+confirmação. A tela desabilita o botão enquanto envia, e isso resolve o caso
+fácil e nenhum dos outros — é a mesma história dos [perfis de
+acesso](#a-barreira-é-o-backend-não-a-tela): o que vale é o que o backend
+garante.
+
+A operação aceita o cabeçalho **`Idempotency-Key`**, e com ele a segunda chamada
+devolve o resultado da primeira em vez de processar de novo.
+
+```
+POST /api/billings/787/payment
+Idempotency-Key: a446dee2-f551-4b68-a4ed-344dddf7301b
+
+HTTP/1.1 200 OK
+{"data":{"paid_amount":"13605.62","paid_interest_amount":"9593.85", ...}}
+
+  ↓ a mesma chamada, de novo
+
+HTTP/1.1 200 OK
+Idempotent-Replay: true
+{"data":{"paid_amount":"13605.62","paid_interest_amount":"9593.85", ...}}
+```
+
+Os dois corpos são idênticos byte a byte. O cabeçalho `Idempotent-Replay` é a
+única diferença, e existe para quem chama distinguir "pagou agora" de "já tinha
+pago" no log — o corpo sozinho não conta essa história.
+
+O nome do cabeçalho não foi inventado: é o do rascunho da IETF
+(`draft-ietf-httpapi-idempotency-key-header`), que é o mesmo que Stripe e
+Adyen usam. Escolher um nome próprio obrigaria a explicá-lo a cada integração.
+
+### O índice único é o mecanismo, não a validação
+
+A reserva da chave é um `INSERT` numa tabela com `UNIQUE (user_id, key)`, feito
+**antes** de processar. A alternativa óbvia — consultar se a chave existe e
+inserir se não existir — tem uma janela entre as duas consultas em que duas
+requisições simultâneas passam as duas. E requisições simultâneas não são o caso
+raro aqui: são o caso principal, porque é assim que o clique duplo chega.
+
+Com o `INSERT` primeiro, quem arbitra é o banco. Quem perde a corrida recebe a
+violação de unicidade e vai olhar o estado da linha para decidir o que fazer.
+
+A linha nasce com `response_status` nulo, e esse estado — *reservada, ainda sem
+resposta* — é o que permite responder **409** para quem chega enquanto a
+primeira ainda processa. Sem ele, a segunda requisição não teria como saber se a
+chave está em uso ou se a resposta simplesmente não existe.
+
+Medido contra a base de 2.000.000 de cobranças, oito requisições disparadas ao
+mesmo tempo na mesma cobrança com a mesma chave:
+
+| Desfecho | Quantas |
+|---|---|
+| `200` — processou o pagamento | 1 |
+| `200 Idempotent-Replay` — recebeu o resultado guardado | 1 |
+| `409` — chegou com a primeira em voo | 6 |
+
+Uma cobrança, um pagamento. Sem a chave, as oito teriam disputado a mesma
+cobrança e o resultado dependeria de quem chegasse primeiro no `UPDATE`.
+
+### Middleware, e não código no controller
+
+A resposta guardada precisa incluir **os erros de validação**: repetir uma
+chamada que falhou tem que repetir a falha, não processá-la. E o 422 do
+`RegisterPaymentRequest` nasce antes de o controller existir — no controller não
+haveria o que guardar.
+
+Do middleware dá para guardar o que a rota respondeu, independente de quem
+respondeu. Isso funciona porque o `Illuminate\Routing\Pipeline` renderiza a
+exceção dentro da pilha: o middleware recebe o 422 já como resposta, não como
+`ValidationException`.
+
+O middleware é registrado como alias `idempotent` e aplicado a uma rota só. Não
+é preguiça: aplicá-lo ao grupo de escrita inteiro criaria linha de tabela para
+toda importação de CSV e todo cadastro de cliente, sem cobrir risco nenhum.
+
+### O que a chave NÃO faz
+
+Três recusas de propósito, e todas têm teste:
+
+**Sem o cabeçalho, nada muda.** Pagar uma cobrança já paga continua respondendo
+422. Idempotência serve a quem repete a **mesma** operação — transformar toda
+segunda tentativa em sucesso esconderia um erro de verdade.
+
+**Mesma chave com outro conteúdo responde 422**, e "outro conteúdo" inclui outra
+cobrança: a impressão digital comparada é o método, o caminho e o payload. Um
+cliente que reaproveita chave está com bug, e devolver o resultado antigo
+esconderia o bug em vez de apontá-lo.
+
+**Erro de servidor devolve a chave.** Um 500 não é resultado da operação, é falha
+em produzi-lo, e o certo depois de um 500 é tentar de novo. Guardá-lo
+condenaria a chave a repetir a falha pelas 24 horas seguintes.
+
+### A validade é de 24 horas
+
+Guardar para sempre não é opção: a tabela cresceria sem teto, e uma chave de
+meses atrás repetiria uma resposta que já não descreve o registro. Vinte e
+quatro horas cobre com folga o que a idempotência existe para cobrir: clique
+duplo, retry de rede, reenvio de formulário.
+
+A limpeza das vencidas é **por sorteio** — uma chance em duzentas, a cada chave
+nova. É a mesma estratégia que o Laravel usa para expirar sessão em arquivo, e a
+razão é a mesma: manutenção não pode custar um `DELETE` em toda operação de
+escrita. Tarefa agendada seria mais previsível, mas este projeto não sobe
+worker — agendar aqui seria escrever uma limpeza que nunca roda.
+
+### De onde a chave vem, na tela
+
+O formulário de pagamento sorteia um UUID **no browser**, e o reaproveita
+enquanto o conteúdo dos campos não muda:
+
+- **conteúdo igual → mesma chave.** É o clique duplo e o reenvio depois de a
+  conexão cair. O backend devolve o primeiro resultado.
+- **conteúdo mudou → chave nova.** Quem corrigiu a data depois de um erro está
+  pedindo outra coisa; reaproveitar a chave devolveria o 422 antigo.
+
+A chave não pode nascer na Server Action. Uma action reexecutada por retry de
+rede rodaria o sorteio de novo e produziria outra chave — que é exatamente o
+caso que a chave existe para cobrir. Nascendo no cliente, o reenvio manda a
+mesma.
+
+Ela também não pode nascer durante a renderização: `crypto.randomUUID()` daria
+um valor no servidor e outro na hidratação. Por isso o envio passa por
+`onSubmit` com a action dentro de uma transição, o mesmo padrão que a
+[importação](#o-arquivo-não-fica-guardado-entre-a-prévia-e-a-confirmação) já
+usava por outro motivo.
+
+---
+
 ## Página pública
 
 A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
@@ -1548,7 +1684,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 188 testes.
+0,84s para o painel, 219 testes.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados

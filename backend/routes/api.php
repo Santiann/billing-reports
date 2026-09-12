@@ -66,6 +66,15 @@ Route::middleware(['auth:sanctum', 'can.write'])->group(function () {
     Route::post('billings/import', BillingImportController::class)
         ->name('billings.import');
 
+    /*
+     * A única rota idempotente, e é a que precisa ser.
+     *
+     * Duplo clique e retry de rede aqui cobram duas vezes. Nas outras, o
+     * estrago de repetir é menor ou inexistente: criar dois clientes com o
+     * mesmo documento esbarra no índice único, e a importação de CSV já
+     * responde o relatório do que gravou.
+     */
     Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
+        ->middleware('idempotent')
         ->name('billings.pay');
 });

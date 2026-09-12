@@ -1079,7 +1079,31 @@ paths:
         - `paid_amount` ausente assume o valor atualizado. Informá-lo cobre
           acordo e desconto; os juros calculados continuam registrados em
           `paid_interest_amount` de qualquer forma.
+
+        ## Idempotência
+
+        Esta é a única operação idempotente da API, porque é a única em que
+        repetir cobra duas vezes. Mandando `Idempotency-Key`, a segunda chamada
+        **devolve o resultado da primeira** em vez de processar de novo — com
+        `Idempotent-Replay: true` no cabeçalho da resposta, para quem chama
+        distinguir "pagou agora" de "já tinha pago".
+
+        A resposta guardada é a que a primeira chamada produziu, seja ela qual
+        for: um 422 de validação se repete como 422. Um 500 **não** é guardado,
+        porque depois de um erro de servidor o certo é tentar de novo.
+
+        Três situações que a chave não cobre, e não deve:
+
+        - **Sem o cabeçalho, nada muda.** Pagar uma cobrança já paga continua
+          respondendo 422. Idempotência serve a quem repete a mesma operação;
+          transformar toda segunda tentativa em sucesso esconderia um erro real.
+        - **Mesma chave com outro conteúdo responde 422.** Inclui usar a mesma
+          chave em outra cobrança. É bug de quem chama, e devolver o resultado
+          antigo esconderia o bug.
+        - **A chave vale 24 horas.** Depois disso ela é uma chave nova.
       operationId: registrarPagamento
+      parameters:
+        - $ref: '#/components/parameters/ChaveDeIdempotencia'
       requestBody:
         required: false
         content:
@@ -1131,8 +1155,13 @@ paths:
           $ref: '#/components/responses/PerfilSemPermissao'
         404:
           $ref: '#/components/responses/NaoEncontrado'
+        409:
+          $ref: '#/components/responses/RequisicaoEmAndamento'
         422:
-          description: Data inválida, valor inválido, ou a cobrança já está paga.
+          description: |
+            Data inválida, valor inválido, a cobrança já está paga — ou a chave
+            de idempotência já foi usada para outra requisição, que vem sem o
+            bloco `errors` por não ser erro de campo.
           content:
             application/json:
               schema:
@@ -1481,6 +1510,22 @@ components:
         type: string
         enum: [pending, paid, overdue]
 
+    ChaveDeIdempotencia:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Identifica a operação para que repeti-la não a execute duas vezes.
+
+        Opcional, e o nome vem do rascunho da IETF
+        (`draft-ietf-httpapi-idempotency-key-header`). Qualquer string única de
+        até 255 caracteres serve — um UUID v4 é a escolha natural. O escopo é
+        por usuário: dois clientes podem sortear a mesma chave sem se enxergar.
+      schema:
+        type: string
+        maxLength: 255
+      example: 6f1b2c4a-9e77-4d2f-9a0a-1c3b5d7e9f11
+
   responses:
     NaoAutenticado:
       description: Token ausente, inválido ou revogado.
@@ -1511,6 +1556,22 @@ components:
             $ref: '#/components/schemas/Mensagem'
           example:
             message: Registro não encontrado.
+
+    RequisicaoEmAndamento:
+      description: |
+        Outra requisição com esta mesma chave de idempotência ainda está sendo
+        processada. É a resposta do clique duplo rápido, em que a segunda
+        requisição chega antes de a primeira terminar — e é ela que impede as
+        duas de processarem.
+
+        Não é falha: tente de novo em alguns instantes e a resposta guardada
+        pela primeira virá.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Mensagem'
+          example:
+            message: Uma requisição com esta chave de idempotência ainda está em andamento.
 
     ErroDeValidacao:
       description: |

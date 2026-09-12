@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useTransition, type FormEvent } from "react";
 
 import { registerPayment, type PaymentFormState } from "@/app/actions/payments";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,58 @@ const INITIAL: PaymentFormState = {};
 
 export function PaymentForm({ billing }: { billing: Billing }) {
   const action = registerPayment.bind(null, billing.id);
-  const [state, formAction, isPending] = useActionState(action, INITIAL);
+  const [state, formAction, isActionPending] = useActionState(action, INITIAL);
+  const [isTransitionPending, startTransition] = useTransition();
+
+  const isPending = isActionPending || isTransitionPending;
+
+  /*
+   * A chave de idempotência desta tentativa.
+   *
+   * Ela é sorteada uma vez e reaproveitada enquanto o conteúdo do formulário
+   * não mudar. É essa regra que separa os dois casos:
+   *
+   *   mesmo conteúdo   -> mesma chave -> o backend devolve o primeiro
+   *                       resultado em vez de cobrar de novo. É o duplo
+   *                       clique, e o reenvio depois de a conexão cair.
+   *
+   *   conteúdo mudou   -> chave nova -> é outra operação. Quem corrigiu a data
+   *                       depois de um erro está pedindo outra coisa, e
+   *                       reaproveitar a chave devolveria o erro antigo.
+   */
+  const tentativa = useRef<{ chave: string; conteudo: string } | null>(null);
+
+  function chaveDaTentativa(dados: FormData): string {
+    const conteudo = JSON.stringify([
+      dados.get("payment_date"),
+      dados.get("paid_amount"),
+    ]);
+
+    if (tentativa.current?.conteudo !== conteudo) {
+      tentativa.current = { chave: crypto.randomUUID(), conteudo };
+    }
+
+    return tentativa.current.chave;
+  }
+
+  /*
+   * O envio passa por `onSubmit` porque a chave só pode nascer no browser:
+   * `crypto.randomUUID()` durante a renderização daria um valor no servidor e
+   * outro na hidratação. Aqui ela é sorteada no clique, quando só existe um
+   * lado. De quebra o formulário não é resetado pelo React, então os valores
+   * digitados sobrevivem a um erro de validação.
+   */
+  function enviar(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+
+    const dados = new FormData(evento.currentTarget);
+    dados.set("idempotency_key", chaveDaTentativa(dados));
+
+    startTransition(() => formAction(dados));
+  }
 
   return (
-    <form action={formAction} className="flex flex-col gap-5" noValidate>
+    <form onSubmit={enviar} className="flex flex-col gap-5" noValidate>
       {state.message ? (
         <p
           role="alert"

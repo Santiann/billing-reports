@@ -23,7 +23,7 @@ const NUMEROS = [
   { valor: "2.000.000", label: "cobranças na base de medição" },
   { valor: "0,24s", label: "no recorte de um mês por cliente" },
   { valor: "0,84s", label: "para o painel inteiro carregar" },
-  { valor: "188", label: "testes automatizados" },
+  { valor: "219", label: "testes automatizados" },
 ];
 
 const RECURSOS = [
