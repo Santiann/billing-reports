@@ -139,7 +139,7 @@ ela precisa passar.
 Pequenos, semânticos, um por responsabilidade — o histórico faz parte da
 avaliação. Um commit por vez, e o projeto sobe depois de cada um.
 
-Ordem planejada:
+### Etapa 1 — entregue
 
 ```
 chore: scaffold laravel and next apps
@@ -158,6 +158,82 @@ test: add billing interest tests
 docs: update project instructions
 ```
 
+### Etapa 2 — diferenciais e acabamento
+
+Três decisões valem para a etapa inteira e não se reabrem a cada commit:
+
+- **Mesma branch.** Tudo vai para `joao-santian`, que já tem o PR #5 aberto de
+  `joao-santian` para `main`. O PR cresce junto —
+  não existe branch nova nem PR novo, e o corpo do PR é atualizado no fim.
+- **Histórico preservado.** Os 14 commits da etapa 1 não são reescritos:
+  mantêm o trailer `Co-Authored-By`, e os novos seguem com ele. Nada de
+  rebase, squash ou amend sobre o que já foi empurrado.
+- **A etapa 1 é a base, não rascunho.** O que já está entregue só muda quando
+  o commit desta etapa pede — e aí a mudança é o assunto do commit.
+
+Ordem planejada, em blocos. Um bloco não emenda no outro: cada commit para,
+mostra o diff e espera.
+
+```
+A — fundação
+docs: plan stage two
+chore: add project skills
+fix: seed paid billings with frozen interest
+feat: add global error and loading boundaries
+chore: add makefile
+refactor: trim excessive comments
+
+B — documentação da API
+feat: add openapi specification
+feat: serve api documentation at root
+
+C — repaginação visual
+feat: add design system foundation
+refactor: restyle authentication and app shell
+refactor: restyle customers and billings
+refactor: restyle billing report
+feat: add dashboard
+
+D — importação e landing page
+feat: add customer csv import
+feat: add billing csv import
+feat: add public landing page
+
+E — diferenciais técnicos
+feat: add role based access control
+feat: add payment idempotency
+feat: add billing audit trail
+feat: add payment reversal
+feat: cache report totals
+feat: add report explain command
+feat: add rate limiting and structured logging
+ci: add continuous integration pipeline
+
+F — qualidade
+test: add end to end frontend tests
+chore: apply security review
+docs: update project documentation
+
+G — subida do zero, cronometrada
+perf: build report indexes after bulk seed
+docs: document clean install timing
+
+H — zerar a lista de pendências do README
+perf: size the innodb buffer pool
+perf: add fulltext index for billing description
+perf: export csv from raw rows
+feat: replace pdf renderer with incremental writer
+feat: add asynchronous export for large reports
+perf: evaluate partitioning billings by date
+feat: add read replica for report queries
+docs: empty the pending list
+```
+
+O bloco H fecha a seção "Melhorias que ficariam para produção" do README. Uma
+pendência morre de dois jeitos, e os dois valem: implementada, ou medida e
+descartada com o número que embasou o descarte. O que não vale é continuar
+listada como intenção.
+
 ---
 
 ## Como trabalhar neste repositório
@@ -167,5 +243,10 @@ docs: update project instructions
 - Nenhuma decisão técnica fica só no código: se existe alternativa razoável, a
   escolha e o porquê vão para o README.
 - Não implementar nada além do que o teste pede. Escopo extra não pontua e
-  aumenta a superfície de erro.
+  aumenta a superfície de erro. Na etapa 2 o "que o teste pede" inclui a lista
+  de diferenciais do enunciado — e nada fora do commit da vez.
 - Não trocar biblioteca ou padrão sem registrar a decisão no README.
+- **Medir contra a base real, não contra a suíte.** O teto do PDF passou em
+  todos os testes com um valor uma ordem de grandeza acima do possível, porque
+  teste usa poucas linhas. Decisão sobre volume, limite ou performance exige
+  medição fora da suíte, com os 2 milhões de registros carregados.
