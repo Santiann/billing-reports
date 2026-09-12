@@ -18,7 +18,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
-| **Decisões** | [Técnicas](#decisões-técnicas) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
+| **Decisões** | [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
 
 ---
 
@@ -1035,6 +1035,46 @@ volume que já existe, o init script não roda — aplique o arquivo à mão:
 ```bash
 docker compose exec -T mysql mysql -u root -proot < docker/mysql/init/01-create-test-database.sql
 ```
+
+---
+
+## Estados de erro e carregamento
+
+Quatro arquivos de convenção do App Router, e nenhum deles é decorativo.
+
+| Arquivo | Cobre |
+|---|---|
+| `app/error.tsx` | Tudo que falha fora do grupo `(app)`: o `/login`, e a falha do próprio layout autenticado |
+| `app/not-found.tsx` | URL inexistente e o `notFound()` das telas de detalhe |
+| `app/(app)/error.tsx` | A área autenticada, preservando o cabeçalho |
+| `app/(app)/{clientes,cobrancas}/[id]/loading.tsx` | Esqueleto das telas de detalhe |
+
+**`retry`, não `reset`.** Esta é a parte que não se descobre lendo código. A
+fronteira de erro recebe os dois, e eles fazem coisas diferentes: `retry()`
+refaz o fetch e re-renderiza; `reset()` só limpa o estado de erro e
+reaproveita o payload que já falhou. Para queda de API — que é o caso real —
+`reset()` reexibe exatamente o mesmo erro, e o botão "Tentar de novo" vira
+enfeite.
+
+Foi assim que o defeito apareceu: com a tela aberta, `docker compose stop
+backend`, recarregar, religar o backend e clicar no botão. Com `reset`, nada
+acontecia. Com `retry`, a tela volta. Os dois arquivos de erro usam `retry`.
+
+**Altura `flex-1`, não `min-h-screen`.** O `app/not-found.tsx` renderiza em
+dois contextos: sozinho no layout raiz, quando a URL não existe, e **dentro do
+cabeçalho da aplicação**, quando uma tela de detalhe chama `notFound()`. No
+segundo caso, uma altura de viewport inteira abaixo do cabeçalho produz scroll
+vertical. Visto em 360px antes de virar commit.
+
+**Esqueleto próprio nas telas de detalhe.** Sem eles, o detalhe herdaria o
+`loading.tsx` da listagem — o esqueleto de uma tabela larga, que não se parece
+com a tela que vai aparecer. O salto de um layout para o outro é pior do que
+não ter esqueleto nenhum.
+
+O que fica de fora, e por quê: `global-error.tsx`. Ele cobriria erro lançado
+pelo layout raiz, mas precisa reconstruir `<html>` e `<body>` e não herda o
+CSS global. O layout raiz deste projeto monta a página e carrega a fonte, nada
+mais — o custo não se paga.
 
 ---
 
