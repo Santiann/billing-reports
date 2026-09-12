@@ -63,9 +63,17 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       <PageHeader
         title="Clientes"
         action={
-          <Link href="/clientes/novo" className={buttonClasses()}>
-            Novo cliente
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/clientes/importar"
+              className={buttonClasses({ variant: "secondary" })}
+            >
+              Importar CSV
+            </Link>
+            <Link href="/clientes/novo" className={buttonClasses()}>
+              Novo cliente
+            </Link>
+          </div>
         }
       />
 

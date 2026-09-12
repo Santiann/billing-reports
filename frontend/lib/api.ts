@@ -74,15 +74,29 @@ export async function apiFetch<T>(
   path: string,
   { token, body, headers, ...init }: ApiFetchOptions = {},
 ): Promise<T> {
+  /*
+   * FormData vai cru, sem Content-Type.
+   *
+   * Serializar em JSON perderia o arquivo, e declarar o Content-Type à mão
+   * quebraria o upload de um jeito difícil de enxergar: o multipart precisa de
+   * um `boundary` que só quem monta o corpo conhece. Deixar a chave ausente é
+   * o que faz o fetch preenchê-la com a fronteira certa.
+   */
+  const multipart = body instanceof FormData;
+
   const response = await fetch(`${resolveBaseUrl()}${path}`, {
     ...init,
     headers: {
       Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(body !== undefined && !multipart
+        ? { "Content-Type": "application/json" }
+        : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined
+      ? { body: multipart ? (body as FormData) : JSON.stringify(body) }
+      : {}),
     // Relatório é dado vivo: nada aqui pode servir de cache.
     cache: "no-store",
   });

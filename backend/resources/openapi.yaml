@@ -392,6 +392,106 @@ paths:
                   status:
                     - O valor selecionado em status é inválido.
 
+  /api/customers/import:
+    post:
+      tags: [Clientes]
+      summary: Importa clientes de um arquivo CSV
+      description: |
+        Duas etapas no mesmo endpoint. Com `?preview=1` o arquivo é analisado e
+        **nada é gravado** — a resposta diz o que aconteceria. Sem o parâmetro,
+        as linhas válidas são importadas.
+
+        **Importação parcial é o comportamento esperado**, não uma falha: linha
+        com erro não impede as outras de entrar. As válidas entram e as
+        recusadas voltam em `errors`, com o número da linha **do arquivo**
+        (contando o cabeçalho, que é como o usuário vai encontrá-la na planilha)
+        e o motivo.
+
+        O arquivo é lido linha a linha, então o tamanho dele não precisa caber
+        na memória do processo. A gravação vai em lotes de 500, com os
+        documentos do lote conferidos contra o banco numa consulta só.
+
+        Sobre o formato: o separador é detectado — `;` do Excel em português ou
+        `,` — e o cabeçalho aceita apelidos (`nome` ou `name`, `documento` ou
+        `cpf`). O documento pode vir com máscara; ela é removida. Status vazio
+        assume ativo.
+
+        Arquivo sem as colunas obrigatórias é recusado **inteiro**, com 422: não
+        há o que importar parcialmente quando nem dá para saber o que é cada
+        coluna.
+      operationId: importarClientes
+      parameters:
+        - name: preview
+          in: query
+          description: Analisa sem gravar.
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV de até 20 MB.
+      responses:
+        200:
+          description: |
+            Relatório do que aconteceu — ou do que aconteceria, na prévia.
+            `imported_count` é sempre 0 quando `preview=1`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelatorioDeImportacao'
+              example:
+                total_rows: 5
+                valid_count: 3
+                imported_count: 3
+                error_count: 2
+                errors_truncated: false
+                errors:
+                  - line: 4
+                    messages:
+                      - O documento deve ser um CPF (11 dígitos) ou CNPJ (14 dígitos).
+                    values:
+                      name: Documento Curto ME
+                      document: "123"
+                      email: curto@exemplo.test
+                      status: ativo
+                  - line: 6
+                    messages:
+                      - O campo e-mail é obrigatório.
+                    values:
+                      name: Sem Email LTDA
+                      document: "44555666000177"
+                      email: ""
+                      status: ativo
+                sample:
+                  - name: Comércio Silva LTDA
+                    document: "12345678000190"
+                    email: financeiro@silva.test
+                    status: active
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          description: |
+            O arquivo não serve: não é CSV, passa do tamanho, ou o cabeçalho não
+            tem as colunas obrigatórias.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: "O arquivo precisa das colunas: documento, email. Cabeçalho recebido: nome, telefone."
+                errors:
+                  file:
+                    - "O arquivo precisa das colunas: documento, email. Cabeçalho recebido: nome, telefone."
+
   /api/customers/{customer}:
     parameters:
       - $ref: '#/components/parameters/IdDoCliente'
@@ -1506,6 +1606,54 @@ components:
           $ref: '#/components/schemas/Dinheiro'
         received_amount:
           $ref: '#/components/schemas/Dinheiro'
+
+    RelatorioDeImportacao:
+      type: object
+      description: |
+        O que aconteceu com o arquivo. Existe nesta forma porque importação
+        parcial só é aceitável se o usuário souber o que entrou e o que não
+        entrou — um contador de sucesso sozinho esconde a metade que importa.
+      properties:
+        total_rows:
+          type: integer
+          description: Linhas de dado, sem contar o cabeçalho.
+        valid_count:
+          type: integer
+        imported_count:
+          type: integer
+          description: Sempre 0 na prévia.
+        error_count:
+          type: integer
+        errors_truncated:
+          type: boolean
+          description: |
+            A lista de erros tem teto de 50; a contagem não. Um arquivo com
+            cabeçalho torto geraria um erro por linha, e devolver cem mil não
+            ajudaria ninguém.
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              line:
+                type: integer
+                description: Linha do arquivo, contando o cabeçalho.
+              messages:
+                type: array
+                items:
+                  type: string
+              values:
+                type: object
+                additionalProperties:
+                  type: string
+                description: A linha como veio, para o usuário se reconhecer.
+        sample:
+          type: array
+          description: Primeiras linhas válidas, já normalizadas.
+          items:
+            type: object
+            additionalProperties:
+              type: string
 
     Totais:
       type: object

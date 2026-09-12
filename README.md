@@ -16,7 +16,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 |---|---|
 | **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
 | **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
-| **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
+| **Módulos** | [Clientes](#módulo-de-clientes) · [Importação CSV](#importação-por-csv) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
 | **Decisões** | [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
 
@@ -609,6 +609,66 @@ da carga.
 
 Ambos são endereçados em `feat: add report indexes`, com medição antes e
 depois.
+
+---
+
+## Importação por CSV
+
+`/clientes/importar` recebe um arquivo, mostra o que vai acontecer e só grava
+depois de confirmado.
+
+**Importação parcial é o comportamento esperado, não uma falha.** Linha com erro
+não impede as outras de entrar: as válidas são importadas, e as recusadas voltam
+nomeadas com o número da linha **do arquivo** — contando o cabeçalho, que é como
+o usuário a encontra ao abrir a planilha — e o motivo. Abortar tudo por causa de
+um e-mail errado na linha 47 obrigaria a corrigir e reenviar o arquivo inteiro.
+
+### O arquivo não fica guardado entre a prévia e a confirmação
+
+O caminho comum seria gravar o upload num diretório temporário, devolver um
+identificador e usá-lo no confirmar. Isso traz junto expiração, faxina de
+arquivo abandonado e um estado a mais para errar.
+
+Aqui a confirmação **reenvia o mesmo arquivo**, que ainda está no input do
+browser. O custo é um upload a mais — trivial para um CSV de clientes — e o
+relatório da confirmação sai do mesmo código da prévia, então o que o usuário
+viu é o que aconteceu.
+
+Isso custou um defeito que só apareceu na tela: um `<form action={fn}>` é
+**resetado pelo React** depois que a action termina, e o campo de arquivo voltava
+a "nenhum arquivo selecionado" — a prévia apagava justamente o que o passo
+seguinte precisava, e o botão de importar não gravava nada. A action passou a ser
+chamada por `onSubmit` dentro de uma transição, que não toca no formulário.
+
+### Streaming, e por quê
+
+O arquivo é lido linha a linha com `fgetcsv` sobre um gerador. Nunca
+`file_get_contents` nem `file()`: um CSV de cem mil clientes não pode existir de
+uma vez na memória do processo. Há teste afirmando que importar 5.000 linhas não
+faz o pico de memória crescer mais que 32 MB.
+
+A gravação vai em **lotes de 500**, e cada lote confere os documentos contra o
+banco numa consulta só. Uma consulta por linha transformaria dez mil clientes em
+dez mil consultas; um insert em lote sem conferir estouraria a unique do banco e
+derrubaria as 499 linhas boas junto com a repetida.
+
+### Conveniências que vêm de quem exporta planilha
+
+| | |
+|---|---|
+| Separador | detectado — `;` do Excel em português ou `,` |
+| Cabeçalho | aceita apelidos: `nome`/`name`, `documento`/`cpf`/`cnpj` |
+| Documento | pode vir com máscara; é gravado só com dígitos |
+| Status | `ativo`/`active`, e vazio assume ativo |
+| BOM do Excel | removido antes de comparar o cabeçalho |
+
+Exigir um formato exato transformaria "o arquivo não funciona" num problema de
+suporte.
+
+**Arquivo sem as colunas obrigatórias é recusado inteiro**, com 422 no campo do
+upload — e a mensagem diz o nome que o usuário precisa digitar (`documento`),
+não o nome interno do campo (`document`). Não há o que importar parcialmente
+quando nem dá para saber o que é cada coluna.
 
 ---
 
@@ -1250,7 +1310,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (161 tests, 611 assertions)
+OK (175 tests, 662 assertions)
 ```
 
 ### Cobertura

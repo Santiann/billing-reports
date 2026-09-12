@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BillingReportController;
 use App\Http\Controllers\Api\BillingReportCsvController;
 use App\Http\Controllers\Api\BillingReportPdfController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\CustomerImportController;
 use App\Http\Controllers\Api\DashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('customers', CustomerController::class)
         ->only(['index', 'store', 'show', 'update']);
+
+    Route::post('customers/import', CustomerImportController::class)
+        ->name('customers.import');
 
     Route::apiResource('billings', BillingController::class)
         ->only(['index', 'store', 'show', 'update']);
