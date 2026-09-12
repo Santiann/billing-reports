@@ -47,6 +47,24 @@
   --color-accent: light-dark(#2f5a8f, #86b0e2);
   --color-accent-soft: light-dark(#eaf0f7, #16202c);
 
+  /* --- séries de gráfico ---------------------------------------------
+     Separadas dos tons de estado acima, e não por capricho. Os tons de
+     estado vestem etiqueta, que vem com texto ao lado; preenchimento de
+     gráfico não tem texto e precisa se distinguir sozinho.
+
+     O par de estado foi reprovado no validador da skill dataviz como paleta
+     categórica: ΔE 14,6 entre verde e âmbar, abaixo do piso de 15 — difíceis
+     de separar mesmo com visão normal, e 6,7 sob protanopia. Estes passaram
+     nos seis testes, nos dois modos:
+
+       claro   #147a58 / #c47d0c   ΔE 22,4 normal · 10,5 protan
+       escuro  #2d9d76 / #b07d20   ΔE 16,4 normal ·  9,9 deutan
+
+     A banda de luminosidade do modo escuro é mais estreita (L 0,48–0,67), e
+     é por isso que os passos escuros não são o clareamento dos claros. */
+  --color-chart-received: light-dark(#147a58, #2d9d76);
+  --color-chart-pending: light-dark(#c47d0c, #b07d20);
+
   /* --- tipografia ----------------------------------------------------
      Serifa no título, porque dá cara ao produto; sans humanista na
      interface; monoespaçada no dado — id, documento e dinheiro. */

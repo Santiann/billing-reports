@@ -17,7 +17,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
 | **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
-| **Performance** | [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
+| **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
 | **Decisões** | [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
 
 ---
@@ -778,6 +778,116 @@ por data não. É o que a seção seguinte resolve.
 
 ---
 
+## Dashboard
+
+A tela inicial mostra os indicadores do mês corrente e a série dos últimos doze
+meses. Uma chamada, duas consultas de agregação, **nenhuma linha carregada para
+o PHP somar** — sobre dois milhões de cobranças isso não seria lento, seria
+impossível.
+
+Medido contra a base cheia:
+
+| | |
+|---|---|
+| `GET /api/dashboard` | 0,66s – 0,93s |
+| **Página completa, com o SSR do Next** | **0,84s – 1,42s** |
+
+O critério era 3 segundos. A primeira versão gastava 2,1s a 3,1s na página, e
+três medições mudaram o desenho até chegar aqui.
+
+### 1. O `GROUP BY` de um ano custa 5x mais que doze faixas de um mês
+
+A forma óbvia da série é agrupar o ano inteiro por mês:
+
+```sql
+SELECT DATE_FORMAT(due_date, '%Y-%m'), SUM(original_amount) ...
+WHERE due_date BETWEEN ? AND ? GROUP BY 1          -- 1,75s
+```
+
+O `EXPLAIN` explica: a função sobre a coluna impede o MySQL de agrupar na ordem
+do índice, e ele monta tabela temporária com as 666.000 linhas do ano
+(`Using temporary`). Sem o índice de cobertura ele nem tenta — escolhe varredura
+completa dos 2.000.000, porque um terço da tabela em busca de linha sai mais
+caro que ler tudo.
+
+Doze faixas estreitas unidas por `UNION ALL` — uma por mês — são doze ranges
+simples que o índice responde sem temporária:
+
+```sql
+SELECT ... WHERE due_date >= '2026-09-01' AND due_date < '2026-10-01'
+UNION ALL ...                                      -- 0,33s
+```
+
+### 2. O índice de cobertura vale 25x, e as cinco colunas são todas usadas
+
+`billings_dashboard_index` é `(due_date, status, monthly_interest_rate,
+original_amount, paid_amount)`. Os sete índices do relatório apontam para a
+linha; este **carrega os valores dentro de si**, e o `EXPLAIN` sai com
+`Using index`.
+
+| Consulta | Sem cobertura | Com este índice |
+|---|---|---|
+| Série de 12 meses | 8,25s | **0,31s** |
+| Indicadores do mês | 0,72s | **0,07s** |
+
+Uma versão estreita sem `status` e sem `monthly_interest_rate` foi medida e
+descartada: economiza 21 MB e faz os indicadores voltarem de 0,07s para 0,72s,
+porque o cálculo de juros passa a buscar a taxa linha por linha.
+
+O custo está aceito e registrado: 79 MB e uma oitava árvore para manter a cada
+insert, somando à penalidade de 4,8x que os sete índices do relatório já cobram
+da carga.
+
+### 3. O mesmo `POW` estava sendo calculado duas vezes por linha
+
+`updatedAmountSql()` e `interestAmountSql()` carregam ambos o cálculo de juros
+composto. Somados lado a lado, o MySQL executava o `POW` duas vezes em cada uma
+das 55.000 linhas do mês.
+
+O valor atualizado passou a ser calculado uma vez numa subconsulta, e os juros
+saem dele por subtração — o que só vale porque a soma é sobre **pendente**, e em
+cobrança pendente juros é exatamente valor atualizado menos original. Em
+cobrança paga não valeria, e por isso ela entra com zero.
+
+**0,87s → 0,25s**, com os seis números idênticos aos de antes.
+
+### Os gráficos
+
+Dois, dos mesmos doze números — o segundo não custa consulta nenhuma:
+
+- **Faturado e recebido por mês**, coluna empilhada. A pergunta é parte-todo ao
+  longo do tempo: a altura inteira é o faturado do mês e o corte mostra quanto
+  virou dinheiro. Duas barras lado a lado responderiam "qual é maior", que não é
+  a pergunta.
+- **Taxa de recebimento**, linha. Mesmos números, outra leitura: eficiência de
+  cobrança é o que não se enxerga quando faturamento e recebido crescem juntos.
+  Eixo fixo de 0 a 100%, porque esticá-lo para o intervalo dos dados
+  transformaria variação de dois pontos numa montanha.
+
+São SVG montados no servidor, **sem JavaScript e sem biblioteca de gráfico**. Um
+gráfico de doze números é uma figura, não uma aplicação: o destaque da coluna
+sob o cursor é CSS, e o valor exato mora no `<title>` e na tabela que fica logo
+abaixo, fechada num `<details>`.
+
+**A paleta das séries foi validada por script, não no olho.** O verde e o âmbar
+que as etiquetas usam foram reprovados como paleta de gráfico:
+
+```
+#1c6448 / #8a5d12   ΔE 14,6 normal · 6,7 protan   → REPROVADO
+#147a58 / #c47d0c   ΔE 22,4 normal · 10,5 protan  → aprovado (claro)
+#2d9d76 / #b07d20   ΔE 16,4 normal ·  9,9 deutan  → aprovado (escuro)
+```
+
+Etiqueta vem com texto ao lado e sobrevive a cores próximas; preenchimento de
+gráfico não tem texto e precisa se distinguir sozinho. Os passos do tema escuro
+não são o clareamento dos claros — a banda de luminosidade aceitável é outra
+(L 0,48–0,67 contra 0,43–0,77).
+
+Em tela estreita os gráficos **rolam na horizontal** em vez de encolher: o SVG
+escalaria o rótulo junto, e um texto de 11px viraria 5px em 360px.
+
+---
+
 ## Índices
 
 Sete índices, cada um com a consulta que serve. O princípio é um só: **coluna
@@ -1140,7 +1250,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (153 tests, 582 assertions)
+OK (161 tests, 611 assertions)
 ```
 
 ### Cobertura

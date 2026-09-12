@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BillingReportController;
 use App\Http\Controllers\Api\BillingReportCsvController;
 use App\Http\Controllers\Api\BillingReportPdfController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -18,6 +19,8 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
+
     Route::apiResource('customers', CustomerController::class)
         ->only(['index', 'store', 'show', 'update']);
 

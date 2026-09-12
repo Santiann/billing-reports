@@ -63,6 +63,8 @@ security:
 tags:
   - name: Autenticação
     description: Login, logout e sessão corrente.
+  - name: Dashboard
+    description: Indicadores do mês corrente e série dos últimos doze meses.
   - name: Clientes
     description: Cadastro de clientes. Documento é CPF ou CNPJ, só dígitos.
   - name: Cobranças
@@ -176,6 +178,68 @@ paths:
                   id: 1
                   name: Administrador
                   email: admin@billing.test
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+
+  # ------------------------------------------------------------- dashboard ---
+
+  /api/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Indicadores do mês e série de doze meses
+      description: |
+        A tela inicial numa chamada. Duas agregações no banco, nenhuma linha
+        carregada para somar em memória.
+
+        `period` recorta o **mês corrente por vencimento** — o que vence agora,
+        o que já entrou e o que falta entrar. `monthly` traz os últimos doze
+        meses, incluindo o corrente, para o gráfico de faturado contra recebido.
+
+        Duas leituras que valem para os dois blocos:
+
+        - **`received_amount` vem das colunas congeladas**, nunca de recálculo.
+          É a mesma regra do relatório, e o dashboard não pode discordar dele.
+        - **`pending_amount` já inclui os juros de hoje**: é o valor atualizado
+          do que não foi pago, não a soma dos valores originais.
+
+        Medido contra 2.000.000 de cobranças: 0,66s a 0,93s.
+      operationId: dashboard
+      responses:
+        200:
+          description: Indicadores e série.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period:
+                    $ref: '#/components/schemas/DashboardPeriod'
+                  monthly:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DashboardMonth'
+              example:
+                period:
+                  label: Setembro de 2026
+                  start_date: "2026-09-01"
+                  end_date: "2026-09-30"
+                  count: 54926
+                  original_amount: "278768833.46"
+                  received_amount: "111606598.70"
+                  pending_amount: "167554107.67"
+                  interest_amount: "343072.66"
+                  overdue_count: 11890
+                monthly:
+                  - month: "2026-08"
+                    label: ago/26
+                    count: 56389
+                    original_amount: "284730191.31"
+                    received_amount: "115024428.54"
+                  - month: "2026-09"
+                    label: set/26
+                    count: 54926
+                    original_amount: "278768833.46"
+                    received_amount: "111606598.70"
         401:
           $ref: '#/components/responses/NaoAutenticado'
 
@@ -1396,6 +1460,52 @@ components:
           type: string
           format: date
           description: Não pode ser anterior à emissão.
+
+    DashboardPeriod:
+      type: object
+      description: O mês corrente, recortado por vencimento.
+      properties:
+        label:
+          type: string
+          examples: ["Setembro de 2026"]
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        count:
+          type: integer
+        original_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        received_amount:
+          $ref: '#/components/schemas/Dinheiro'
+          description: Soma das colunas congeladas no pagamento.
+        pending_amount:
+          $ref: '#/components/schemas/Dinheiro'
+          description: Valor ATUALIZADO do que não foi pago — já com juros.
+        interest_amount:
+          $ref: '#/components/schemas/Dinheiro'
+          description: Juros acumulados pelas vencidas do mês, até hoje.
+        overdue_count:
+          type: integer
+
+    DashboardMonth:
+      type: object
+      properties:
+        month:
+          type: string
+          examples: ["2026-09"]
+        label:
+          type: string
+          description: Rótulo curto, para caber sob a coluna do gráfico.
+          examples: ["set/26"]
+        count:
+          type: integer
+        original_amount:
+          $ref: '#/components/schemas/Dinheiro'
+        received_amount:
+          $ref: '#/components/schemas/Dinheiro'
 
     Totais:
       type: object
