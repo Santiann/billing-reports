@@ -68,6 +68,34 @@ class BillingReportCsvExportTest extends TestCase
         $this->assertStringContainsString('Paga', $conteudo);
     }
 
+    public function test_cabecalho_reflete_cada_base_de_periodo_e_status(): void
+    {
+        $this->travelTo(self::HOJE);
+        $this->actingAsUser();
+
+        // Cada rótulo é um ramo próprio, e um ramo não exercitado é um rótulo
+        // que pode estar errado sem ninguém notar.
+        $this->assertStringContainsString(
+            'Data de pagamento',
+            $this->exportar(['date_field' => 'payment_date']),
+        );
+
+        $this->assertStringContainsString(
+            'Data de vencimento',
+            $this->exportar(['date_field' => 'due_date']),
+        );
+
+        $this->assertStringContainsString(
+            'Pendente',
+            $this->exportar(['status' => 'pending']),
+        );
+
+        $this->assertStringContainsString(
+            'Vencida',
+            $this->exportar(['status' => 'overdue']),
+        );
+    }
+
     public function test_arquivo_traz_o_cabecalho_das_colunas(): void
     {
         $this->actingAsUser();

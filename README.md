@@ -871,6 +871,44 @@ a face SQL do `InterestCalculator` com a face PHP. Em SQLite ele estaria
 validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
+```
+OK (129 tests, 384 assertions)
+```
+
+### Cobertura
+
+```bash
+docker compose exec php php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text
+```
+
+| | |
+|---|---|
+| **Linhas** | **99,81%** (536/537) |
+| Métodos | 98,96% (95/96) |
+| Classes | 96,77% (30/31) |
+
+Usa **pcov**, não xdebug: ele existe só para cobertura e custa uma fração do
+tempo. Fica desligado por padrão (`pcov.enabled = 0`) para não pesar na
+execução normal, e é ligado na linha de comando.
+
+O `-d` precisa ir direto no `phpunit` porque `artisan test --coverage` roda o
+PHPUnit em subprocesso e a flag não propaga — ele responde
+"No code coverage driver available" mesmo com a extensão carregada.
+
+**A linha não coberta**, e por quê: `BillingReportCsvExport.php:68`, o
+`flush()` que dispara a cada 500 linhas escritas. Cobri-la exigiria criar 500
+cobranças num teste para afirmar um efeito colateral sem resultado observável.
+Fica descoberta de propósito — perseguir o último ponto percentual produziria
+um teste pior, não um sistema melhor.
+
+O relatório de cobertura foi o que expôs três lacunas reais, que já estão
+fechadas: o filtro `status=pending` do relatório nunca era exercitado (os
+testes usavam `paid` e `overdue` e pulavam o terceiro), três rótulos de
+cabeçalho da exportação nunca eram gerados, e o ramo defensivo do calculador
+para cobrança paga sem data de pagamento não tinha teste.
+
+### Banco de testes
+
 O banco da suíte é o `faturamento_test`, separado do de desenvolvimento porque
 `RefreshDatabase` derruba e recria o schema a cada execução. Ele é criado no
 first-init do MySQL por `docker/mysql/init/01-create-test-database.sql`. Em um

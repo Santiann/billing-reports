@@ -154,6 +154,27 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame($congelado, $this->viaSql($billing->id));
     }
 
+    public function test_cobranca_paga_sem_data_de_pagamento_nao_quebra(): void
+    {
+        $this->travelTo(self::HOJE);
+
+        $billing = $this->makeBilling('1000.00', '0.0200', '2026-04-10', null);
+
+        // Estado inconsistente que a API não produz — status pago sem data —
+        // mas que um import ou uma correção manual no banco pode criar. O
+        // ramo defensivo existe para isso, e existir sem teste é o mesmo que
+        // não existir.
+        \Illuminate\Support\Facades\DB::table('billings')
+            ->where('id', $billing->id)
+            ->update(['status' => 'paid', 'payment_date' => null, 'paid_amount' => null]);
+
+        $calculation = (new InterestCalculator())->for($billing->fresh());
+
+        $this->assertSame(0, $calculation->daysLate);
+        $this->assertSame('1000.00', $calculation->updatedAmount);
+        $this->assertSame('0.00', $calculation->interestAmount);
+    }
+
     // --- helpers ------------------------------------------------------
 
     private function makeBilling(

@@ -11,9 +11,14 @@ ARG GID=1000
 
 # pdo_mysql e bcmath compilam a partir do fonte, e a imagem alpine não traz
 # toolchain — daí o pacote virtual, removido logo depois para não inchar.
+# pcov em vez de xdebug para cobertura: ele existe só para isso e custa uma
+# fração do tempo de execução. Fica desligado por padrão e é habilitado na
+# linha de comando quando se quer o relatório de cobertura.
 RUN apk add --no-cache git unzip shadow \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql bcmath \
+    && pecl install pcov \
+    && docker-php-ext-enable pcov \
     && apk del .build-deps \
     && groupmod -o -g "${GID}" www-data \
     && usermod -o -u "${UID}" -g "${GID}" www-data

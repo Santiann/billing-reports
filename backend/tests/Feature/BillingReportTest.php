@@ -127,6 +127,22 @@ class BillingReportTest extends TestCase
         $this->assertSame(3, $response->json('totals.count'));
     }
 
+    public function test_filtra_por_status_pendente(): void
+    {
+        $this->travelTo(self::HOJE);
+        $this->actingAsUser();
+
+        Billing::factory()->count(4)->create();          // pendentes no prazo
+        Billing::factory()->count(2)->overdue(30)->create(); // pendentes vencidas
+        Billing::factory()->count(3)->paid()->create();
+
+        // `pending` é o status gravado e inclui as vencidas, que são pendentes
+        // com vencimento no passado. Quem quer só as vencidas usa `overdue`.
+        $response = $this->getJson('/api/reports/billings?status=pending')->assertOk();
+
+        $this->assertSame(6, $response->json('totals.count'));
+    }
+
     public function test_filtra_por_vencida_que_e_condicao_derivada(): void
     {
         $this->travelTo(self::HOJE);
