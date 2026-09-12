@@ -23,21 +23,43 @@ final class RegisterPayment
         CarbonInterface|string|null $paymentDate = null,
         ?string $paidAmount = null,
     ): Billing {
+        $billing->update($this->freeze($billing, $paymentDate, $paidAmount));
+
+        return $billing;
+    }
+
+    /**
+     * As colunas que o pagamento grava, sem gravar.
+     *
+     * Existe separada por causa do seeder de volume: ele precisa dos mesmos
+     * valores congelados para milhões de linhas que entram por insert em lote,
+     * e um UPDATE por cobrança destruiria a carga. Com isto ele monta a linha
+     * pela regra de produção, sem reescrever a fórmula.
+     *
+     * Devolve escalares, e não enum e Carbon, porque os dois consumidores
+     * comem o mesmo array: o `update()` do Eloquent, que faz o cast na
+     * entrada, e o insert cru do seeder, que não faz.
+     *
+     * @return array<string, string>
+     */
+    public function freeze(
+        Billing $billing,
+        CarbonInterface|string|null $paymentDate = null,
+        ?string $paidAmount = null,
+    ): array {
         $date = CarbonImmutable::parse(
             $paymentDate ?? CarbonImmutable::now(),
         )->startOfDay();
 
         $calculation = (new InterestCalculator($date))->for($billing);
 
-        $billing->update([
-            'status' => BillingStatus::Paid,
-            'payment_date' => $date,
+        return [
+            'status' => BillingStatus::Paid->value,
+            'payment_date' => $date->toDateString(),
             'paid_interest_amount' => $calculation->interestAmount,
             // O valor efetivamente pago pode diferir do calculado (acordo,
             // desconto). Quando não informado, assume-se o valor atualizado.
             'paid_amount' => $paidAmount ?? $calculation->updatedAmount,
-        ]);
-
-        return $billing;
+        ];
     }
 }

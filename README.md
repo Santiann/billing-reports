@@ -861,7 +861,65 @@ sequenciais para garantir unicidade sem consultar o banco, o que tornaria uma
 segunda execução impossível sobre os dados da primeira; e medir consulta sobre
 volume acumulado de execuções anteriores não diria nada.
 
-Medição nesta máquina: 100.000 cobranças em 53s.
+Uma exceção: ele **não trunca tabela já vazia**. `TRUNCATE` é DDL e custa ~7s
+por tabela nesta base mesmo sem ter o que apagar, e há um efeito colateral pior
+do que o tempo — descrito em [Testes](#o-teste-do-seeder-não-emite-ddl).
+
+### Pagas em atraso, com juros congelados de verdade
+
+Quarenta por cento das cobranças nascem pagas, e **35% dessas foram pagas com
+atraso** — com `paid_amount` e `paid_interest_amount` calculados, não zerados.
+
+Sem isso a base de medição não exercita a regra que mais importa no domínio: o
+relatório mostraria R$ 0,00 de juros recebidos, e a tela de detalhe de uma
+cobrança paga nunca teria juros congelados para exibir. Uma base de dois
+milhões de linhas em que a regra central nunca aparece não é base de medição, é
+volume.
+
+**O valor congelado vem do `RegisterPayment`**, o mesmo serviço que a API usa
+quando alguém registra um pagamento pela tela. O seeder decide *quando* a
+cobrança foi paga e mais nada. Para isso o serviço ganhou `freeze()`, que
+devolve as colunas do pagamento sem gravá-las:
+
+| | quem chama | o que faz com o retorno |
+|---|---|---|
+| `__invoke()` | API, factory | `update()` no model |
+| `freeze()` | seeder de volume | vira campo da linha do insert em lote |
+
+A alternativa era escrever `valor * POW(1 + taxa, dias/30)` dentro do seeder.
+Seria mais rápido e estaria errado: a base de medição passaria a validar uma
+cópia da regra, e uma divergência entre as duas só apareceria quando alguém
+comparasse a tela com o relatório. `BillingVolumeSeederTest` fecha essa porta —
+ele reconstrói a cobrança semeada como pendente, paga pelo serviço de produção
+na mesma data e exige igualdade até o centavo.
+
+Dois limites, ambos com motivo:
+
+- **Atraso de no máximo 120 dias.** Sem teto, uma cobrança vencida há três anos
+  paga a 5% ao mês acumularia `1,05^36` — quase seis vezes o valor original.
+  Acontece, mas não é o que uma base de faturamento parece.
+- **Pagamento nunca cai no futuro.** A versão anterior pagava sempre de 1 a 25
+  dias antes do vencimento, e para cobrança que ainda vai vencer isso produzia
+  data de pagamento depois de hoje. Cobrança cujo vencimento está a mais de 25
+  dias de distância simplesmente nasce pendente.
+
+### Quanto custa congelar
+
+Medição A/B na mesma máquina e na mesma sessão, 200.000 cobranças inseridas na
+tabela com os sete índices do relatório:
+
+| | total | PHP | INSERT | linhas/s |
+|---|---|---|---|---|
+| Sem congelamento | 330,1s | 6,5s | 323,5s | 606 |
+| Com congelamento | 364,1s | 32,8s | 331,3s | 549 |
+
+O congelamento custa **0,29 ms por cobrança paga** — 26s a mais por 200.000
+linhas, ou +10% no total. O que domina é o INSERT, com 90% do tempo: o seeder é
+limitado pelo banco, não pelo PHP, e é por isso que trocar o `RegisterPayment`
+por uma fórmula inline compraria pouco e custaria a fonte única da regra.
+
+O detalhe do custo, medido em 20.000 iterações isoladas: `new Billing()` 0,052
+ms, `InterestCalculator::for()` 0,150 ms, o resto é a escolha da data.
 
 ---
 
@@ -880,7 +938,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (129 tests, 384 assertions)
+OK (135 tests, 411 assertions)
 ```
 
 ### Cobertura
@@ -914,6 +972,26 @@ fechadas: o filtro `status=pending` do relatório nunca era exercitado (os
 testes usavam `paid` e `overdue` e pulavam o terceiro), três rótulos de
 cabeçalho da exportação nunca eram gerados, e o ramo defensivo do calculador
 para cobrança paga sem data de pagamento não tinha teste.
+
+### O teste do seeder não emite DDL
+
+`BillingVolumeSeederTest` roda o seeder de verdade sobre uma amostra de 600
+cobranças e não limpa nada depois: quem desfaz é o rollback do
+`RefreshDatabase`. Limpar com `TRUNCATE` seria o caminho óbvio e custaria caro.
+
+`TRUNCATE` é DDL, e em MySQL DDL faz **commit implícito**. O Laravel percebe
+que a transação do teste sumiu e marca `RefreshDatabaseState::$migrated =
+false` — o que dispara um `migrate:fresh` inteiro antes de **cada teste
+seguinte**, e não só dos desta classe. O código está em
+`RefreshDatabase.php:158`, e o efeito foi medido aqui:
+
+| | duração da classe |
+|---|---|
+| Com `TRUNCATE` no teardown | 360s (6 testes, ~50s de `migrate:fresh` cada) |
+| Sem DDL nenhum | 62s (60s do `migrate:fresh` único + 0,3s por teste) |
+
+É a mesma razão pela qual o seeder sai cedo quando não há o que truncar: em
+tabela vazia, o `TRUNCATE` só teria o custo.
 
 ### Banco de testes
 

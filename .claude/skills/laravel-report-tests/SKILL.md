@@ -95,6 +95,21 @@ cobre a regra que ele diz cobrir.
 
 ---
 
+## Armadilha 6 — DDL dentro do teste
+
+`TRUNCATE`, `ALTER` e qualquer outro DDL fazem **commit implícito** em MySQL. A
+transação que o `RefreshDatabase` abriu morre ali, o Laravel detecta que ela
+sumiu e marca `RefreshDatabaseState::$migrated = false` — o que dispara um
+`migrate:fresh` inteiro antes de **cada teste seguinte da suíte**, não só dos
+da classe culpada. Medido neste projeto: ~50s por teste contra 0,3s.
+
+Nunca limpar tabela no teardown. Quem limpa é o rollback do `RefreshDatabase`.
+Um seeder invocado de dentro do teste também não pode truncar — o
+`BillingVolumeSeeder` sai cedo quando as tabelas já estão vazias justamente por
+isso.
+
+---
+
 ## Convenções
 
 - Feature tests para tudo que passa por HTTP; unit test apenas para o
