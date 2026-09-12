@@ -13,6 +13,13 @@ type ImportFormProps = {
   action: (state: ImportState, formData: FormData) => Promise<ImportState>;
   /** Colunas do CSV, na ordem, para o cabeçalho de exemplo e a amostra. */
   columns: ReadonlyArray<{ field: string; label: string }>;
+  /**
+   * Campo que identifica a linha na tabela de erros.
+   *
+   * Cliente se reconhece pelo nome e cobrança pela descrição. Fixar "name"
+   * deixaria metade dos erros da importação de cobranças sem identificação.
+   */
+  labelField: string;
   exampleCsv: string;
   voltarHref: string;
 };
@@ -31,6 +38,7 @@ const INITIAL: ImportState = {};
 export function ImportForm({
   action,
   columns,
+  labelField,
   exampleCsv,
   voltarHref,
 }: ImportFormProps) {
@@ -115,7 +123,7 @@ export function ImportForm({
               {report && !importado && report.valid_count > 0 ? (
                 <Button type="submit" name="acao" value="import" disabled={isPending}>
                   Importar {report.valid_count.toLocaleString("pt-BR")}{" "}
-                  {report.valid_count === 1 ? "cliente" : "registros"}
+                  {report.valid_count === 1 ? "registro" : "registros"}
                 </Button>
               ) : null}
 
@@ -153,7 +161,7 @@ export function ImportForm({
                         {erro.line}
                       </TD>
                       <TD className="text-ink-muted">
-                        {erro.values.name || "—"}
+                        {erro.values[labelField] || "—"}
                         {erro.values.document ? (
                           <span className="block font-mono text-xs">
                             {erro.values.document}

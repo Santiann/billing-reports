@@ -786,6 +786,104 @@ paths:
                   due_date:
                     - O campo data de vencimento deve ser uma data posterior ou igual a data de emissão.
 
+  /api/billings/import:
+    post:
+      tags: [Cobranças]
+      summary: Importa cobranças de um arquivo CSV
+      description: |
+        Mesma mecânica da importação de clientes — `?preview=1` analisa sem
+        gravar, importação parcial é o comportamento esperado, e as linhas
+        recusadas voltam com o número da linha do arquivo e o motivo — com duas
+        regras próprias.
+
+        **O cliente é resolvido pelo documento**, que precisa já estar
+        cadastrado. O arquivo vem de fora e não conhece o id interno; documento
+        é a identidade de negócio que as duas pontas têm. Linha cujo documento
+        não existe falha sozinha, sem impedir as outras.
+
+        **A cobrança nasce pendente**, como a cadastrada pela tela. Coluna de
+        status ou de valor pago no arquivo é **ignorada**, não aceita: aceitar
+        `paid` criaria cobrança paga sem os valores congelados, e quem faz essa
+        transição é `POST /api/billings/{billing}/payment`.
+
+        Formatos aceitos, porque o arquivo costuma sair de planilha: valor como
+        `1.234,56` ou `1234.56`, data como `09/08/2026` ou `2026-08-09`, taxa
+        como `0,02`. Taxa ausente vira zero — cobrança sem juros é legítima.
+
+        Ao contrário de cliente, **linhas idênticas geram duas cobranças**:
+        cobrança não tem chave natural, e duas mensalidades do mesmo cliente com
+        o mesmo vencimento são duas cobranças de verdade.
+      operationId: importarCobrancas
+      parameters:
+        - name: preview
+          in: query
+          description: Analisa sem gravar.
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    CSV com as colunas documento, descricao, valor, emissao e
+                    vencimento. A taxa é opcional.
+      responses:
+        200:
+          description: Relatório do que aconteceu — ou do que aconteceria.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelatorioDeImportacao'
+              example:
+                total_rows: 5
+                valid_count: 3
+                imported_count: 3
+                error_count: 2
+                errors_truncated: false
+                errors:
+                  - line: 4
+                    messages:
+                      - O vencimento não pode ser anterior à emissão.
+                    values:
+                      document: "12345678000190"
+                      description: Vencimento invertido
+                  - line: 5
+                    messages:
+                      - Nenhum cliente cadastrado com este documento.
+                    values:
+                      document: "00000000000000"
+                      description: Cliente que não existe
+                sample:
+                  - document: "12345678000190"
+                    description: Mensalidade de setembro
+                    original_amount: "1500.00"
+                    monthly_interest_rate: "0.02"
+                    issue_date: "2026-08-10"
+                    due_date: "2026-09-09"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        422:
+          description: |
+            O arquivo não serve: não é CSV, passa do tamanho, ou o cabeçalho não
+            tem as colunas obrigatórias.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroDeValidacao'
+              example:
+                message: "O arquivo precisa das colunas: valor, emissao, vencimento. Cabeçalho recebido: documento, descricao."
+                errors:
+                  file:
+                    - "O arquivo precisa das colunas: valor, emissao, vencimento. Cabeçalho recebido: documento, descricao."
+
   /api/billings/{billing}:
     parameters:
       - $ref: '#/components/parameters/IdDaCobranca'

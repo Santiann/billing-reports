@@ -30,6 +30,7 @@ export default function ImportCustomersPage() {
       <ImportForm
         action={importCustomers}
         columns={COLUNAS}
+        labelField="name"
         exampleCsv={EXEMPLO}
         voltarHref="/clientes"
       />

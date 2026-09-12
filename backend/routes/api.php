@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillingController;
+use App\Http\Controllers\Api\BillingImportController;
 use App\Http\Controllers\Api\BillingReportController;
 use App\Http\Controllers\Api\BillingReportCsvController;
 use App\Http\Controllers\Api\BillingReportPdfController;
@@ -30,6 +31,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('billings', BillingController::class)
         ->only(['index', 'store', 'show', 'update']);
+
+    Route::post('billings/import', BillingImportController::class)
+        ->name('billings.import');
 
     Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
         ->name('billings.pay');

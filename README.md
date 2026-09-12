@@ -670,6 +670,44 @@ upload — e a mensagem diz o nome que o usuário precisa digitar (`documento`),
 não o nome interno do campo (`document`). Não há o que importar parcialmente
 quando nem dá para saber o que é cada coluna.
 
+### Cobranças: duas regras a mais
+
+`/cobrancas/importar` usa o mesmo leitor e o mesmo formulário, com duas regras
+próprias.
+
+**O cliente é resolvido pelo documento**, não por id. O arquivo vem de fora e
+não conhece o id interno; documento é a identidade de negócio que as duas pontas
+têm. A resolução acontece **por lote**: uma consulta traz os clientes dos 500
+documentos de uma vez, e há teste afirmando que mil cobranças espalhadas por cem
+clientes não passam de 20 consultas — sem o lote seriam mil.
+
+**A cobrança nasce pendente**, como a cadastrada pela tela. Coluna de status ou
+de valor pago no arquivo é **ignorada**, não aceita: aceitar `paid` criaria
+cobrança paga sem os valores congelados, que é o mesmo motivo pelo qual o
+formulário de cadastro não tem esses campos. Existe teste enviando
+`status;valor_pago` no arquivo e afirmando que a cobrança entra pendente.
+
+Formatos que vêm de planilha, todos aceitos:
+
+| No arquivo | No banco |
+|---|---|
+| `1.234,56` ou `1234.56` | `1234.56` |
+| `09/08/2026` ou `2026-08-09` | `2026-08-09` |
+| `0,035` | `0.0350` |
+| taxa ausente | `0` — cobrança sem juros é legítima |
+
+A conversão de data usa `DateTimeImmutable` e não `CarbonImmutable`, e isso é
+deliberado: o Carbon **lança exceção** quando o valor não casa com o formato, em
+vez de devolver `false` como o nativo. Aqui a tentativa que falha é o caso
+normal — são quatro formatos testados em sequência — e usar exceção para fluxo
+esperado custa caro e lê pior. As duas convertem `32/13/2026` rolando para o mês
+seguinte, então a data é formatada de volta e comparada com a original; sem isso,
+data inválida viraria cobrança com vencimento errado em vez de erro na linha.
+
+Ao contrário de cliente, **linhas idênticas geram duas cobranças**: cobrança não
+tem chave natural, e duas mensalidades do mesmo cliente com o mesmo vencimento
+são duas cobranças de verdade.
+
 ---
 
 ## Cálculo de juros
@@ -1310,7 +1348,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (175 tests, 662 assertions)
+OK (188 tests, 713 assertions)
 ```
 
 ### Cobertura

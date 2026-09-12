@@ -61,9 +61,17 @@ export default async function BillingsPage({ searchParams }: PageProps) {
       <PageHeader
         title="Cobranças"
         action={
-          <Link href="/cobrancas/nova" className={buttonClasses()}>
-            Nova cobrança
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/cobrancas/importar"
+              className={buttonClasses({ variant: "secondary" })}
+            >
+              Importar CSV
+            </Link>
+            <Link href="/cobrancas/nova" className={buttonClasses()}>
+              Nova cobrança
+            </Link>
+          </div>
         }
       />
 

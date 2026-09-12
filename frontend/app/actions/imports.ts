@@ -64,3 +64,10 @@ export async function importCustomers(
 ): Promise<ImportState> {
   return enviar("customers", formData);
 }
+
+export async function importBillings(
+  _previous: ImportState,
+  formData: FormData,
+): Promise<ImportState> {
+  return enviar("billings", formData);
+}
