@@ -20,6 +20,13 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'role' => $this->role->value,
+            // O rótulo vem do enum de PHP para não duplicar a tradução no
+            // frontend e as duas saírem de sincronia.
+            'role_label' => $this->role->label(),
+            // A tela usa isto para esconder o que o perfil não pode fazer. É
+            // conveniência, não barreira: quem manda no acesso é o backend.
+            'can_write' => $this->role->canWrite(),
         ];
     }
 }

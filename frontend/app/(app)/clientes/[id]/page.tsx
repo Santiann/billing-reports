@@ -8,6 +8,7 @@ import { Feedback } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/page-header";
 import { ApiError } from "@/lib/api";
 import { getCustomer } from "@/lib/customers";
+import { getSessionUser } from "@/lib/session-user";
 import type { Customer } from "@/types/customer";
 
 type PageProps = {
@@ -32,6 +33,8 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
     throw error;
   }
 
+  const { can_write: podeEscrever } = await getSessionUser();
+
   return (
     <div>
       {/* Nome e status sobem da ficha para o cabeçalho: repetir o nome logo
@@ -45,12 +48,14 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           </Badge>
         }
         action={
-          <Link
-            href={`/clientes/${customer.id}/editar`}
-            className={buttonClasses({ variant: "secondary" })}
-          >
-            Editar
-          </Link>
+          podeEscrever ? (
+            <Link
+              href={`/clientes/${customer.id}/editar`}
+              className={buttonClasses({ variant: "secondary" })}
+            >
+              Editar
+            </Link>
+          ) : null
         }
       />
 

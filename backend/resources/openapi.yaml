@@ -372,6 +372,8 @@ paths:
                   created_at: "2026-09-12T04:42:44+00:00"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         422:
           description: |
             Validação falhou. Os erros vêm campo a campo, que é o que permite ao
@@ -478,6 +480,8 @@ paths:
                     status: active
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         422:
           description: |
             O arquivo não serve: não é CSV, passa do tamanho, ou o cabeçalho não
@@ -562,6 +566,8 @@ paths:
                   created_at: "2026-09-12T04:42:44+00:00"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         404:
           $ref: '#/components/responses/NaoEncontrado'
         422:
@@ -607,6 +613,8 @@ paths:
                   created_at: "2026-09-12T04:42:44+00:00"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         404:
           $ref: '#/components/responses/NaoEncontrado'
         422:
@@ -774,6 +782,8 @@ paths:
                   updated_amount: "1534.05"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         422:
           description: Validação falhou.
           content:
@@ -870,6 +880,8 @@ paths:
                     due_date: "2026-09-09"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         422:
           description: |
             O arquivo não serve: não é CSV, passa do tamanho, ou o cabeçalho não
@@ -977,6 +989,8 @@ paths:
                   updated_amount: "1636.32"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         404:
           $ref: '#/components/responses/NaoEncontrado'
         422:
@@ -1039,6 +1053,8 @@ paths:
                   updated_amount: "1636.32"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         404:
           $ref: '#/components/responses/NaoEncontrado'
         422:
@@ -1111,6 +1127,8 @@ paths:
                   updated_amount: "1530.00"
         401:
           $ref: '#/components/responses/NaoAutenticado'
+        403:
+          $ref: '#/components/responses/PerfilSemPermissao'
         404:
           $ref: '#/components/responses/NaoEncontrado'
         422:
@@ -1473,6 +1491,18 @@ components:
           example:
             message: Unauthenticated.
 
+    PerfilSemPermissao:
+      description: |
+        O perfil do usuário é de consulta e não escreve. Esta é a barreira real:
+        esconder o botão na tela é conveniência para quem não pode usá-lo, e
+        quem sabe o endereço do endpoint chega nele sem passar por tela nenhuma.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Mensagem'
+          example:
+            message: Seu perfil é de consulta e não permite esta operação.
+
     NaoEncontrado:
       description: O registro não existe.
       content:
@@ -1547,6 +1577,21 @@ components:
         email:
           type: string
           format: email
+        role:
+          type: string
+          enum: [admin, viewer]
+        role_label:
+          type: string
+          description: Rótulo em português, vindo do enum do backend.
+          examples: ["Consulta"]
+        can_write:
+          type: boolean
+          description: |
+            Se o perfil pode criar, editar, importar e registrar pagamento. A
+            tela usa isto para esconder o que não adianta oferecer — é
+            conveniência, não barreira: o backend recusa a operação de qualquer
+            forma, com 403.
+            
 
     Customer:
       type: object

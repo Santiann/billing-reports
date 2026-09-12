@@ -20,23 +20,21 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+/*
+ * Leitura: todo perfil autenticado.
+ *
+ * Exportar está aqui de propósito — o arquivo é o mesmo relatório em outro
+ * formato, e recusá-lo a quem pode ver a tela seria proteger o dado do lugar
+ * errado.
+ */
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::apiResource('customers', CustomerController::class)
-        ->only(['index', 'store', 'show', 'update']);
-
-    Route::post('customers/import', CustomerImportController::class)
-        ->name('customers.import');
+        ->only(['index', 'show']);
 
     Route::apiResource('billings', BillingController::class)
-        ->only(['index', 'store', 'show', 'update']);
-
-    Route::post('billings/import', BillingImportController::class)
-        ->name('billings.import');
-
-    Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
-        ->name('billings.pay');
+        ->only(['index', 'show']);
 
     Route::get('reports/billings', BillingReportController::class)
         ->name('reports.billings');
@@ -46,4 +44,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('reports/billings/pdf', BillingReportPdfController::class)
         ->name('reports.billings.pdf');
+});
+
+/*
+ * Escrita: só o perfil de administrador.
+ *
+ * O grupo existe para a lista de rotas que escrevem caber numa olhada. Rota
+ * nova fora daqui salta aos olhos na revisão — e, se escapar, RoleAccessTest
+ * não a cobre, que é o sinal seguinte.
+ */
+Route::middleware(['auth:sanctum', 'can.write'])->group(function () {
+    Route::apiResource('customers', CustomerController::class)
+        ->only(['store', 'update']);
+
+    Route::post('customers/import', CustomerImportController::class)
+        ->name('customers.import');
+
+    Route::apiResource('billings', BillingController::class)
+        ->only(['store', 'update']);
+
+    Route::post('billings/import', BillingImportController::class)
+        ->name('billings.import');
+
+    Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
+        ->name('billings.pay');
 });

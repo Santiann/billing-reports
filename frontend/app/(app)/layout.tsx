@@ -6,9 +6,8 @@ import { LogoutButton } from "@/components/logout-button";
 import { MainNav } from "@/components/main-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ApiError } from "@/lib/api";
-import { fetchAsUser } from "@/lib/server-api";
+import { getSessionUser } from "@/lib/session-user";
 import { isTheme, THEME_COOKIE } from "@/lib/theme";
-import type { SessionResponse } from "@/types/auth";
 
 /**
  * Layout da área autenticada.
@@ -24,7 +23,7 @@ export default async function AppLayout({
   let user;
 
   try {
-    ({ user } = await fetchAsUser<SessionResponse>("/api/auth/me"));
+    user = await getSessionUser();
   } catch (error) {
     // Cookie presente e token inválido: quem apaga o cookie é o handler,
     // senão middleware e layout se redirecionam em loop.
@@ -64,6 +63,13 @@ export default async function AppLayout({
           <div className="order-2 ml-auto flex items-center gap-2 sm:order-3">
             <span className="hidden text-xs text-ink-muted lg:inline">
               {user.email}
+              {/* O perfil só é dito quando limita: administrador é o caso
+                  normal e não precisa de etiqueta. */}
+              {user.can_write ? null : (
+                <span className="ml-2 rounded-sm bg-sunken px-1.5 py-0.5 text-ink-faint">
+                  {user.role_label}
+                </span>
+              )}
             </span>
             <ThemeToggle atual={theme} />
             <LogoutButton />

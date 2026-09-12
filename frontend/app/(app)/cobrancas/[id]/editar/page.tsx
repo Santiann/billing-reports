@@ -3,7 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { updateBilling } from "@/app/actions/billings";
 import { BillingForm } from "@/components/billings/billing-form";
 import { Card, CardBody } from "@/components/ui/card";
+import { Forbidden } from "@/components/ui/forbidden";
 import { PageHeader } from "@/components/ui/page-header";
+import { getSessionUser } from "@/lib/session-user";
 import { ApiError } from "@/lib/api";
 import { getBilling } from "@/lib/billings";
 import type { Billing } from "@/types/billing";
@@ -34,6 +36,15 @@ export default async function EditBillingPage({ params }: PageProps) {
   }
 
   const action = updateBilling.bind(null, billing.id);
+
+  // A tela não é a barreira — o backend recusa a operação de qualquer forma —
+  // mas quem digita o endereço merece a explicação, não um formulário que vai
+  // falhar no envio.
+  const { can_write: podeEscrever } = await getSessionUser();
+
+  if (!podeEscrever) {
+    return <Forbidden voltar={{ href: "/cobrancas", label: "Cobranças" }} />;
+  }
 
   return (
     <div>

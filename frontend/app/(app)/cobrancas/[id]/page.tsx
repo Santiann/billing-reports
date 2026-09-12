@@ -10,6 +10,7 @@ import { Feedback } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/page-header";
 import { ApiError } from "@/lib/api";
 import { getBilling } from "@/lib/billings";
+import { getSessionUser } from "@/lib/session-user";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import type { Billing } from "@/types/billing";
 
@@ -35,6 +36,7 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
   }
 
   const paga = billing.status === "paid";
+  const { can_write: podeEscrever } = await getSessionUser();
 
   return (
     <div>
@@ -43,7 +45,7 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
         voltar={{ href: "/cobrancas", label: "Cobranças" }}
         badge={<BillingStatusBadge billing={billing} />}
         action={
-          paga ? undefined : (
+          paga || !podeEscrever ? undefined : (
             <Link
               href={`/cobrancas/${billing.id}/editar`}
               className={buttonClasses({ variant: "secondary" })}
@@ -149,12 +151,16 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
             />
           </section>
 
-          <Card className="mt-8">
-            <CardHeader title="Registrar pagamento" />
-            <CardBody className="p-6">
-              <PaymentForm billing={billing} />
-            </CardBody>
-          </Card>
+          {/* O formulário some para o perfil de consulta; o endpoint recusa
+              de qualquer forma. */}
+          {podeEscrever ? (
+            <Card className="mt-8">
+              <CardHeader title="Registrar pagamento" />
+              <CardBody className="p-6">
+                <PaymentForm billing={billing} />
+              </CardBody>
+            </Card>
+          ) : null}
         </>
       )}
     </div>

@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import { importBillings } from "@/app/actions/imports";
 import { ImportForm } from "@/components/imports/import-form";
+import { Forbidden } from "@/components/ui/forbidden";
 import { PageHeader } from "@/components/ui/page-header";
+import { getSessionUser } from "@/lib/session-user";
 
 const COLUNAS = [
   { field: "document", label: "Documento" },
@@ -17,7 +19,16 @@ const EXEMPLO = `documento;descricao;valor;taxa;emissao;vencimento
 12345678000190;Mensalidade de agosto;1.500,00;0,02;10/07/2026;09/08/2026
 98765432000155;Consultoria;800,00;0,02;2026-07-15;2026-08-15`;
 
-export default function ImportBillingsPage() {
+export default async function ImportBillingsPage() {
+  // A tela não é a barreira — o backend recusa a operação de qualquer forma —
+  // mas quem digita o endereço merece a explicação, não um formulário que vai
+  // falhar no envio.
+  const { can_write: podeEscrever } = await getSessionUser();
+
+  if (!podeEscrever) {
+    return <Forbidden voltar={{ href: "/cobrancas", label: "Cobranças" }} />;
+  }
+
   return (
     <div>
       <PageHeader

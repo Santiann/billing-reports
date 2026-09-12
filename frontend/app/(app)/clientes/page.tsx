@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { listCustomers } from "@/lib/customers";
+import { getSessionUser } from "@/lib/session-user";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -55,6 +56,8 @@ export default async function CustomersPage({ searchParams }: PageProps) {
     per_page: params.per_page,
   });
 
+  const { can_write: podeEscrever } = await getSessionUser();
+
   const currentSort = params.sort ?? "name";
   const currentDirection = params.direction ?? "asc";
 
@@ -63,17 +66,19 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       <PageHeader
         title="Clientes"
         action={
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/clientes/importar"
-              className={buttonClasses({ variant: "secondary" })}
-            >
-              Importar CSV
-            </Link>
-            <Link href="/clientes/novo" className={buttonClasses()}>
-              Novo cliente
-            </Link>
-          </div>
+          podeEscrever ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/clientes/importar"
+                className={buttonClasses({ variant: "secondary" })}
+              >
+                Importar CSV
+              </Link>
+              <Link href="/clientes/novo" className={buttonClasses()}>
+                Novo cliente
+              </Link>
+            </div>
+          ) : null
         }
       />
 
@@ -149,12 +154,16 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                     </Badge>
                   </TD>
                   <TD numeric>
-                    <Link
-                      href={`/clientes/${customer.id}/editar`}
-                      className="font-sans text-sm text-accent hover:underline"
-                    >
-                      Editar
-                    </Link>
+                    {podeEscrever ? (
+                      <Link
+                        href={`/clientes/${customer.id}/editar`}
+                        className="font-sans text-sm text-accent hover:underline"
+                      >
+                        Editar
+                      </Link>
+                    ) : (
+                      <span className="text-ink-faint">—</span>
+                    )}
                   </TD>
                 </TR>
               ))

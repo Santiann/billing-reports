@@ -15,7 +15,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | | |
 |---|---|
 | **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
-| **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
+| **Domínio** | [Perfis de acesso](#perfis-de-acesso) · [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Importação CSV](#importação-por-csv) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
 | **Decisões** | [Página pública](#página-pública) · [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
@@ -49,10 +49,13 @@ docker compose exec php php artisan db:seed
 Não há `.env` para copiar nem `composer install` para rodar à mão: o entrypoint
 do backend resolve os dois (ver [Bootstrap automático](#bootstrap-automático-do-backend)).
 
-| Credencial | Valor |
-|---|---|
-| E-mail | `admin@billing.test` |
-| Senha | `password` |
+| Perfil | E-mail | Senha |
+|---|---|---|
+| Administrador | `admin@billing.test` | `password` |
+| Consulta | `consulta@billing.test` | `password` |
+
+O segundo usuário existe para o perfil de consulta poder ser visto funcionando
+(ver [Perfis de acesso](#perfis-de-acesso)).
 
 ### Os alvos do Makefile
 
@@ -1348,7 +1351,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (188 tests, 713 assertions)
+OK (208 tests, 738 assertions)
 ```
 
 ### Cobertura
@@ -1453,6 +1456,69 @@ O que fica de fora, e por quê: `global-error.tsx`. Ele cobriria erro lançado
 pelo layout raiz, mas precisa reconstruir `<html>` e `<body>` e não herda o
 CSS global. O layout raiz deste projeto monta a página e carrega a fonte, nada
 mais — o custo não se paga.
+
+---
+
+## Perfis de acesso
+
+Dois perfis: **administrador**, que opera, e **consulta**, que lê tudo e não
+escreve nada.
+
+| | Administrador | Consulta |
+|---|---|---|
+| Ver clientes, cobranças, relatório e painel | sim | sim |
+| Exportar CSV e PDF | sim | **sim** |
+| Cadastrar, editar e importar | sim | não |
+| Registrar pagamento | sim | não |
+
+Exportar é leitura, e fica do lado de quem consulta: o arquivo é o mesmo
+relatório em outro formato, e recusá-lo a quem pode ver a tela seria proteger o
+dado do lugar errado.
+
+### A barreira é o backend, não a tela
+
+A interface esconde o que o perfil não pode fazer, e isso é **conveniência**.
+Quem sabe o endereço do endpoint chega nele sem passar por tela nenhuma:
+
+```bash
+curl -X POST localhost:8000/api/customers -H "Authorization: Bearer <token de consulta>"
+# 403 — Seu perfil é de consulta e não permite esta operação.
+```
+
+`RoleAccessTest` bate direto na API, sem tela no caminho, e cobre **todo**
+endpoint que escreve. Um endpoint de escrita novo que não aparecer lá fica sem
+teste, que é o sinal seguinte.
+
+Quem digitar o endereço de uma tela de escrita recebe a explicação — "seu perfil
+é de consulta" — e não um formulário que vai falhar no envio nem um 404
+mentiroso: a página existe, o que falta é permissão.
+
+### Middleware e não Policy
+
+Policy resolve autorização **por registro**: "este usuário pode editar ESTA
+cobrança". A regra aqui é por **perfil** e vale para todo registro, então ela
+está amarrada ao grupo de rotas.
+
+O ganho é o `routes/api.php`: dá para ler quais rotas escrevem olhando o
+arquivo, porque elas estão num grupo só, com `can.write`. Espalhada por uma
+classe de política para cada model, a mesma informação exigiria abrir quatro
+arquivos.
+
+### Dois defaults que parecem se contradizer
+
+A coluna `role` tem default **`viewer`** — o menor privilégio. Um usuário criado
+por um caminho que esqueceu de definir o perfil não sai escrevendo, que é o
+comportamento seguro quando alguém erra.
+
+A factory de testes cria **`admin`**. Não é contradição: o default do banco
+protege produção, e a factory serve a dezenas de testes que precisam escrever e
+não têm nada a ver com perfil. O default oposto ali faria todos eles falharem
+com 403 por um motivo que não é o deles.
+
+E os usuários que já existiam quando a migration rodou viraram administradores,
+apesar do default: antes dela não havia outro perfil, então quem estava lá era
+administrador por definição. Aplicar o default a eles tiraria o acesso de quem
+já operava o sistema.
 
 ---
 

@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { listBillings } from "@/lib/billings";
+import { getSessionUser } from "@/lib/session-user";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 type PageProps = {
@@ -56,22 +57,26 @@ export default async function BillingsPage({ searchParams }: PageProps) {
     per_page: params.per_page,
   });
 
+  const { can_write: podeEscrever } = await getSessionUser();
+
   return (
     <div>
       <PageHeader
         title="Cobranças"
         action={
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/cobrancas/importar"
-              className={buttonClasses({ variant: "secondary" })}
-            >
-              Importar CSV
-            </Link>
-            <Link href="/cobrancas/nova" className={buttonClasses()}>
-              Nova cobrança
-            </Link>
-          </div>
+          podeEscrever ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/cobrancas/importar"
+                className={buttonClasses({ variant: "secondary" })}
+              >
+                Importar CSV
+              </Link>
+              <Link href="/cobrancas/nova" className={buttonClasses()}>
+                Nova cobrança
+              </Link>
+            </div>
+          ) : null
         }
       />
 
@@ -165,7 +170,7 @@ export default async function BillingsPage({ searchParams }: PageProps) {
                     <BillingStatusBadge billing={billing} />
                   </TD>
                   <TD numeric>
-                    {billing.status === "paid" ? (
+                    {billing.status === "paid" || !podeEscrever ? (
                       <span className="text-ink-faint">—</span>
                     ) : (
                       <Link
