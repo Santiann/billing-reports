@@ -1036,6 +1036,13 @@ agente estão no repositório, como o teste exige:
 |---|---|
 | `CLAUDE.md` | Instruções de projeto: stack, a regra que governa a arquitetura, as duas origens de API, autenticação, limites de performance, ordem de commits |
 | `.claude/skills/laravel-report-tests/SKILL.md` | Skill acionada em tarefa de teste, com as armadilhas específicas deste projeto |
+| `.claude/skills/agent-browser/SKILL.md` | Automação de browser: navegar as telas, tirar screenshot e iterar sobre o que se está construindo |
+| `.claude/skills/github-actions-docs/SKILL.md` | Sintaxe de workflow do GitHub Actions ancorada na documentação oficial, em vez de memória |
+| `.claude/skills/vulnerability-scanner/SKILL.md` | Roteiro de análise de vulnerabilidade — OWASP, cadeia de suprimentos, superfície de ataque |
+
+As três últimas vieram prontas de outro projeto e foram copiadas sem alteração:
+skill é conteúdo versionado, e reescrever uma na importação é perder a versão
+que já foi exercitada em outro lugar.
 
 ### O que a configuração efetivamente evitou
 
