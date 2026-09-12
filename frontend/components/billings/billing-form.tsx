@@ -5,6 +5,8 @@ import { useActionState } from "react";
 
 import type { BillingFormState } from "@/app/actions/billings";
 import { CustomerPicker } from "@/components/billings/customer-picker";
+import { Button, buttonClasses } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 import type { Billing } from "@/types/billing";
 
 type BillingFormProps = {
@@ -19,14 +21,6 @@ type BillingFormProps = {
 
 const INITIAL: BillingFormState = {};
 
-function FieldError({ messages }: { messages?: string[] }) {
-  if (!messages?.length) {
-    return null;
-  }
-
-  return <p className="text-sm text-red-700">{messages[0]}</p>;
-}
-
 export function BillingForm({
   action,
   billing,
@@ -35,54 +29,54 @@ export function BillingForm({
 }: BillingFormProps) {
   const [state, formAction, isPending] = useActionState(action, INITIAL);
 
-  const fieldClass =
-    "rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 disabled:bg-slate-100";
-  const labelClass = "text-sm font-medium text-slate-700";
-
   return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-4" noValidate>
+    <form action={formAction} className="flex max-w-2xl flex-col gap-5" noValidate>
       {state.message ? (
         <p
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2 text-sm text-overdue"
         >
           {state.message}
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="customer_id" className={labelClass}>
-          Cliente
-        </label>
+      <Field
+        label="Cliente"
+        htmlFor="customer_id"
+        required
+        errors={state.errors?.customer_id}
+      >
         <CustomerPicker
           name="customer_id"
           defaultCustomer={billing?.customer}
           disabled={isPending}
           hasError={Boolean(state.errors?.customer_id)}
         />
-        <FieldError messages={state.errors?.customer_id} />
-      </div>
+      </Field>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="description" className={labelClass}>
-          Descrição
-        </label>
-        <input
+      <Field
+        label="Descrição"
+        htmlFor="description"
+        required
+        errors={state.errors?.description}
+      >
+        <Input
           id="description"
           name="description"
           defaultValue={billing?.description}
           disabled={isPending}
-          className={fieldClass}
+          aria-invalid={state.errors?.description ? true : undefined}
         />
-        <FieldError messages={state.errors?.description} />
-      </div>
+      </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="original_amount" className={labelClass}>
-            Valor original (R$)
-          </label>
-          <input
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field
+          label="Valor original (R$)"
+          htmlFor="original_amount"
+          required
+          errors={state.errors?.original_amount}
+        >
+          <Input
             id="original_amount"
             name="original_amount"
             type="number"
@@ -90,16 +84,20 @@ export function BillingForm({
             min="0.01"
             defaultValue={billing?.original_amount}
             disabled={isPending}
-            className={fieldClass}
+            aria-invalid={state.errors?.original_amount ? true : undefined}
+            className="font-mono tabular-nums"
           />
-          <FieldError messages={state.errors?.original_amount} />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="monthly_interest_rate" className={labelClass}>
-            Taxa de juros mensal
-          </label>
-          <input
+        <Field
+          label="Taxa de juros mensal"
+          htmlFor="monthly_interest_rate"
+          required
+          hint="Em fração — 0,02 equivale a 2% ao mês."
+          errors={state.errors?.monthly_interest_rate}
+        >
+          {/* Fração, não porcentagem: é como a coluna guarda. */}
+          <Input
             id="monthly_interest_rate"
             name="monthly_interest_rate"
             type="number"
@@ -107,63 +105,54 @@ export function BillingForm({
             min="0"
             defaultValue={billing?.monthly_interest_rate ?? "0.0200"}
             disabled={isPending}
-            className={fieldClass}
+            aria-invalid={state.errors?.monthly_interest_rate ? true : undefined}
+            className="font-mono tabular-nums"
           />
-          {/* Fração, não porcentagem: é como a coluna guarda. */}
-          <p className="text-xs text-slate-500">
-            Em fração — 0,02 equivale a 2% ao mês.
-          </p>
-          <FieldError messages={state.errors?.monthly_interest_rate} />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="issue_date" className={labelClass}>
-            Data de emissão
-          </label>
-          <input
+        <Field
+          label="Data de emissão"
+          htmlFor="issue_date"
+          required
+          errors={state.errors?.issue_date}
+        >
+          <Input
             id="issue_date"
             name="issue_date"
             type="date"
             defaultValue={billing?.issue_date}
             disabled={isPending}
-            className={fieldClass}
+            aria-invalid={state.errors?.issue_date ? true : undefined}
           />
-          <FieldError messages={state.errors?.issue_date} />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="due_date" className={labelClass}>
-            Data de vencimento
-          </label>
-          <input
+        <Field
+          label="Data de vencimento"
+          htmlFor="due_date"
+          required
+          errors={state.errors?.due_date}
+        >
+          <Input
             id="due_date"
             name="due_date"
             type="date"
             defaultValue={billing?.due_date}
             disabled={isPending}
-            className={fieldClass}
+            aria-invalid={state.errors?.due_date ? true : undefined}
           />
-          <FieldError messages={state.errors?.due_date} />
-        </div>
+        </Field>
       </div>
 
       {/* Status e pagamento não estão no formulário de propósito: quem faz a
           transição para paga é o registro de pagamento, que grava junto os
           valores congelados. */}
 
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md bg-slate-900 px-4 py-2 font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-        >
+      <div className="flex items-center gap-3 border-t border-rule pt-5">
+        <Button type="submit" disabled={isPending}>
           {isPending ? "Salvando…" : submitLabel}
-        </button>
+        </Button>
 
-        <Link
-          href={cancelHref}
-          className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
-        >
+        <Link href={cancelHref} className={buttonClasses({ variant: "ghost" })}>
           Cancelar
         </Link>
       </div>

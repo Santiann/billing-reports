@@ -1,8 +1,13 @@
 import Link from "next/link";
 
 import { CustomerFilters } from "@/components/customers/customer-filters";
+import { Badge } from "@/components/ui/badge";
+import { buttonClasses } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
+import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
+import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { listCustomers } from "@/lib/customers";
 
 type PageProps = {
@@ -55,104 +60,106 @@ export default async function CustomersPage({ searchParams }: PageProps) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Clientes</h1>
-
-        <Link
-          href="/clientes/novo"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-        >
-          Novo cliente
-        </Link>
-      </div>
+      <PageHeader
+        title="Clientes"
+        action={
+          <Link href="/clientes/novo" className={buttonClasses()}>
+            Novo cliente
+          </Link>
+        }
+      />
 
       <Feedback code={params.sucesso} />
 
-      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+      <Card className="mb-4 p-4">
         <CustomerFilters />
-      </div>
+      </Card>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-              <tr>
-                {SORTABLE.map((column) => (
-                  <th key={column.key} scope="col" className="px-4 py-3 font-medium">
+      <Card className="overflow-hidden">
+        <Table label="Clientes cadastrados">
+          <THead>
+            {SORTABLE.map((column) => {
+              const ativa = currentSort === column.key;
+
+              return (
+                <TH
+                  key={column.key}
+                  aria-sort={
+                    ativa
+                      ? currentDirection === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : undefined
+                  }
+                >
+                  <Link
+                    href={sortHref(params, column.key)}
+                    className={
+                      "inline-flex items-center gap-1 transition-colors hover:text-ink " +
+                      (ativa ? "text-ink" : "")
+                    }
+                  >
+                    {column.label}
+                    {/* A seta ocupa lugar mesmo inativa: sem isso o cabeçalho
+                        salta de largura a cada troca de ordenação. */}
+                    <span aria-hidden className={ativa ? "" : "opacity-0"}>
+                      {currentDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  </Link>
+                </TH>
+              );
+            })}
+            <TH>Status</TH>
+            <TH numeric>Ações</TH>
+          </THead>
+
+          <TBody>
+            {customers.data.length === 0 ? (
+              <TEmpty colSpan={5}>
+                Nenhum cliente encontrado com esses filtros.
+              </TEmpty>
+            ) : (
+              customers.data.map((customer) => (
+                <TR key={customer.id}>
+                  <TD>
                     <Link
-                      href={sortHref(params, column.key)}
-                      className="inline-flex items-center gap-1 transition hover:text-slate-900"
+                      href={`/clientes/${customer.id}`}
+                      className="font-medium text-ink hover:underline"
                     >
-                      {column.label}
-                      {currentSort === column.key ? (
-                        <span aria-hidden>
-                          {currentDirection === "asc" ? "↑" : "↓"}
-                        </span>
-                      ) : null}
+                      {customer.name}
                     </Link>
-                  </th>
-                ))}
-                <th scope="col" className="px-4 py-3 font-medium">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">
-                  Ações
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100">
-              {customers.data.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
-                    Nenhum cliente encontrado com esses filtros.
-                  </td>
-                </tr>
-              ) : (
-                customers.data.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      <Link
-                        href={`/clientes/${customer.id}`}
-                        className="hover:underline"
-                      >
-                        {customer.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{customer.document}</td>
-                    <td className="px-4 py-3 text-slate-600">{customer.email}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          customer.status === "active"
-                            ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
-                            : "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
-                        }
-                      >
-                        {customer.status_label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/clientes/${customer.id}/editar`}
-                        className="text-sm font-medium text-slate-700 hover:underline"
-                      >
-                        Editar
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                  </TD>
+                  <TD className="font-mono text-ink-muted">
+                    {customer.document}
+                  </TD>
+                  <TD className="text-ink-muted">{customer.email}</TD>
+                  <TD>
+                    <Badge
+                      tone={customer.status === "active" ? "positive" : "neutral"}
+                    >
+                      {customer.status_label}
+                    </Badge>
+                  </TD>
+                  <TD numeric>
+                    <Link
+                      href={`/clientes/${customer.id}/editar`}
+                      className="font-sans text-sm text-accent hover:underline"
+                    >
+                      Editar
+                    </Link>
+                  </TD>
+                </TR>
+              ))
+            )}
+          </TBody>
+        </Table>
 
         <Pagination
           meta={customers.meta}
           basePath="/clientes"
           searchParams={params}
         />
-      </div>
+      </Card>
     </div>
   );
 }

@@ -8,7 +8,18 @@ import type { ReactNode } from "react";
  * listagem, no detalhe e no relatório.
  */
 
-export type BadgeTone = "neutral" | "overdue" | "paid" | "pending" | "accent";
+export type BadgeTone =
+  | "neutral"
+  | "overdue"
+  | "paid"
+  | "pending"
+  | "accent"
+  // `positive` tem a mesma aparência de `paid` e existe para o código não
+  // mentir: um cliente ATIVO não é um cliente pago. Compartilhar a cor é
+  // correto — verde significa a mesma coisa nas duas telas —, mas escrever
+  // `tone="paid"` num cliente faria o próximo leitor procurar um pagamento
+  // que não existe.
+  | "positive";
 
 const TONES: Record<BadgeTone, string> = {
   neutral: "bg-sunken text-ink-muted",
@@ -16,6 +27,7 @@ const TONES: Record<BadgeTone, string> = {
   paid: "bg-paid-soft text-paid",
   pending: "bg-pending-soft text-pending",
   accent: "bg-accent-soft text-accent",
+  positive: "bg-paid-soft text-paid",
 };
 
 export function Badge({

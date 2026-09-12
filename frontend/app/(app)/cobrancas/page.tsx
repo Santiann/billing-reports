@@ -1,8 +1,13 @@
 import Link from "next/link";
 
 import { BillingFilters } from "@/components/billings/billing-filters";
+import { BillingStatusBadge } from "@/components/billings/billing-status-badge";
+import { buttonClasses } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
+import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
+import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { listBillings } from "@/lib/billings";
 import { formatCurrency, formatDate } from "@/lib/format";
 
@@ -11,9 +16,9 @@ type PageProps = {
 };
 
 const SORTABLE = [
-  { key: "due_date", label: "Vencimento" },
-  { key: "issue_date", label: "Emissão" },
-  { key: "original_amount", label: "Valor" },
+  { key: "due_date", label: "Vencimento", numeric: false },
+  { key: "issue_date", label: "Emissão", numeric: false },
+  { key: "original_amount", label: "Valor", numeric: true },
 ] as const;
 
 function sortHref(
@@ -53,131 +58,128 @@ export default async function BillingsPage({ searchParams }: PageProps) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Cobranças</h1>
-
-        <Link
-          href="/cobrancas/nova"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-        >
-          Nova cobrança
-        </Link>
-      </div>
+      <PageHeader
+        title="Cobranças"
+        action={
+          <Link href="/cobrancas/nova" className={buttonClasses()}>
+            Nova cobrança
+          </Link>
+        }
+      />
 
       <Feedback code={params.sucesso} />
 
-      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+      <Card className="mb-4 p-4">
         <BillingFilters />
-      </div>
+      </Card>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[52rem] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-              <tr>
-                <th scope="col" className="px-4 py-3 font-medium">Cliente</th>
-                <th scope="col" className="px-4 py-3 font-medium">Descrição</th>
-                {SORTABLE.map((column) => (
-                  <th key={column.key} scope="col" className="px-4 py-3 font-medium">
+      <Card className="overflow-hidden">
+        <Table label="Cobranças cadastradas">
+          <THead>
+            <TH>Cliente</TH>
+            <TH>Descrição</TH>
+            {SORTABLE.map((column) => {
+              const ativa = params.sort === column.key;
+
+              return (
+                <TH
+                  key={column.key}
+                  numeric={column.numeric}
+                  aria-sort={
+                    ativa
+                      ? (params.direction ?? "desc") === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : undefined
+                  }
+                >
+                  <Link
+                    href={sortHref(params, column.key)}
+                    className={
+                      "inline-flex items-center gap-1 transition-colors hover:text-ink " +
+                      (ativa ? "text-ink" : "")
+                    }
+                  >
+                    {column.label}
+                    {/* A seta ocupa lugar mesmo inativa: sem isso a coluna
+                        salta de largura a cada troca de ordenação. */}
+                    <span aria-hidden className={ativa ? "" : "opacity-0"}>
+                      {(params.direction ?? "desc") === "asc" ? "↑" : "↓"}
+                    </span>
+                  </Link>
+                </TH>
+              );
+            })}
+            <TH numeric>Atualizado</TH>
+            <TH>Status</TH>
+            <TH numeric>Ações</TH>
+          </THead>
+
+          <TBody>
+            {billings.data.length === 0 ? (
+              <TEmpty colSpan={8}>
+                Nenhuma cobrança encontrada com esses filtros.
+              </TEmpty>
+            ) : (
+              billings.data.map((billing) => (
+                <TR key={billing.id}>
+                  <TD className="text-ink-muted">
+                    {billing.customer?.name ?? "—"}
+                  </TD>
+                  <TD>
                     <Link
-                      href={sortHref(params, column.key)}
-                      className="inline-flex items-center gap-1 transition hover:text-slate-900"
+                      href={`/cobrancas/${billing.id}`}
+                      className="font-medium text-ink hover:underline"
                     >
-                      {column.label}
-                      {params.sort === column.key ? (
-                        <span aria-hidden>
-                          {(params.direction ?? "desc") === "asc" ? "↑" : "↓"}
-                        </span>
-                      ) : null}
+                      {billing.description}
                     </Link>
-                  </th>
-                ))}
-                <th scope="col" className="px-4 py-3 font-medium">Atualizado</th>
-                <th scope="col" className="px-4 py-3 font-medium">Status</th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">Ações</th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100">
-              {billings.data.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
-                    Nenhuma cobrança encontrada com esses filtros.
-                  </td>
-                </tr>
-              ) : (
-                billings.data.map((billing) => (
-                  <tr key={billing.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-600">
-                      {billing.customer?.name ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      <Link
-                        href={`/cobrancas/${billing.id}`}
-                        className="hover:underline"
-                      >
-                        {billing.description}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatDate(billing.due_date)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatDate(billing.issue_date)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatCurrency(billing.original_amount)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-slate-900">
-                        {formatCurrency(billing.updated_amount)}
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {formatDate(billing.due_date)}
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {formatDate(billing.issue_date)}
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {formatCurrency(billing.original_amount)}
+                  </TD>
+                  <TD numeric>
+                    <span className="font-medium text-ink">
+                      {formatCurrency(billing.updated_amount)}
+                    </span>
+                    {Number(billing.interest_amount) > 0 ? (
+                      <span className="block text-xs text-overdue">
+                        + {formatCurrency(billing.interest_amount)} de juros
                       </span>
-                      {Number(billing.interest_amount) > 0 ? (
-                        <span className="block text-xs text-red-700">
-                          + {formatCurrency(billing.interest_amount)} de juros
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      {billing.is_overdue ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                          Vencida
-                        </span>
-                      ) : billing.status === "paid" ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Paga
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          Pendente
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {billing.status === "paid" ? (
-                        <span className="text-sm text-slate-400">—</span>
-                      ) : (
-                        <Link
-                          href={`/cobrancas/${billing.id}/editar`}
-                          className="text-sm font-medium text-slate-700 hover:underline"
-                        >
-                          Editar
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    ) : null}
+                  </TD>
+                  <TD>
+                    <BillingStatusBadge billing={billing} />
+                  </TD>
+                  <TD numeric>
+                    {billing.status === "paid" ? (
+                      <span className="text-ink-faint">—</span>
+                    ) : (
+                      <Link
+                        href={`/cobrancas/${billing.id}/editar`}
+                        className="font-sans text-sm text-accent hover:underline"
+                      >
+                        Editar
+                      </Link>
+                    )}
+                  </TD>
+                </TR>
+              ))
+            )}
+          </TBody>
+        </Table>
 
         <Pagination
           meta={billings.meta}
           basePath="/cobrancas"
           searchParams={params}
         />
-      </div>
+      </Card>
     </div>
   );
 }

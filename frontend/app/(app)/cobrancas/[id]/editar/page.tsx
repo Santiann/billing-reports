@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { updateBilling } from "@/app/actions/billings";
 import { BillingForm } from "@/components/billings/billing-form";
+import { Card, CardBody } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { ApiError } from "@/lib/api";
 import { getBilling } from "@/lib/billings";
 import type { Billing } from "@/types/billing";
@@ -36,27 +37,21 @@ export default async function EditBillingPage({ params }: PageProps) {
 
   return (
     <div>
-      <nav className="mb-2 text-sm">
-        <Link
-          href={`/cobrancas/${billing.id}`}
-          className="text-slate-600 hover:text-slate-900"
-        >
-          ← {billing.description}
-        </Link>
-      </nav>
+      <PageHeader
+        title="Editar cobrança"
+        voltar={{ href: `/cobrancas/${billing.id}`, label: billing.description }}
+      />
 
-      <h1 className="mb-6 text-xl font-semibold text-slate-900">
-        Editar cobrança
-      </h1>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <BillingForm
-          action={action}
-          billing={billing}
-          submitLabel="Salvar alterações"
-          cancelHref={`/cobrancas/${billing.id}`}
-        />
-      </div>
+      <Card>
+        <CardBody className="p-6">
+          <BillingForm
+            action={action}
+            billing={billing}
+            submitLabel="Salvar alterações"
+            cancelHref={`/cobrancas/${billing.id}`}
+          />
+        </CardBody>
+      </Card>
     </div>
   );
 }

@@ -97,10 +97,10 @@ export function CustomerPicker({
           setTerm("");
         }}
         onChange={(event) => setTerm(event.target.value)}
-        className={`w-full rounded-md border px-3 py-2 text-slate-900 outline-none focus:ring-1 disabled:bg-slate-100 ${
+        className={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors disabled:bg-sunken disabled:text-ink-muted ${
           hasError
-            ? "border-red-400 focus:border-red-500 focus:ring-red-500"
-            : "border-slate-300 focus:border-slate-900 focus:ring-slate-900"
+            ? "border-overdue"
+            : "border-rule-strong hover:border-ink-faint"
         }`}
       />
 
@@ -108,12 +108,12 @@ export function CustomerPicker({
         <ul
           id="customer-picker-list"
           role="listbox"
-          className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border border-rule bg-surface py-1 shadow-raised"
         >
           {isLoading ? (
-            <li className="px-3 py-2 text-sm text-slate-500">Buscando…</li>
+            <li className="px-3 py-2 text-sm text-ink-muted">Buscando…</li>
           ) : results.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-slate-500">
+            <li className="px-3 py-2 text-sm text-ink-muted">
               Nenhum cliente encontrado.
             </li>
           ) : (
@@ -125,12 +125,12 @@ export function CustomerPicker({
                     setSelected(customer);
                     setIsOpen(false);
                   }}
-                  className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                  className="block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-sunken"
                 >
-                  <span className="font-medium text-slate-900">
+                  <span className="font-medium text-ink">
                     {customer.name}
                   </span>
-                  <span className="block text-xs text-slate-500">
+                  <span className="block font-mono text-xs text-ink-muted">
                     {customer.document}
                   </span>
                 </button>

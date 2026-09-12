@@ -21,7 +21,7 @@ export function Feedback({ code }: { code?: string }) {
   return (
     <p
       role="status"
-      className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+      className="mb-4 rounded-md border border-paid/30 bg-paid-soft px-4 py-3 text-sm text-paid"
     >
       {message}
     </p>

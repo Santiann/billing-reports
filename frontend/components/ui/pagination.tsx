@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { buttonClasses } from "@/components/ui/button";
 import type { Paginated } from "@/types/pagination";
 
 type PaginationProps = {
@@ -43,21 +44,22 @@ export function Pagination({ meta, basePath, searchParams }: PaginationProps) {
   const hasPrevious = meta.current_page > 1;
   const hasNext = meta.current_page < meta.last_page;
 
-  const linkClass =
-    "rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
-  const disabledClass =
-    "rounded-md border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-400";
+  const linkClass = buttonClasses({ variant: "secondary", size: "sm" });
+  const disabledClass = `${linkClass} pointer-events-none border-rule bg-sunken text-ink-faint`;
 
   return (
     <nav
       aria-label="Paginação"
-      className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3"
+      className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-3"
     >
-      <p className="text-sm text-slate-600">
-        {meta.from}–{meta.to} de{" "}
-        <strong className="font-medium">
+      <p className="text-sm text-ink-muted">
+        <span className="font-mono tabular-nums text-ink">
+          {meta.from}–{meta.to}
+        </span>{" "}
+        de{" "}
+        <span className="font-mono tabular-nums text-ink">
           {meta.total.toLocaleString("pt-BR")}
-        </strong>{" "}
+        </span>{" "}
         · página {meta.current_page} de {meta.last_page.toLocaleString("pt-BR")}
       </p>
 
