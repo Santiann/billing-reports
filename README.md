@@ -18,7 +18,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
-| **Decisões** | [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
+| **Decisões** | [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
 
 ---
 
@@ -1245,6 +1245,73 @@ O que fica de fora, e por quê: `global-error.tsx`. Ele cobriria erro lançado
 pelo layout raiz, mas precisa reconstruir `<html>` e `<body>` e não herda o
 CSS global. O layout raiz deste projeto monta a página e carrega a fonte, nada
 mais — o custo não se paga.
+
+---
+
+## Fundação visual
+
+Os tokens e os primitivos vivem em [`app/globals.css`](frontend/app/globals.css)
+e [`components/ui/`](frontend/components/ui/).
+
+**A direção é a de um livro-razão**: papel e tinta, régua em fio de cabelo no
+lugar de sombra, e número tabular em toda coluna de dinheiro. Não é gosto — é a
+forma que o domínio já tem. Quem confere cobrança lê coluna de valor, e coluna
+de valor só se lê alinhada: com algarismo de largura variável, `1.111,11` ocupa
+menos espaço que `8.888,88` e a comparação de relance se perde. Por isso o
+primitivo de tabela tem uma coluna `numeric` que é monoespaçada, tabular e
+alinhada à direita, em vez de deixar a decisão para cada tela.
+
+### Tema escuro sem uma única classe `dark:`
+
+Os tokens são **semânticos** — `--color-ink`, não `--color-slate-900` — e cada
+um declara os dois temas de uma vez:
+
+```css
+--color-paper: light-dark(#faf8f4, #121214);
+--color-overdue: light-dark(#9d2b1e, #e58a7c);
+```
+
+`light-dark()` resolve pelo `color-scheme` do elemento, então trocar de tema é
+trocar uma propriedade no `<html>` — e nenhum componente precisa repetir cada
+cor com o prefixo `dark:`. O default segue o sistema operacional; `data-theme`
+com `light` ou `dark` sobrepõe, e os dois seletores já existem para que um
+futuro seletor de tema seja um atributo, e não uma reescrita da tabela de cores.
+
+A primeira versão deste arquivo fazia o caminho comum: repetia o bloco inteiro
+de tokens num `@media (prefers-color-scheme: dark)` e de novo num
+`[data-theme="dark"]`. Um valor saiu digitado errado na segunda cópia — que é
+exatamente o defeito que duplicar tabela de cor produz, e o argumento para não
+duplicar.
+
+### Nenhuma biblioteca de componentes
+
+Sem shadcn/ui, sem Radix, sem Headless UI, sem Material. Os cinco primitivos —
+botão, campo, card, etiqueta e tabela — somam pouco mais de 300 linhas, e o que
+eles fazem é justamente o que uma biblioteca genérica não faria: a tabela sabe
+o que é coluna de dinheiro, a etiqueta conhece os três estados do domínio, e o
+botão trata `disabled` com fundo rebaixado em vez de opacidade.
+
+Não há aqui nada que peça o que essas bibliotecas resolvem bem — combobox
+acessível, diálogo com armadilha de foco, menu com navegação por teclado. A
+tela mais complexa deste projeto é uma tabela com filtros. Trazer Radix para
+isso seria adicionar uma dependência, um estilo a sobrescrever e uma camada de
+API para aprender, em troca de nada que o HTML nativo não entregue.
+
+O que existe de acessibilidade foi escrito à mão porque é onde ela costuma se
+perder: o `Field` amarra `label`, `id`, `aria-invalid` e `role="alert"` numa
+vez só, e o foco visível usa `:focus-visible` — o anel aparece para quem navega
+por Tab e some para quem clica.
+
+### Tipografia
+
+| | Família | Papel |
+|---|---|---|
+| Título | Instrument Serif | dá cara ao produto |
+| Interface | IBM Plex Sans | humanista, boa em leitura densa |
+| Dado | IBM Plex Mono | id, documento e dinheiro alinhados |
+
+Servidas por `next/font`, que baixa e hospeda no build: sem requisição a
+terceiro em runtime e sem salto de layout ao carregar.
 
 ---
 
