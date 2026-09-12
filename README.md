@@ -14,7 +14,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 
 | | |
 |---|---|
-| **Começar** | [Como executar](#como-executar) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
+| **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
 | **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
@@ -31,29 +31,92 @@ MySQL instalados.
 git clone https://github.com/Santiann/billing-reports.git
 cd billing-reports
 git checkout joao-santian
+make install
+```
+
+`make install` é o comando único: sobe os quatro serviços, **espera as
+migrations do entrypoint terminarem** e cria o usuário de acesso. No fim ele
+imprime as URLs e as credenciais.
+
+Sem `make`, são dois comandos — e o segundo só funciona depois que as
+migrations terminam, o que na primeira subida demora:
+
+```bash
 docker compose up -d
-```
-
-É só isso — não há `.env` para copiar nem `composer install` para rodar à mão.
-O entrypoint do backend resolve os dois (ver [Bootstrap automático](#bootstrap-automático-do-backend)).
-
-Para acompanhar o boot:
-
-```bash
-docker compose logs -f
-```
-
-Na primeira subida, crie o usuário de acesso (o teste dispensa cadastro
-público, então ele nasce do seeder):
-
-```bash
 docker compose exec php php artisan db:seed
 ```
+
+Não há `.env` para copiar nem `composer install` para rodar à mão: o entrypoint
+do backend resolve os dois (ver [Bootstrap automático](#bootstrap-automático-do-backend)).
 
 | Credencial | Valor |
 |---|---|
 | E-mail | `admin@billing.test` |
 | Senha | `password` |
+
+### Os alvos do Makefile
+
+`make` sem argumento lista tudo. Nenhum alvo esconde o `docker compose`: a
+coluna da direita é o que cada um executa, para quem não tem `make` instalado
+ou prefere digitar à mão.
+
+| Alvo | Equivalente |
+|---|---|
+| `make install` | `docker compose up -d` + espera + `db:seed` |
+| `make up` | `docker compose up -d` |
+| `make down` | `docker compose down` |
+| `make logs` | `docker compose logs -f` |
+| `make shell` | `docker compose exec php sh` |
+| `make test` | `docker compose exec php php artisan test` |
+| `make coverage` | `docker compose exec php php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text` |
+| `make seed` | `docker compose exec php php artisan db:seed` |
+| `make seed-volume` | `docker compose exec php php artisan db:seed --class=BillingVolumeSeeder` |
+| `make fresh` | `docker compose exec php php artisan migrate:fresh --seed` |
+| `make lint` | `pint --test` no backend, `tsc --noEmit` e `eslint` no frontend |
+
+Duas decisões que o arquivo registra:
+
+**`install` usa `up -d`, não `up -d --build`.** Numa máquina limpa não há
+imagem e o compose constrói de qualquer jeito, então o `--build` não
+acrescenta nada além de um caminho a mais para dar errado: ele precisa
+resolver `docker/dockerfile:1` no registry, o que passa pelo helper de
+credenciais do Docker. No WSL com Docker Desktop esse helper é um `.exe`, e
+quando o interop não está disponível ele falha com `exec format error` — com a
+stack inteira funcionando. Para reconstruir de propósito depois de mexer num
+Dockerfile: `docker compose up -d --build`.
+
+**`install` espera as migrations antes de semear.** `up -d` devolve o controle
+quando os containers sobem, mas o entrypoint do php roda as migrations depois
+disso. Semear sem esperar falha com *table users doesn't exist* — e falha
+exatamente na primeira subida, que é a única em que `make install` importa.
+Medido aqui: a espera durou 35 segundos com o datadir do MySQL já criado.
+
+**O `lint` precisou de um `pint.json`.** O preset `laravel` do Pint remove os
+parênteses de `new` sem argumento — `new InterestCalculator` em vez de
+`new InterestCalculator()` — e o projeto inteiro usa a forma com parênteses.
+Duas saídas eram possíveis: reescrever o código para o preset, ou registrar a
+escolha. Optei pela segunda, porque `new X()` é a forma que o PHP 8.4 passou a
+aceitar encadeada (`new X()->metodo()`) e a que deixa a chamada parecida com
+qualquer outra.
+
+A regra não pode ser simplesmente ligada, e essa é a parte não óbvia:
+`"new_with_parentheses": true` também exigiria parênteses em **classe
+anônima**, e reescreveria as quatro migrations, que usam
+`return new class extends Migration`. A configuração separa os dois casos:
+
+```json
+{
+    "preset": "laravel",
+    "rules": {
+        "new_with_parentheses": { "named_class": true, "anonymous_class": false }
+    }
+}
+```
+
+Com isso `make lint` passa limpo. As outras três divergências que o Pint
+apontou eram defeito de verdade e foram corrigidas, não silenciadas: três
+arquivos de teste usavam classe totalmente qualificada no meio do código
+(`\App\Models\Billing::factory()`) em vez de `use` no topo.
 
 Com os quatro serviços de pé:
 
@@ -869,7 +932,7 @@ tabela, senão a exportação seria inútil em qualquer base real.
 ## Gerando volume para teste
 
 ```bash
-docker compose exec php php artisan db:seed --class=BillingVolumeSeeder
+make seed-volume                            # docker compose exec php php artisan db:seed --class=BillingVolumeSeeder
 ```
 
 Gera 5.000 clientes e **2.000.000 de cobranças**, com emissão espalhada por
@@ -958,7 +1021,7 @@ ms, `InterestCalculator::for()` 0,150 ms, o resto é a escolha da data.
 ## Testes
 
 ```bash
-docker compose exec php php artisan test
+make test                                   # docker compose exec php php artisan test
 ```
 
 A suíte roda **dentro do container** porque roda em **MySQL**, não em SQLite.
@@ -976,13 +1039,13 @@ OK (138 tests, 417 assertions)
 ### Cobertura
 
 ```bash
-docker compose exec php php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text
+make coverage                               # docker compose exec php php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text
 ```
 
 | | |
 |---|---|
-| **Linhas** | **99,81%** (536/537) |
-| Métodos | 98,96% (95/96) |
+| **Linhas** | **99,81%** (538/539) |
+| Métodos | 98,98% (97/98) |
 | Classes | 96,77% (30/31) |
 
 Usa **pcov**, não xdebug: ele existe só para cobertura e custa uma fração do

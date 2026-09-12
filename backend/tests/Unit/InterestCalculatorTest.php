@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Domain\Billing\InterestCalculator;
+use App\Domain\Billing\RegisterPayment;
 use App\Models\Billing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -189,7 +190,7 @@ class InterestCalculatorTest extends TestCase
         // mas que um import ou uma correção manual no banco pode criar. O
         // ramo defensivo existe para isso, e existir sem teste é o mesmo que
         // não existir.
-        \Illuminate\Support\Facades\DB::table('billings')
+        DB::table('billings')
             ->where('id', $billing->id)
             ->update(['status' => 'paid', 'payment_date' => null, 'paid_amount' => null]);
 
@@ -218,7 +219,7 @@ class InterestCalculatorTest extends TestCase
         if ($paymentDate !== null) {
             // Passa pelo mesmo serviço que a API usa: congelar à mão aqui
             // faria o teste validar um congelamento que não é o de produção.
-            app(\App\Domain\Billing\RegisterPayment::class)($billing, $paymentDate);
+            app(RegisterPayment::class)($billing, $paymentDate);
         }
 
         return $billing->fresh();

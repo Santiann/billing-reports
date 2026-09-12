@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domain\Billing\BillingStatus;
 use App\Models\Billing;
 use App\Models\Customer;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -95,7 +96,7 @@ class BillingSchemaTest extends TestCase
     {
         Customer::factory()->create(['document' => '12345678901']);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         Customer::factory()->create(['document' => '12345678901']);
     }

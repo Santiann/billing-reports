@@ -6,6 +6,7 @@ use App\Models\Billing;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -293,13 +294,13 @@ class BillingReportTest extends TestCase
         $this->actingAsUser();
         config(['reports.pdf_max_rows' => 3]);
 
-        \App\Models\Billing::factory()->count(2)->create();
+        Billing::factory()->count(2)->create();
         $this->getJson('/api/reports/billings')
             ->assertOk()
             ->assertJsonPath('export.pdf_available', true)
             ->assertJsonPath('export.pdf_max_rows', 3);
 
-        \App\Models\Billing::factory()->count(2)->create();
+        Billing::factory()->count(2)->create();
 
         // A tela usa isto para desabilitar o botão antes do clique, em vez de
         // mandar o usuário bater num 422.
@@ -313,10 +314,10 @@ class BillingReportTest extends TestCase
         $this->actingAsUser();
         Billing::factory()->count(10)->create();
 
-        \Illuminate\Support\Facades\DB::enableQueryLog();
+        DB::enableQueryLog();
         $this->getJson('/api/reports/billings?per_page=10')->assertOk();
-        $queries = \Illuminate\Support\Facades\DB::getQueryLog();
-        \Illuminate\Support\Facades\DB::disableQueryLog();
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
 
         // count da paginação + linhas + clientes + agregação dos totais.
         $this->assertLessThanOrEqual(4, count($queries));
