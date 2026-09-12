@@ -98,7 +98,12 @@ cobre a regra que ele diz cobrir.
 ## Convenções
 
 - Feature tests para tudo que passa por HTTP; unit test apenas para o
-  `InterestCalculator`.
+  `InterestCalculator`. Duas exceções conscientes: `InterestCalculatorTest`
+  fica em `tests/Unit` mas toca o banco, porque a face SQL só existe dentro do
+  MySQL; e `ReportIndexTest` fica em `tests/Feature` sem passar por HTTP,
+  porque o que ele verifica é o schema.
+- A suíte roda em **MySQL**, no banco `faturamento_test`. Em SQLite a face SQL
+  do calculador validaria outro motor — `POW()` nem existe por padrão.
 - `RefreshDatabase`, e factories com states nomeados (`overdue()`, `paid()`,
   `paidLate()`) em vez de montar datas na mão dentro de cada teste.
 - Um comportamento por teste, com nome descrevendo a regra e não o método.
@@ -106,3 +111,10 @@ cobre a regra que ele diz cobrir.
   com token responde 200. Só o 401 não prova que a rota funciona.
 - Volume nos testes é pequeno de propósito. A prova de performance é o seeder e
   a documentação de índices, não a suíte.
+- Consequência disso: **teste pequeno não prova comportamento em volume.** O
+  teto do PDF passou na suíte com o valor errado, e só a exportação contra a
+  base real mostrou que ele estava uma ordem de grandeza acima do possível.
+  Toda decisão sobre volume precisa ser medida fora da suíte.
+- Asserção sobre plano de execução (`EXPLAIN`) é sobre `possible_keys`, não
+  sobre o plano escolhido: em tabela pequena o otimizador prefere varredura, e
+  afirmar `type != ALL` falharia por motivo errado.

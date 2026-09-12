@@ -12,6 +12,14 @@ para tabelas na casa dos milhões de registros.
 
 O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-técnico--desenvolvedor-fullstack).
 
+| | |
+|---|---|
+| **Começar** | [Como executar](#como-executar) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
+| **Domínio** | [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) |
+| **Módulos** | [Clientes](#módulo-de-clientes) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
+| **Performance** | [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
+| **Decisões** | [Técnicas](#decisões-técnicas) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
+
 ---
 
 ## Como executar
@@ -966,6 +974,108 @@ decidir. Mesmo padrão que clientes e cobranças vão seguir.
 ambiente de avaliação local, e o critério de aceite exige que subir não dependa
 de preencher segredo nenhum. Os valores do serviço `mysql` espelham os de
 `backend/.env.example`; mudar um exige mudar o outro.
+
+---
+
+## Melhorias que ficariam para produção
+
+Nenhuma foi aplicada: estão fora do que o teste pede, e implementá-las
+aumentaria a superfície sem pontuar. Ficam registradas porque são as que a
+medição deste projeto realmente indica, não uma lista genérica.
+
+**Dimensionar o `innodb_buffer_pool_size`.** É a primeira e a mais barata. A
+tabela tem 177 MB de dados e 322 MB de índices contra um pool de 128 MB no
+default — nada cabe, e toda varredura vai ao disco. Foi o que derrubou a
+inserção do seeder de ~1.900 para ~150 linhas por segundo na segunda metade da
+carga.
+
+**Cachear ou materializar os totalizadores.** Eles são O(n) por natureza: somar
+juros exige calcular `POW` para cada linha do conjunto filtrado, e nenhum
+índice dispensa a conta. Um cache por combinação de filtros, ou uma tabela de
+agregados atualizada por evento de cobrança, resolveria o recorte largo — que
+é justamente onde o índice não ajuda.
+
+**Particionar `billings` por data.** Com o relatório sempre recortando por
+período, partições por ano ou trimestre tornariam a varredura de um recorte
+largo proporcional ao recorte, e não à tabela.
+
+**Índice FULLTEXT em `description`.** A busca usa `LIKE '%termo%'`, que não é
+indexável por ter curinga à esquerda. Aceitável na tela de CRUD, não numa base
+que cresce.
+
+**Rate limit no login.** Deixado de fora porque escolher um limite que não
+deixe a própria suíte intermitente exige cuidado que não agrega ao que o teste
+avalia. Em produção é obrigatório.
+
+**Ler linhas cruas na exportação CSV.** Medido: dos 55s de uma exportação de
+56.680 linhas, ~18s são banco e o resto é hidratar model Eloquent e instanciar
+Carbon. `DB::table()` com join troca a conveniência do domínio por velocidade.
+
+**Trocar o renderizador de PDF se volume for requisito.** `FPDF` ou `TCPDF`
+emitem páginas incrementalmente e não montam a árvore inteira, o que removeria
+o teto. Custa estilização mais trabalhosa — a troca certa quando o volume manda.
+
+**Exportação assíncrona.** Acima de certo tamanho, gerar em fila e notificar o
+usuário com um link, em vez de segurar uma conexão HTTP por minutos.
+
+**Réplica de leitura para o relatório.** Consultas analíticas competindo com a
+escrita transacional é o próximo gargalo depois do buffer pool.
+
+**Observabilidade.** Log de consultas lentas com o plano de execução — os três
+achados de performance deste projeto vieram de `EXPLAIN` rodado à mão, e isso
+não escala como prática.
+
+---
+
+## Uso de inteligência artificial
+
+O desenvolvimento foi conduzido com **Claude Code**. Os arquivos que orientam o
+agente estão no repositório, como o teste exige:
+
+| Arquivo | Papel |
+|---|---|
+| `CLAUDE.md` | Instruções de projeto: stack, a regra que governa a arquitetura, as duas origens de API, autenticação, limites de performance, ordem de commits |
+| `.claude/skills/laravel-report-tests/SKILL.md` | Skill acionada em tarefa de teste, com as armadilhas específicas deste projeto |
+
+### O que a configuração efetivamente evitou
+
+Vale mais mostrar onde ela mudou o resultado do que descrevê-la:
+
+- **Tempo congelado.** A skill exige `travelTo()` em todo teste que toca juros.
+  Sem isso, "vencida há 30 dias" mudaria de significado a cada dia e a suíte
+  passaria a falhar sozinha.
+- **`streamedContent()`.** A skill avisa que `assertSee` e `getContent()` não
+  funcionam em `StreamedResponse`. Os testes de CSV nasceram certos.
+- **Nada sobre o binário do PDF.** A skill delimita o que é verificável —
+  status, content-type, e sobretudo o teto.
+- **Totalizadores contra a página.** A skill descreve exatamente o erro fácil:
+  montar cenário com mais registros do que cabe numa página e afirmar que os
+  totais cobrem o conjunto. O teste existe nessa forma.
+- **Teste antes do código.** Em toda etapa de regra de negócio o teste foi
+  escrito primeiro e visto falhar. Foi o que fez o `InterestCalculator` nascer
+  com o teste de consistência entre as duas faces, que é o teste mais
+  importante do projeto.
+- **Fonte única da regra.** O state `paidLate()` da factory ficou
+  deliberadamente incompleto por duas etapas, em vez de repetir a fórmula de
+  juros, até o `RegisterPayment` existir para preenchê-lo.
+
+### Onde as instruções estavam erradas
+
+Isto importa tanto quanto o resto: instrução de agente não é verdade revelada,
+e duas delas não sobreviveram ao contato com a medição.
+
+- **O teto do PDF era 5.000.** Os testes passavam, porque testes usam poucas
+  linhas. A exportação contra a base real estourou a memória com 3.577. A curva
+  medida mostrou que 5.000 precisaria de mais de 3 GB. O teto virou 1.000, e a
+  medição ficou registrada ao lado do valor.
+- **O nome do serviço `backend`.** O `CLAUDE.md` fixa
+  `API_URL_INTERNAL=http://backend`, e o plano de infra chamava de `backend` o
+  php-fpm — que fala FastCGI, não HTTP. Todo fetch de Server Component
+  falharia, e só dentro do Docker. O nginx passou a se chamar `backend` e o
+  `CLAUDE.md` ganhou a nota de que o nome é load-bearing.
+
+Ambas as correções voltaram para o `CLAUDE.md`, que é o ponto: a configuração é
+mantida junto do código e corrigida quando o código prova que ela está errada.
 
 ---
 

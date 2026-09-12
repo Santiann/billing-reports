@@ -32,8 +32,14 @@ teste proíbe explicitamente.
 Consequências, e elas são obrigatórias:
 
 - `App\Domain\Billing\InterestCalculator` é a única fonte da regra e tem duas
-  faces: `sqlExpression()`, usada em `selectRaw` na listagem e nas agregações, e
-  `for(Billing $billing)`, usada para exibir uma cobrança isolada.
+  faces: `updatedAmountSql()` e `interestAmountSql()`, usadas em `selectRaw` na
+  listagem e nas agregações, e `for(Billing $billing)`, usada para exibir uma
+  cobrança isolada. `overdueSql()` mora junto porque "vencida" é a mesma regra
+  vista de outro ângulo.
+- A data de referência **desce do PHP**, nunca `CURDATE()`. `travelTo()` move o
+  relógio do PHP e não o do MySQL: com `CURDATE()` embutido, o teste de
+  consistência compararia tempo congelado contra tempo real e nunca fecharia.
+  É também o que permite calcular juros na data do pagamento.
 - Existe um teste que roda a mesma matriz de casos pelas duas faces e afirma
   igualdade até o centavo. **Sem esse teste a entrega está incompleta** — ele é o
   que sustenta a exigência de "resultado consistente em todas as telas e
@@ -73,7 +79,12 @@ Token Sanctum em cookie **httpOnly**, nunca em `localStorage`.
 - Server Components leem o cookie e enviam `Authorization: Bearer` ao Laravel.
 - **Downloads de PDF e CSV passam por Route Handler**, que anexa o token e faz
   stream da resposta do Laravel. O browser não tem o token, então não pode
-  chamar o endpoint de exportação diretamente.
+  chamar o endpoint de exportação diretamente. O corpo é repassado sem ser
+  lido: consumir o stream para reenviar guardaria o arquivo em memória.
+- **Mutações usam Server Action**, não Route Handler. Mesma razão — quem fala
+  com o Laravel é o servidor — mas a Action devolve os erros de validação campo
+  a campo para o formulário, em vez de uma mensagem genérica. Route Handler
+  fica para o que o browser precisa navegar ou baixar.
 
 ---
 
@@ -83,9 +94,14 @@ Token Sanctum em cookie **httpOnly**, nunca em `localStorage`.
   filtro ou ordenação em coleção.
 - Exportação CSV com `lazy()` + `StreamedResponse`, escrevendo linha a linha.
   Nunca montar o conjunto completo em array.
-- Exportação PDF é limitada por natureza. Definir um teto de linhas (5.000) e
-  acima disso responder 422 orientando o uso do CSV. Isso é uma decisão a
-  documentar no README, não uma falha a esconder.
+- Exportação PDF é limitada por natureza: o documento é montado inteiro antes
+  de existir, então não há streaming. Teto de linhas com 422 acima dele,
+  orientando o CSV. Decisão a documentar no README, não falha a esconder.
+- **O teto é 1.000, não 5.000.** O valor original era estimativa e não
+  sobreviveu à medição: o dompdf consome 420 MB para mil linhas, 1.164 MB para
+  duas mil e estoura 3 GB em cinco mil — o crescimento é superlinear porque ele
+  monta a árvore de frames da tabela toda antes de paginar. Vive em
+  `config/reports.php` com a curva medida registrada ao lado.
 - Totalizadores em query de agregação separada, sobre o conjunto filtrado
   inteiro. Nunca somar a página corrente.
 - **Índices:** coluna de igualdade antes da coluna de range. Como o usuário
@@ -102,6 +118,16 @@ Token Sanctum em cookie **httpOnly**, nunca em `localStorage`.
 Ver `.claude/skills/laravel-report-tests/SKILL.md` para as convenções e as
 armadilhas específicas deste projeto (tempo congelado, resposta em stream,
 asserção sobre PDF).
+
+**A suíte roda em MySQL, não em SQLite.** O skeleton do Laravel vem apontado
+para `sqlite/:memory:`, e isso inviabilizaria o teste de consistência: em
+SQLite a face SQL validaria outro motor — `POW()` nem existe por padrão. O
+banco é o `faturamento_test`, criado pelo init do container, e a consequência é
+que a suíte roda dentro dele:
+
+```
+docker compose exec php php artisan test
+```
 
 Regra geral: antes de escrever código de regra de negócio, escrever o teste que
 ela precisa passar.
