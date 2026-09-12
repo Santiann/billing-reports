@@ -1,9 +1,13 @@
 import Link from "next/link";
 
+import { BillingStatusBadge } from "@/components/billings/billing-status-badge";
 import { ReportExport } from "@/components/reports/report-export";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { ReportTotalsPanel } from "@/components/reports/report-totals";
+import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
+import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { getCustomer } from "@/lib/customers";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getBillingReport } from "@/lib/reports";
@@ -64,128 +68,128 @@ export default async function ReportPage({ searchParams }: PageProps) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">
-          Relatório de faturamento
-        </h1>
+      <PageHeader
+        title="Relatório de faturamento"
+        action={
+          /* Os filtros vêm do backend, já normalizados: o arquivo sai com o
+             mesmo recorte que a tela está mostrando. */
+          <ReportExport
+            filters={report.filters}
+            info={report.export}
+            count={report.totals.count}
+          />
+        }
+      />
 
-        {/* Os filtros vêm do backend, já normalizados: o arquivo sai com o
-            mesmo recorte que a tela está mostrando. */}
-        <ReportExport
-          filters={report.filters}
-          info={report.export}
-          count={report.totals.count}
-        />
-      </div>
-
-      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+      <Card className="mb-4 p-4">
         <ReportFilters selectedCustomer={selectedCustomer} />
-      </div>
+      </Card>
 
       <ReportTotalsPanel totals={report.totals} />
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[64rem] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-              <tr>
-                <th scope="col" className="px-4 py-3 font-medium">Cliente</th>
-                <th scope="col" className="px-4 py-3 font-medium">Descrição</th>
-                {COLUMNS.map((column) => (
-                  <th
-                    key={column.key}
-                    scope="col"
-                    className={`px-4 py-3 font-medium ${"numeric" in column && column.numeric ? "text-right" : ""}`}
-                  >
-                    <Link
-                      href={sortHref(params, column.key)}
-                      className="inline-flex items-center gap-1 transition hover:text-slate-900"
-                    >
-                      {column.label}
-                      {currentSort === column.key ? (
-                        <span aria-hidden>
-                          {currentDirection === "asc" ? "↑" : "↓"}
-                        </span>
-                      ) : null}
-                    </Link>
-                  </th>
-                ))}
-                <th scope="col" className="px-4 py-3 text-right font-medium">Pago</th>
-                <th scope="col" className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
+      <Card className="overflow-hidden">
+        <Table label="Cobranças do período">
+          <THead>
+            <TH>Cliente</TH>
+            <TH>Descrição</TH>
+            {COLUMNS.map((column) => {
+              const numeric = "numeric" in column && column.numeric;
+              const ativa = currentSort === column.key;
 
-            <tbody className="divide-y divide-slate-100">
-              {report.data.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
-                    Nenhuma cobrança no período e filtros selecionados.
-                  </td>
-                </tr>
-              ) : (
-                report.data.map((billing) => (
-                  <tr key={billing.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-600">
-                      {billing.customer?.name ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-900">
-                      <Link
-                        href={`/cobrancas/${billing.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {billing.description}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatDate(billing.issue_date)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatDate(billing.due_date)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      {formatCurrency(billing.original_amount)}
-                    </td>
-                    <td
-                      className={`px-4 py-3 text-right ${Number(billing.interest_amount) > 0 ? "text-red-700" : "text-slate-500"}`}
+              return (
+                <TH
+                  key={column.key}
+                  numeric={numeric}
+                  aria-sort={
+                    ativa
+                      ? currentDirection === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : undefined
+                  }
+                >
+                  <Link
+                    href={sortHref(params, column.key)}
+                    className={
+                      "inline-flex items-center gap-1 transition-colors hover:text-ink " +
+                      (ativa ? "text-ink" : "")
+                    }
+                  >
+                    {column.label}
+                    {/* A seta ocupa lugar mesmo inativa: sem isso a coluna
+                        salta de largura a cada troca de ordenação. */}
+                    <span aria-hidden className={ativa ? "" : "opacity-0"}>
+                      {currentDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  </Link>
+                </TH>
+              );
+            })}
+            <TH numeric>Pago</TH>
+            <TH>Status</TH>
+          </THead>
+
+          <TBody>
+            {report.data.length === 0 ? (
+              <TEmpty colSpan={9}>
+                Nenhuma cobrança no período e filtros selecionados.
+              </TEmpty>
+            ) : (
+              report.data.map((billing) => (
+                <TR key={billing.id}>
+                  <TD className="text-ink-muted">
+                    {billing.customer?.name ?? "—"}
+                  </TD>
+                  <TD>
+                    <Link
+                      href={`/cobrancas/${billing.id}`}
+                      className="font-medium text-ink hover:underline"
                     >
-                      {formatCurrency(billing.interest_amount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-slate-900">
-                      {formatCurrency(billing.updated_amount)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      {billing.status === "paid"
-                        ? formatCurrency(billing.paid_amount)
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {billing.is_overdue ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                          Vencida
-                        </span>
-                      ) : billing.status === "paid" ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Paga
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          Pendente
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {billing.description}
+                    </Link>
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {formatDate(billing.issue_date)}
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {formatDate(billing.due_date)}
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {formatCurrency(billing.original_amount)}
+                  </TD>
+                  <TD
+                    numeric
+                    className={
+                      Number(billing.interest_amount) > 0
+                        ? "text-overdue"
+                        : "text-ink-faint"
+                    }
+                  >
+                    {formatCurrency(billing.interest_amount)}
+                  </TD>
+                  <TD numeric className="font-medium text-ink">
+                    {formatCurrency(billing.updated_amount)}
+                  </TD>
+                  <TD numeric className="text-ink-muted">
+                    {billing.status === "paid"
+                      ? formatCurrency(billing.paid_amount)
+                      : "—"}
+                  </TD>
+                  <TD>
+                    <BillingStatusBadge billing={billing} />
+                  </TD>
+                </TR>
+              ))
+            )}
+          </TBody>
+        </Table>
 
         <Pagination
           meta={report.meta}
           basePath="/relatorio"
           searchParams={params}
         />
-      </div>
+      </Card>
     </div>
   );
 }

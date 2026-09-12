@@ -1,3 +1,4 @@
+import { buttonClasses } from "@/components/ui/button";
 import type { ReportExportInfo, ReportFilters } from "@/types/report";
 
 type ReportExportProps = {
@@ -29,8 +30,7 @@ export function ReportExport({ filters, info, count }: ReportExportProps) {
 
   const query = params.toString();
 
-  const buttonClass =
-    "rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
+  const buttonClass = buttonClasses({ variant: "secondary" });
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -40,7 +40,7 @@ export function ReportExport({ filters, info, count }: ReportExportProps) {
         </a>
       ) : (
         <span
-          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+          className="max-w-sm rounded-md border border-pending/30 bg-pending-soft px-3 py-2 text-xs text-pending"
           role="status"
         >
           PDF indisponível: {count.toLocaleString("pt-BR")} cobranças acima do
