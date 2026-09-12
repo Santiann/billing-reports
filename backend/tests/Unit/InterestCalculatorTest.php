@@ -52,6 +52,14 @@ class InterestCalculatorTest extends TestCase
             // delas, e é o caso que guarda o `/ 30e0` do compoundSql:
             // sem ele, DECIMAL da 1363158.13 e PHP da 1363158.14.
             'divergencia decimal vs double' => ['987654.31', '0.0350', '2025-09-07', null],
+            // Outro caso achado por varredura, e de natureza diferente do
+            // anterior: aqui a conta cai EXATAMENTE no meio centavo. 4224,10
+            // a 5% por 30 dias dá 4435,305. PHP arredonda meio para longe do
+            // zero e dá 4435,31; o ROUND do MySQL sobre DOUBLE arredonda meio
+            // para par e dá 4435,30. Varredura de 200.000 combinações achou
+            // uma divergência dessas, e a base de dois milhões achou outra.
+            'empate no meio centavo' => ['4224.10', '0.0500', '2026-05-16', null],
+            'empate no meio centavo, valor alto' => ['435254.90', '0.0500', '2026-05-16', null],
             'paga em dia' => ['1500.00', '0.0200', '2026-05-20', '2026-05-18'],
             'paga em atraso' => ['1500.00', '0.0200', '2026-04-10', '2026-05-20'],
         ];
@@ -85,6 +93,23 @@ class InterestCalculatorTest extends TestCase
     }
 
     // --- a regra em si ------------------------------------------------
+
+    /**
+     * O empate não podia ficar só na matriz de consistência: lá as duas faces
+     * concordarem bastaria, mesmo que concordassem no valor errado. Aqui o
+     * valor está escrito.
+     *
+     * 4224,10 a 5% por 30 dias = 4435,305, e meio centavo arredonda para cima.
+     */
+    public function test_empate_no_meio_centavo_arredonda_para_cima(): void
+    {
+        $this->travelTo(self::HOJE);
+
+        $billing = $this->makeBilling('4224.10', '0.0500', '2026-05-16', null);
+
+        $this->assertSame('4435.31', (new InterestCalculator())->for($billing)->updatedAmount);
+        $this->assertSame('4435.31', $this->viaSql($billing->id)['updated_amount']);
+    }
 
     public function test_cobranca_em_dia_nao_acumula_juros(): void
     {

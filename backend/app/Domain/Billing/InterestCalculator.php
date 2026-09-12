@@ -29,6 +29,25 @@ final class InterestCalculator
     private const DAYS_IN_MONTH = 30;
 
     /**
+     * Casas de guarda antes do arredondamento final.
+     *
+     * As duas faces partem do mesmo produto em ponto flutuante, mas
+     * arredondam o empate de formas diferentes: PHP faz meio para longe do
+     * zero, e o ROUND do MySQL sobre DOUBLE faz meio para par. 4224,10 a 5%
+     * por 30 dias dá exatamente 4435,305 — PHP devolvia 4435,31 e o MySQL,
+     * 4435,30. Uma varredura de 200.000 combinações achou uma ocorrência, e a
+     * base de dois milhões achou outra: raro, e ainda assim é a tela
+     * discordando do relatório.
+     *
+     * Arredondar primeiro em seis casas e só então em duas resolve nos dois
+     * motores, porque em ambos o segundo arredondamento passa a operar sobre
+     * um decimal exato, e não sobre o double. De quebra, absorve diferença de
+     * 1 ULP entre a `pow()` do PHP e a do MySQL, que rodam em containers
+     * diferentes e não precisam compartilhar a mesma libm.
+     */
+    private const GUARD_DIGITS = 6;
+
+    /**
      * A data de referência desce do PHP em vez de a face SQL usar CURDATE().
      *
      * Isso não é preciosismo: `travelTo()` move o relógio do PHP e não o do
@@ -73,20 +92,19 @@ final class InterestCalculator
         $daysLate = $this->daysBetween($billing->due_date, $this->referenceDate());
 
         $updated = $daysLate <= 0
-            ? round($original, 2)
-            : round(
+            ? $this->round($original)
+            : $this->round(
                 $original * pow(
                     1 + (float) $billing->monthly_interest_rate,
                     $daysLate / self::DAYS_IN_MONTH,
                 ),
-                2,
             );
 
         return new InterestCalculation(
             originalAmount: $this->money($original),
             // Subtrai do valor JÁ arredondado, na mesma ordem que a face SQL:
             // arredondar a diferença separadamente divergiria em um centavo.
-            interestAmount: $this->money($updated - round($original, 2)),
+            interestAmount: $this->money($updated - $this->round($original)),
             updatedAmount: $this->money($updated),
             daysLate: $daysLate,
         );
@@ -145,10 +163,15 @@ final class InterestCalculator
      */
     private function compoundSql(string $table): string
     {
-        return "ROUND({$table}.original_amount * POW("
+        // CAST para DECIMAL antes do ROUND, e não ROUND direto: o ROUND do
+        // MySQL sobre DOUBLE arredonda meio para par, enquanto o PHP
+        // arredonda meio para longe do zero. Convertido para decimal exato
+        // com as casas de guarda, o arredondamento final concorda nos dois.
+        return 'ROUND(CAST('
+            ."{$table}.original_amount * POW("
             ."1 + {$table}.monthly_interest_rate, "
             .'('.$this->daysLateSql($table).') / '.self::DAYS_IN_MONTH.'e0'
-            .'), 2)';
+            .') AS DECIMAL(20, '.self::GUARD_DIGITS.')), 2)';
     }
 
     // --- helpers ------------------------------------------------------
@@ -160,6 +183,12 @@ final class InterestCalculator
         $to = CarbonImmutable::parse($target)->startOfDay();
 
         return max(0, (int) $from->diffInDays($to));
+    }
+
+    /** Arredondamento da regra: casas de guarda primeiro, centavo depois. */
+    private function round(float $value): float
+    {
+        return round(round($value, self::GUARD_DIGITS), 2);
     }
 
     private function money(string|float $value): string

@@ -470,7 +470,7 @@ Duas implementações da mesma regra divergem em silêncio. Por isso
 afirma igualdade até o centavo — em dia, vencida por 1, 30, 281 e 400 dias,
 taxa zero, taxa alta, centavos quebrados, paga em dia e paga em atraso.
 
-### Duas armadilhas que o desenho precisou resolver
+### Três armadilhas que o desenho precisou resolver
 
 **`travelTo()` não move o relógio do MySQL.** Se a face SQL usasse `CURDATE()`,
 o teste de consistência compararia PHP em tempo congelado contra SQL em tempo
@@ -487,6 +487,38 @@ Isso não é teórico: um varrimento de 900 dias x 6 taxas x 3 valores encontrou
 do teste — R$ 987.654,31 a 3,5% com 281 dias de atraso, onde DECIMAL dá
 `1363158.13` e double dá `1363158.14`. O `/ 30e0` do `compoundSql()` força a
 divisão a virar double, e removê-lo faz esse caso falhar.
+
+**PHP e MySQL desempatam o meio centavo em direções opostas.** Quando a conta
+cai exatamente sobre o meio centavo, `round()` do PHP arredonda meio para longe
+do zero e `ROUND()` do MySQL sobre `DOUBLE` arredonda meio para par:
+
+```
+4224,10 a 5% ao mês, 30 dias de atraso  ->  4435,305
+PHP   round(, 2)   4435,31     meio para longe do zero
+MySQL ROUND(, 2)   4435,30     meio para par, porque o argumento é DOUBLE
+```
+
+Em cobrança paga isso não aparece — as duas faces leem a coluna congelada. Em
+cobrança **pendente vencida** aparece: a tela de detalhe usa a face PHP e o
+relatório usa a face SQL, e as duas mostrariam valores diferentes para a mesma
+cobrança. É exatamente a inconsistência entre tela e relatório que o teste
+proíbe.
+
+A frequência é baixa e foi medida, não estimada: **uma ocorrência em 200.000**
+combinações varridas, e uma na base de 2.000.000 (13.654 pagas em atraso). Só
+acontece quando o produto é exato o bastante para cair no empate, o que na
+prática quer dizer atraso múltiplo de 30 dias.
+
+A correção são **seis casas de guarda**: arredondar primeiro em seis casas e só
+então em duas. Na face PHP, `round(round($v, 6), 2)`; na face SQL, um `CAST`
+para `DECIMAL(20,6)` antes do `ROUND`. Nos dois motores o arredondamento final
+passa a operar sobre um decimal exato em vez de sobre o double, e o empate
+desempata para o mesmo lado. A varredura de 200.000 combinações que achava uma
+divergência passou a achar zero.
+
+O ganho secundário justifica sozinho: as duas `pow()` rodam em containers
+diferentes e não compartilham a mesma libm, então uma diferença de 1 ULP entre
+elas é possível. As casas de guarda absorvem isso.
 
 ### Congelamento no pagamento
 
@@ -938,7 +970,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (135 tests, 411 assertions)
+OK (138 tests, 417 assertions)
 ```
 
 ### Cobertura
