@@ -31,7 +31,8 @@ class OpenApiSpecTest extends TestCase
      * nem na spec, o teste falha e alguém precisa decidir.
      */
     private const FORA_DA_SPEC = [
-        'GET /' => 'A raiz do backend, que não é endpoint da API.',
+        'GET /' => 'A própria documentação, servida na raiz.',
+        'GET /openapi.yaml' => 'O arquivo desta spec, servido cru para importar em cliente de API.',
         'GET /up' => 'Health check do próprio Laravel.',
         'GET /sanctum/csrf-cookie' => 'Rota do Sanctum para o fluxo de SPA com cookie, não usada aqui.',
         'GET /storage/{path}' => 'Servidor de arquivos do disco público.',

@@ -326,6 +326,49 @@ O teste ainda cobra quatro coisas que separam documentação de índice:
 - o **422 do teto do PDF** está documentado, e o limite do exemplo é comparado
   com `config/reports.php` — se o teto mudar e a spec não, o teste acusa.
 
+### A raiz do backend é a documentação
+
+```bash
+curl localhost:8000          # a documentação inteira, em HTML
+curl localhost:8000/openapi.yaml   # a spec crua, para importar
+```
+
+`http://localhost:8000` deixou de ser a welcome do Laravel. Quem abre esse
+endereço está procurando a API, e entregar a página de boas-vindas do framework
+desperdiça a única URL que a pessoa já sabe de cor.
+
+**A página é montada no servidor, e essa foi a decisão que custou mais.** O
+caminho fácil era Redoc, Scalar ou Stoplight Elements: uma linha de HTML, uma
+tag de `<script>` de CDN, e um resultado bonito de graça. Todos os três montam
+a página no browser — `curl localhost:8000` devolveria `<div id="app">` e mais
+nada.
+
+Documentação que só existe depois do JavaScript não se lê pelo terminal, não se
+indexa, não abre sem internet e não sobrevive a uma CDN fora do ar. O critério
+"`curl` responde a documentação" não é capricho: é o que separa documentação de
+página de documentação.
+
+O custo da escolha é um controller de 200 linhas e uma view — resolver `$ref`,
+fundir os parâmetros declarados no path com os da operação, formatar exemplo. O
+que se ganha:
+
+| | Renderizador de CDN | Esta página |
+|---|---|---|
+| `curl` devolve a documentação | não | **sim** |
+| Funciona sem internet | não | **sim** |
+| Dependência de terceiro em runtime | sim | **nenhuma** |
+| JavaScript | obrigatório | **zero** |
+
+O visual é de especificação impressa — papel, tinta, fio de régua e numeração de
+seção (`3.6 Registra o pagamento e congela os juros`). Sem fonte externa, pelo
+mesmo motivo de não ter CDN: a página abre offline com as famílias que a máquina
+já tem. Há folha de estilo de impressão, porque um documento que se chama
+especificação deveria sair bem no papel.
+
+O parse do YAML não é cacheado de propósito: leva poucos milissegundos, e editar
+a spec e recarregar mostra o resultado na hora — que é o que se quer de um
+arquivo mantido à mão.
+
 ### Decisões
 
 **YAML e não JSON**, com `symfony/yaml` para o teste conseguir ler. JSON não
@@ -1097,7 +1140,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (138 tests, 417 assertions)
+OK (153 tests, 582 assertions)
 ```
 
 ### Cobertura
@@ -1108,9 +1151,9 @@ make coverage                               # docker compose exec php php -d pco
 
 | | |
 |---|---|
-| **Linhas** | **99,81%** (538/539) |
-| Métodos | 98,98% (97/98) |
-| Classes | 96,77% (30/31) |
+| **Linhas** | **99,84%** (627/628) |
+| Métodos | 99,08% (108/109) |
+| Classes | 96,88% (31/32) |
 
 Usa **pcov**, não xdebug: ele existe só para cobertura e custa uma fração do
 tempo. Fica desligado por padrão (`pcov.enabled = 0`) para não pesar na
