@@ -1302,6 +1302,38 @@ perder: o `Field` amarra `label`, `id`, `aria-invalid` e `role="alert"` numa
 vez só, e o foco visível usa `:focus-visible` — o anel aparece para quem navega
 por Tab e some para quem clica.
 
+### O seletor de tema é um formulário HTML
+
+Três estados — sistema, claro, escuro — e "sistema" é uma escolha própria: sem
+ele, quem prefere acompanhar o sistema operacional não teria como voltar depois
+de tocar no seletor uma vez.
+
+A preferência vai para um cookie e é **lida no layout raiz, no servidor**. É o
+que elimina o piscar: com `localStorage` a página renderiza no tema errado e
+troca depois da hidratação, e a saída comum para isso é um script inline no
+`<head>` que o bundler não enxerga. Lendo o cookie no servidor, o `<html>` já
+sai da primeira resposta com `data-theme` correto.
+
+**O seletor posta para um Route Handler, não para uma Server Action** — e isso
+contraria a regra geral deste projeto, de que mutação usa Action. A exceção
+está na própria regra: Route Handler é para o que o browser precisa *navegar*.
+
+A versão com Server Action foi escrita primeiro e não funciona aqui. O cookie
+era gravado e o servidor já respondia o tema novo, mas a tela continuava no
+tema antigo até alguém recarregar: numa atualização suave o React não
+reconcilia atributo do elemento `<html>`. Com `<form method="post">` o browser
+navega de verdade, o layout raiz roda no servidor e o `<html>` chega pronto —
+e o seletor passa a funcionar **sem JavaScript nenhum**.
+
+A primeira versão do handler também caiu numa armadilha que este projeto já
+tinha documentado em outro lugar: `NextResponse.redirect()` exige URL absoluta,
+e dentro do container `request.nextUrl.origin` resolve para o endereço de bind
+(`http://0.0.0.0:3000`), não para o host que o browser usou. O browser seguia
+para **outra origem**, não mandava o cookie de sessão junto, e o usuário caía no
+login a cada troca de tema. O `Location` agora é relativo, e o `Referer` só é
+aceito se o host bater com o header `Host` — que é o host que o browser usou de
+fato, e não o que o container acha que é.
+
 ### Tipografia
 
 | | Família | Papel |

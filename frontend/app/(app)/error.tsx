@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 /**
  * Fronteira de erro da área autenticada: renderiza dentro do cabeçalho e
  * preserva a navegação. O que acontece acima dela — inclusive a falha do
@@ -16,20 +18,16 @@ export default function AppError({
   retry: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-      <h2 className="font-semibold text-red-900">Algo deu errado</h2>
+    <div className="rounded-lg border border-overdue/30 bg-overdue-soft p-6">
+      <h2 className="font-semibold text-overdue">Algo deu errado</h2>
 
-      <p className="mt-1 text-sm text-red-800">
+      <p className="mt-1 text-sm text-overdue">
         {error.message || "Não foi possível carregar esta página."}
       </p>
 
-      <button
-        type="button"
-        onClick={() => retry()}
-        className="mt-4 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 transition hover:bg-red-100"
-      >
+      <Button variant="secondary" size="sm" onClick={() => retry()} className="mt-4">
         Tentar de novo
-      </button>
+      </Button>
     </div>
   );
 }

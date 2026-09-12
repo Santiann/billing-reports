@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 import { login } from "@/lib/auth-client";
 
 type LoginFormProps = {
@@ -34,12 +36,9 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-sm font-medium text-slate-700">
-          E-mail
-        </label>
-        <input
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+      <Field label="E-mail" htmlFor="email">
+        <Input
           id="email"
           name="email"
           type="email"
@@ -48,15 +47,11 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           disabled={isSubmitting}
-          className="rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 disabled:bg-slate-100"
         />
-      </div>
+      </Field>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-sm font-medium text-slate-700">
-          Senha
-        </label>
-        <input
+      <Field label="Senha" htmlFor="password">
+        <Input
           id="password"
           name="password"
           type="password"
@@ -65,23 +60,26 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           disabled={isSubmitting}
-          className="rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 disabled:bg-slate-100"
         />
-      </div>
+      </Field>
 
+      {/*
+        Erro de credencial não é erro de campo: o 401 não diz qual dos dois
+        está errado, de propósito, para não revelar quais e-mails existem.
+        Por isso aparece acima do botão, e não sob um campo.
+      */}
       {error ? (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-md border border-overdue/30 bg-overdue-soft px-3 py-2 text-sm text-overdue"
+        >
           {error}
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="rounded-md bg-slate-900 px-4 py-2 font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-      >
+      <Button type="submit" disabled={isSubmitting} className="w-full">
         {isSubmitting ? "Entrando…" : "Entrar"}
-      </button>
+      </Button>
     </form>
   );
 }

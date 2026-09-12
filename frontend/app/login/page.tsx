@@ -21,13 +21,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <header className="mb-6">
-          <h1 className="text-xl font-semibold text-slate-900">
+    <main className="flex flex-1 items-center justify-center px-4 py-16">
+      <div className="w-full max-w-sm">
+        {/* Régua sob o título: é o motivo do papel pautado, e é o que ancora
+            o formulário em vez de deixá-lo flutuando no meio da tela. */}
+        <header className="mb-8 border-b border-rule pb-5">
+          <h1 className="font-display text-3xl leading-tight text-ink">
             Gerador de Relatórios
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-ink-muted">
             Entre para acessar cobranças e relatórios.
           </p>
         </header>
@@ -35,7 +37,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {params.expired ? (
           <p
             role="status"
-            className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+            className="mb-5 rounded-md border border-pending/30 bg-pending-soft px-3 py-2 text-sm text-pending"
           >
             Sua sessão expirou. Entre novamente.
           </p>

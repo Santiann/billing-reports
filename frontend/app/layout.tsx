@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Instrument_Serif } from "next/font/google";
+import { cookies } from "next/headers";
+
+import { isTheme, THEME_COOKIE } from "@/lib/theme";
 import "./globals.css";
 
 /**
@@ -39,10 +42,25 @@ export const metadata: Metadata = {
   description: "Faturamento, cobranças e relatório por período.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  /*
+   * O tema é lido do cookie AQUI, no servidor, e não num efeito do cliente.
+   *
+   * É o que elimina o piscar: com `localStorage` a página renderiza no tema
+   * errado e troca depois da hidratação, e a saída comum para isso é um script
+   * inline no <head> que o bundler não enxerga. Lendo o cookie no layout, o
+   * `<html>` já sai da primeira resposta com o atributo certo.
+   *
+   * "system" não vira atributo: a ausência dele é o que devolve a decisão ao
+   * `prefers-color-scheme`.
+   */
+  const escolhido = (await cookies()).get(THEME_COOKIE)?.value;
+  const theme = isTheme(escolhido) ? escolhido : "system";
+
   return (
     <html
       lang="pt-BR"
+      data-theme={theme === "system" ? undefined : theme}
       className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">{children}</body>

@@ -1,25 +1,42 @@
 import Link from "next/link";
 
+import { buttonClasses } from "@/components/ui/button";
+
+/**
+ * Tela inicial, provisória.
+ *
+ * Vira dashboard com indicadores e gráficos no commit próprio. Até lá, serve
+ * para o que serve: dizer o que o sistema é e levar para onde se trabalha.
+ */
 export default function HomePage() {
   return (
     <div className="max-w-2xl">
-      <h1 className="text-xl font-semibold text-slate-900">Início</h1>
+      <h1 className="font-display text-4xl leading-tight text-ink">
+        Faturamento, cobranças e juros
+      </h1>
 
-      <p className="mt-2 text-slate-600">
-        Cadastro de clientes e cobranças, com relatório de faturamento por
-        período.
+      <p className="mt-3 text-ink-muted">
+        Cadastro de clientes e cobranças, com relatório por período, juros
+        compostos sobre atraso e exportação em CSV e PDF.
       </p>
 
-      <Link
-        href="/clientes"
-        className="mt-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-      >
-        Ver clientes
-      </Link>
-
-      <p className="mt-8 text-sm text-slate-500">
-        Cobranças e relatório entram nas próximas etapas.
-      </p>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link href="/relatorio" className={buttonClasses()}>
+          Abrir relatório
+        </Link>
+        <Link
+          href="/cobrancas"
+          className={buttonClasses({ variant: "secondary" })}
+        >
+          Ver cobranças
+        </Link>
+        <Link
+          href="/clientes"
+          className={buttonClasses({ variant: "secondary" })}
+        >
+          Ver clientes
+        </Link>
+      </div>
     </div>
   );
 }
