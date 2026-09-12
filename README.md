@@ -1598,10 +1598,19 @@ agente estão no repositório, como o teste exige:
 | `.claude/skills/agent-browser/SKILL.md` | Automação de browser: navegar as telas, tirar screenshot e iterar sobre o que se está construindo |
 | `.claude/skills/github-actions-docs/SKILL.md` | Sintaxe de workflow do GitHub Actions ancorada na documentação oficial, em vez de memória |
 | `.claude/skills/vulnerability-scanner/SKILL.md` | Roteiro de análise de vulnerabilidade — OWASP, cadeia de suprimentos, superfície de ataque |
+| `.claude/skills/crafting-effective-readmes/SKILL.md` | Como escrever README por público: contribuidor, avaliador, o próprio autor daqui a um ano |
+| `.claude/skills/find-skills/SKILL.md` | Descoberta e instalação de skills do ecossistema aberto |
+| `skills-lock.json` | Origem e hash de cada skill instalada do ecossistema |
 
-As três últimas vieram prontas de outro projeto e foram copiadas sem alteração:
+As três do meio vieram prontas de outro projeto e foram copiadas sem alteração:
 skill é conteúdo versionado, e reescrever uma na importação é perder a versão
 que já foi exercitada em outro lugar.
+
+As duas últimas vêm de repositórios públicos — `softaworks/agent-toolkit` e
+`vercel-labs/skills` — e por isso existe o `skills-lock.json`, que grava a
+origem e o hash do conteúdo de cada uma. É o mesmo motivo de um `composer.lock`:
+uma dependência sem versão fixada não é uma dependência, é uma aposta. A
+diferença é que aqui ela entra no contexto de quem escreve o código.
 
 ### O que a configuração efetivamente evitou
 
