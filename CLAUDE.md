@@ -96,7 +96,8 @@ Token Sanctum em cookie **httpOnly**, nunca em `localStorage`.
   Nunca montar o conjunto completo em array.
 - Exportação PDF é limitada por natureza: o documento é montado inteiro antes
   de existir, então não há streaming. Teto de linhas com 422 acima dele,
-  orientando o CSV. Decisão a documentar no README, não falha a esconder.
+  orientando o CSV. Decisão a documentar em `docs/performance.md`, não falha a
+  esconder.
 - **O teto é 1.000, não 5.000.** O valor original era estimativa e não
   sobreviveu à medição: o dompdf consome 420 MB para mil linhas, 1.164 MB para
   duas mil e estoura 3 GB em cinco mil — o crescimento é superlinear porque ele
@@ -107,7 +108,8 @@ Token Sanctum em cookie **httpOnly**, nunca em `localStorage`.
 - **Índices:** coluna de igualdade antes da coluna de range. Como o usuário
   escolhe qual das três datas define o período, cada uma precisa do seu próprio
   índice, e a variante com `customer_id` à frente cobre o caso de filtro por
-  cliente. Cada índice criado vai para o README junto da query que ele serve.
+  cliente. Cada índice criado vai para `docs/performance.md` junto da query que
+  ele serve.
 - Seeder gera volume real (2M+ cobranças) por insert em lote com chunk, não por
   factory registro a registro.
 
@@ -248,7 +250,7 @@ G — subida do zero, cronometrada
 perf: build report indexes after bulk seed
 docs: document clean install timing
 
-H — zerar a lista de pendências do README
+H — zerar a lista de pendências (docs/producao.md)
 perf: size the innodb buffer pool
 perf: add fulltext index for billing description
 perf: export csv from raw rows
@@ -259,7 +261,7 @@ feat: add read replica for report queries
 docs: empty the pending list
 ```
 
-O bloco H fecha a seção "Melhorias que ficariam para produção" do README. Uma
+O bloco H fecha o `docs/producao.md`. Uma
 pendência morre de dois jeitos, e os dois valem: implementada, ou medida e
 descartada com o número que embasou o descarte. O que não vale é continuar
 listada como intenção.
@@ -271,11 +273,14 @@ listada como intenção.
 - Uma etapa por vez, na ordem acima. Não adiantar etapas nem encadear módulos.
 - Ao terminar uma etapa, parar e apresentar o diff antes de seguir.
 - Nenhuma decisão técnica fica só no código: se existe alternativa razoável, a
-  escolha e o porquê vão para o README.
+  escolha e o porquê vão para a documentação. O README é a porta de entrada e
+  fica curto — o detalhe vive em `docs/`, por tema. Decisão nova entra no
+  documento do tema, e só sobe para o README se mudar o que o avaliador precisa
+  saber nos primeiros três minutos.
 - Não implementar nada além do que o teste pede. Escopo extra não pontua e
   aumenta a superfície de erro. Na etapa 2 o "que o teste pede" inclui a lista
   de diferenciais do enunciado — e nada fora do commit da vez.
-- Não trocar biblioteca ou padrão sem registrar a decisão no README.
+- Não trocar biblioteca ou padrão sem registrar a decisão em `docs/`.
 - **Medir contra a base real, não contra a suíte.** O teto do PDF passou em
   todos os testes com um valor uma ordem de grandeza acima do possível, porque
   teste usa poucas linhas. Decisão sobre volume, limite ou performance exige
@@ -289,8 +294,8 @@ listada como intenção.
   duas execuções perdidas por não ter lido.
 - **Ferramenta que varre `vendor/` mede a internet, não o projeto.** O scanner
   de vulnerabilidade acusou 23 achados críticos, todos em código minificado de
-  terceiros. Relatório de ferramenta entra no README com o recorte explícito do
-  que foi varrido.
+  terceiros. Relatório de ferramenta entra na documentação com o recorte
+  explícito do que foi varrido.
 - **Contexto seguro no browser.** `crypto.randomUUID()` e a família
   `crypto.subtle` só existem em HTTPS ou `localhost`. Código de cliente que
   dependa delas quebra em qualquer outro host servido por HTTP — e quebra
