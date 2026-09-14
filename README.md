@@ -20,7 +20,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 | **Domínio** | [Perfis de acesso](#perfis-de-acesso) · [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Importação CSV](#importação-por-csv) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
-| **Decisões** | [Página pública](#página-pública) · [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
+| **Decisões** | [Segurança](#revisão-de-segurança) · [Página pública](#página-pública) · [Fundação visual](#fundação-visual) · [Técnicas](#decisões-técnicas) · [Erro e carregamento](#estados-de-erro-e-carregamento) · [Produção](#melhorias-que-ficariam-para-produção) · [Uso de IA](#uso-de-inteligência-artificial) |
 
 ---
 
@@ -2513,6 +2513,113 @@ Um detalhe da documentação: o linter da spec avisa que a operação não decla
 nenhum 4xx. Não declara porque não há — a rota é pública e não recebe entrada.
 Inventar um 4xx para calar o aviso seria documentar o que não existe, então o
 aviso fica.
+
+---
+
+## Revisão de segurança
+
+Feita com a skill `vulnerability-scanner`, na ordem que ela propõe:
+reconhecimento, descoberta, análise, relato. O que segue é o resultado completo
+— o que foi corrigido **e** o que foi avaliado e descartado, com o motivo.
+
+### Corrigido
+
+| Achado | Por que importa | Correção |
+|---|---|---|
+| **CORS aberto** — o default do framework é `allowed_origins: ['*']` | A API aceita token no cabeçalho; origem `*` é superfície que este desenho não usa, porque o browser nunca chama a API direto | `config/cors.php` restrito ao frontend, com lista explícita de cabeçalhos aceitos e expostos |
+| **Token Sanctum sem expiração** (`expiration => null`) | O cookie de sessão dura 8h, mas o token continuava válido para sempre — vazamento sem prazo de validade | 480 minutos, o mesmo prazo do cookie |
+| **Nenhum cabeçalho de segurança** | Clickjacking, sniffing de tipo, vazamento de referrer | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` nas duas origens, mais CSP completo na API |
+| **`X-Powered-By: PHP/8.3.33`** | Dizer a versão poupa a quem sonda o trabalho de descobrir qual CVE tentar | `expose_php = Off` |
+| **Health vazava a mensagem do driver** | A rota é pública, e o erro do PDO nomeia host, porta e driver | Mensagem genérica na resposta, detalhe no log estruturado |
+| **API sem teto de requisições** | O motivo aqui não é força bruta, é custo: uma consulta sem cache no recorte de um ano leva 12s de banco, e um laço derruba o serviço com credencial legítima | `throttle:api`, 180/min, contados **por usuário** |
+| **`Str::markdown` renderizando HTML cru** | XSS teórico na página de documentação, cujo conteúdo vem da spec | `html_input => escape` |
+
+O limite da API é contado por usuário, e não por IP, por um detalhe deste
+desenho: o frontend chama a API pelo servidor do Next, então **todas** as
+requisições da aplicação chegam do mesmo endereço. Contar por IP faria um
+usuário ativo limitar todos os outros.
+
+O CSP da API é o mais restritivo possível — `script-src 'none'` — e isso só é
+viável porque a [página de documentação](#a-raiz-do-backend-é-a-documentação) é
+montada no servidor e não tem um único `<script>`. A escolha de não usar
+renderizador de spec do mercado, feita por outro motivo, pagou aqui também.
+
+### Avaliado e descartado
+
+**CSP na aplicação Next.** O servidor de desenvolvimento precisa de
+`unsafe-eval` e estilo inline; uma política que valesse só em produção iria ao
+ar sem nunca ter sido exercitada, e CSP que ninguém testou quebra a aplicação no
+pior momento. Ficam os quatro cabeçalhos que valem nos dois ambientes.
+
+**Dependências.** `composer audit` e `npm audit`: nenhum advisory. Os dois
+lockfiles são versionados e o CI usa `npm ci`, que instala exatamente o
+lockfile e falha se ele divergir do manifesto.
+
+**Injeção de SQL.** Todo SQL cru do projeto vem de dois lugares: o
+`InterestCalculator`, que gera a expressão com a data de referência vinda do
+PHP, e as agregações do dashboard, que usam parâmetro vinculado. Coluna de
+ordenação e base de data passam por **duas** allowlists — o `FormRequest` e o
+objeto de filtros — justamente porque viram nome de coluna.
+
+**Upload de CSV.** Validado em tipo e tamanho (20 MB), e o caminho lido é o do
+arquivo temporário que o PHP criou, não um valor da requisição. O leitor é
+streaming e falha com mensagem clara quando o cabeçalho não bate.
+
+**Geração de PDF.** O dompdf vem com `enable_remote` e `enable_php`
+desligados: sem SSRF por imagem remota e sem execução de PHP dentro do
+template.
+
+**Acesso a registro de outro usuário.** Qualquer usuário autenticado vê
+qualquer cobrança. Não há conceito de cliente-dono nem de organização no
+enunciado, e inventá-lo seria escopo extra; o que existe é o [perfil de
+consulta](#perfis-de-acesso), que separa leitura de escrita. Fica registrado
+como limite conhecido, não como descuido.
+
+**`APP_DEBUG=true` e senhas de exemplo.** São o ambiente local que o teste pede
+— `docker compose up -d` tem que entregar a aplicação usável, com credenciais
+documentadas. Em produção, `APP_DEBUG=false`, `APP_ENV=production` e segredos
+fora do repositório são pré-requisito, não ajuste.
+
+**Fixar as ações do CI por SHA em vez de major.** `actions/checkout@v7` confia
+na tag, que é móvel. Fixar por SHA protege contra a tag ser reapontada, e é
+prática de organização com requisito de assurance alto; para este projeto o
+custo de manutenção não se paga.
+
+### Sobre o número que o scanner reportou
+
+O script da skill acusou **224 padrões perigosos, 23 críticos** — e nenhum é
+nosso. Ele varre o diretório inteiro, e os achados estão em
+`backend/vendor/phpunit/.../billboard.pkgd.min.js` e companhia: concatenação de
+string em código minificado de terceiros. Rodado sobre o nosso código, o
+resultado é outro:
+
+```
+backend/app         0 crítico, 0 alto
+backend/routes      0 crítico, 0 alto
+backend/config      0 crítico, 0 alto
+frontend/app        0 crítico, 0 alto
+frontend/components 0 crítico, 0 alto
+frontend/lib        0 crítico, 0 alto
+```
+
+Registrar isso importa porque a leitura preguiçosa do relatório levaria à
+conclusão oposta. Ferramenta que varre `vendor/` mede a internet, não o
+projeto — e o achado de configuração dela, o dos cabeçalhos ausentes, era
+verdadeiro e virou correção.
+
+### Falhar fechado
+
+A última categoria da OWASP 2025 é condição excepcional, e vale listar o que o
+projeto faz quando algo dá errado:
+
+- **Chave de idempotência em erro de servidor:** devolvida, não guardada — um
+  500 não é resultado, e repetir é o certo.
+- **Health com dependência fora:** 503, nunca 200 otimista.
+- **Logout com a API fora do ar:** o cookie é apagado de qualquer forma. Deixar
+  o usuário preso numa sessão que ele pediu para encerrar é pior que um token
+  órfão, que agora expira sozinho.
+- **Sem trilha de auditoria, sem alteração:** a gravação da cobrança e a da
+  trilha estão na mesma transação.
 
 ---
 

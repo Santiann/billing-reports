@@ -20,6 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // linha de log da requisição, inclusive as de erro.
         $middleware->api(prepend: [RequestId::class]);
 
+        // Teto de requisições da API. O limitador `api` está no
+        // AppServiceProvider, com a razão do número.
+        $middleware->api(append: ['throttle:api']);
+
         $middleware->alias([
             'can.write' => EnsureUserCanWrite::class,
             'idempotent' => IdempotentRequest::class,

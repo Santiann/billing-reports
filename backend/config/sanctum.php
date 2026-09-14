@@ -50,7 +50,15 @@ return [
     |
     */
 
-    'expiration' => null,
+    /*
+     * Oito horas, o mesmo prazo do cookie de sessão do frontend.
+     *
+     * O default do Sanctum é `null`: token que não expira NUNCA. Como o cookie
+     * dura oito horas, um token vazado continuaria valendo muito depois de a
+     * sessão ter acabado, e sem nenhum rastro de que ainda existe. Com prazo,
+     * o 401 chega e o frontend manda para o login — caminho que já existe.
+     */
+    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION', 480),
 
     /*
     |--------------------------------------------------------------------------

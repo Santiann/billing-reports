@@ -486,7 +486,7 @@
             </div>
 
             <div class="prosa">
-                {!! Str::markdown($spec['info']['description'] ?? '') !!}
+                {!! Str::markdown($spec['info']['description'] ?? '', ['html_input' => 'escape']) !!}
             </div>
         </header>
 
@@ -512,7 +512,7 @@
                         <h3>{{ $endpoint['resumo'] }}</h3>
 
                         @isset($endpoint['descricao'])
-                            <div class="prosa">{!! Str::markdown($endpoint['descricao']) !!}</div>
+                            <div class="prosa">{!! Str::markdown($endpoint['descricao'], ['html_input' => 'escape']) !!}</div>
                         @endisset
 
                         @if ($endpoint['parametros'] !== [])
@@ -567,7 +567,7 @@
                                     {{ $resposta['status'] }}
                                 </span>
                                 <div class="resposta-descricao">
-                                    {!! Str::markdown($resposta['descricao']) !!}
+                                    {!! Str::markdown($resposta['descricao'], ['html_input' => 'escape']) !!}
                                 </div>
                             </div>
                             @foreach ($resposta['exemplos'] as $exemplo)

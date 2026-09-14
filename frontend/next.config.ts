@@ -21,6 +21,33 @@ const nextConfig: NextConfig = {
    */
   allowedDevOrigins: ["frontend"],
 
+  /*
+   * Cabeçalhos de segurança da aplicação.
+   *
+   * Sem CSP, e a ausência é uma decisão: o servidor de desenvolvimento do Next
+   * precisa de `unsafe-eval` e de estilo inline, então uma política que
+   * valesse só em produção iria para o ar sem nunca ter sido exercitada aqui —
+   * e CSP que ninguém testou quebra a aplicação no pior momento. A origem da
+   * API, que serve conteúdo estático e não tem script nenhum, ganhou CSP
+   * completo no nginx.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+    ];
+  },
+
   experimental: {
     serverActions: {
       /*

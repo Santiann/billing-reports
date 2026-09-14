@@ -7,6 +7,7 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -47,7 +48,18 @@ class HealthController extends Controller
         try {
             $checagem();
         } catch (Throwable $erro) {
-            return ['ok' => false, 'error' => $erro->getMessage()];
+            /*
+             * A mensagem do driver fica no LOG, não na resposta.
+             *
+             * A rota é pública, e o erro do PDO nomeia host, porta e driver —
+             * `SQLSTATE[HY000] [2002] Connection refused`, e o DSN junto. Isso
+             * é reconhecimento gratuito para quem sonda. Quem precisa do
+             * detalhe é quem opera, e tem o log estruturado com o identificador
+             * da requisição para achá-lo.
+             */
+            Log::error('health.falhou', ['erro' => $erro->getMessage()]);
+
+            return ['ok' => false, 'error' => 'não respondeu'];
         }
 
         return ['ok' => true, 'duration_ms' => round((microtime(true) - $inicio) * 1000, 2)];
