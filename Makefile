@@ -74,8 +74,15 @@ seed-volume: ## Gera 2.000.000 de cobranças para medição (demorado)
 fresh: ## Recria o schema do zero e semeia o usuário
 	$(PHP) php artisan migrate:fresh --seed --force
 
+# O `next typegen` existe aqui porque os tipos de rota do Next — LayoutProps,
+# PageProps — são GERADOS, e o tsconfig os inclui. Num clone novo ninguém os
+# criou ainda e o typecheck falha; na máquina de quem desenvolve eles já
+# existem, criados pelo servidor de desenvolvimento, e o furo fica invisível.
+# Foi o CI que mostrou. (Comentário fora da receita: dentro dela o make ecoaria
+# cada linha.)
 lint: ## Pint no backend, typecheck e ESLint no frontend
 	$(PHP) ./vendor/bin/pint --test
+	$(FRONTEND) npx next typegen
 	$(FRONTEND) npx tsc --noEmit
 	$(FRONTEND) npx eslint
 

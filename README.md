@@ -77,7 +77,7 @@ ou prefere digitar à mão.
 | `make seed` | `docker compose exec php php artisan db:seed` |
 | `make seed-volume` | `docker compose exec php php artisan db:seed --class=BillingVolumeSeeder` |
 | `make fresh` | `docker compose exec php php artisan migrate:fresh --seed` |
-| `make lint` | `pint --test` no backend, `tsc --noEmit` e `eslint` no frontend |
+| `make lint` | `pint --test` no backend, `next typegen`, `tsc --noEmit` e `eslint` no frontend |
 | `make explain` | `docker compose exec php php artisan report:explain` — passe opções com `ARGS="--analyze"` |
 
 Duas decisões que o arquivo registra:
@@ -1442,7 +1442,7 @@ os minutos da suíte para falhar.
 | Job | O que roda |
 |---|---|
 | Backend | MySQL 8 como serviço, PHP 8.3 com `pdo_mysql` e `bcmath`, `pint --test`, `php artisan test` |
-| Frontend | Node 22, `npm ci`, `tsc --noEmit`, `eslint` |
+| Frontend | Node 22, `npm ci`, `next typegen`, `tsc --noEmit`, `eslint` |
 
 As versões e as extensões não foram escolhidas de novo: são as dos Dockerfiles,
 e o banco da suíte é o `faturamento_test` com as credenciais que o
@@ -1468,6 +1468,29 @@ PHPUnit que eu **conferi antes de escrever o workflow**, em vez de assumir: o
 com `force="true"`. Rodando a suíte com a variável presente, o erro de conexão
 nomeou o host — `Host: 127.0.0.1` —, provando quem vence. O `phpunit.xml`
 continua sendo a fonte da verdade para o ambiente documentado, o do Compose.
+
+### O CI achou um problema no primeiro push
+
+A primeira execução **falhou** — e não no workflow, no projeto. O backend
+passou em 56s; o frontend quebrou com `Cannot find name 'LayoutProps'`.
+
+`LayoutProps` e `PageProps` são tipos **gerados** pelo Next em `.next/types`, e
+o `tsconfig.json` os inclui. Na máquina eles já existiam, criados pelo servidor
+de desenvolvimento — então `make lint` passava. Num checkout limpo ninguém os
+criou, e o `tsc` não os encontra. O alvo local tinha o mesmo furo e ninguém
+notaria até alguém clonar o repositório e rodar a verificação antes de subir a
+aplicação.
+
+A correção é um passo, `next typegen`, que gera só as definições sem o build
+inteiro, e foi aplicada **nos dois lugares** — no CI e no `make lint` —, porque
+o problema era dos dois. É o primeiro retorno concreto do pipeline: ele não
+serviu para confirmar o que já se sabia, serviu para mostrar o que a máquina de
+desenvolvimento escondia.
+
+Na mesma execução vieram avisos de que `actions/checkout@v4`, `setup-node@v4` e
+`cache@v4` rodam sobre Node 20, descontinuado. As versões correntes foram
+conferidas pela API do GitHub, não pela memória — `checkout v7`, `setup-node
+v7`, `cache v6` — e o workflow subiu para elas.
 
 ### Três ajustes que valem o comentário
 

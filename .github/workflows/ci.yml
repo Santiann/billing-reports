@@ -71,7 +71,7 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -89,7 +89,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache do Composer
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ hashFiles('backend/composer.lock') }}
@@ -122,12 +122,12 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Node 22, a mesma versão do Dockerfile do frontend. O cache de npm sai
       # da própria ação, que é o que a documentação recomenda para gerenciador
       # suportado.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -137,6 +137,16 @@ jobs:
       # ele divergir do package.json.
       - name: Dependências
         run: npm ci
+
+      # Sem isto o typecheck falha num checkout limpo, e foi o CI que
+      # mostrou: o Next GERA os tipos de rota — `LayoutProps`, `PageProps` — em
+      # `.next/types`, e o tsconfig os inclui. Na máquina eles já existiam,
+      # criados pelo servidor de desenvolvimento; aqui não havia ninguém para
+      # criá-los, e o tsc não encontrava `LayoutProps`.
+      #
+      # `typegen` gera só as definições, sem o build inteiro.
+      - name: Tipos de rota do Next
+        run: npx next typegen
 
       - name: Typecheck
         run: npx tsc --noEmit
