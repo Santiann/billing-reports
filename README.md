@@ -1055,9 +1055,11 @@ O outro fator é que os totalizadores são inerentemente O(n): somar juros exige
 calcular `POW` para cada linha do conjunto filtrado. Nenhum índice evita isso —
 índice acha as linhas, não dispensa a conta.
 
-Mitigações de produção, não aplicadas aqui por estarem fora do escopo do teste:
-cache dos totalizadores por combinação de filtros, tabela de agregados
-atualizada por evento, ou particionamento da tabela por data.
+Das mitigações de produção listadas na etapa 1, o cache dos totalizadores por
+combinação de filtros foi feito na etapa 2, [com medição e estratégia de
+invalidação](#cache-dos-totalizadores). Tabela de agregados atualizada por
+evento e particionamento por data continuam sendo as alternativas para quando o
+cache não bastar — e ele não basta para a primeira consulta de cada recorte.
 
 ### Custo em disco
 
@@ -1351,7 +1353,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (243 tests, 886 assertions)
+OK (255 tests, 946 assertions)
 ```
 
 ### Cobertura
@@ -1952,6 +1954,136 @@ de um commit de funcionalidade.
 
 ---
 
+## Cache dos totalizadores
+
+Os totalizadores são a parte cara do relatório: somar juros exige calcular
+`POW` para cada linha do conjunto filtrado, e nenhum índice dispensa a conta. A
+partir daqui eles ficam em cache por recorte — e a maior parte do trabalho não
+foi fazer o cache acertar, foi garantir que ele **nunca sirva um número velho**.
+
+### Antes: 12 segundos, e não 6
+
+A medição da etapa 1 registrou 6,2 s para o recorte de um ano. Medido de novo
+antes deste commit, no mesmo recorte (vencimento em 2026, 519.986 cobranças), com
+a máquina parada: **12,1 a 14,0 s**. Consulta a consulta, pelo query log:
+
+| Consulta | Tempo |
+|---|---|
+| agregação dos totalizadores | **8,2 – 8,5 s** |
+| página de 25 linhas | 2,3 – 2,7 s |
+| `COUNT` da paginação | 0,35 s |
+| clientes da página | 1 – 2 ms |
+
+Parte do crescimento tem autor e número: os [dígitos de
+guarda](#três-armadilhas-que-o-desenho-precisou-resolver) que fizeram as duas
+faces concordarem no meio centavo. Um A/B da agregação direto no MySQL, mesma
+consulta com e sem o `CAST(... AS DECIMAL(20, 6))`:
+
+| Expressão | Tempo | Soma atualizada |
+|---|---|---|
+| com o `CAST` (a atual) | 4,33 – 4,54 s | 2.832.396.064,22 |
+| sem o `CAST` | 2,84 – 3,17 s | 2.832.396.063,9201 |
+
+O `CAST` custa uns 40% da agregação, e fica: as somas diferem exatamente nos
+centavos que ele existe para acertar. O resto da distância — 4,4 s no SQL direto
+contra 8,3 s pela classe do relatório — não está explicado aqui. A diferença
+visível é que a classe manda as datas como parâmetro vinculado, e o SQL direto
+as mandou literais, o que pode mudar o plano. É exatamente o que o comando de
+`EXPLAIN` do commit seguinte existe para mostrar.
+
+### Depois
+
+| Chamada, recorte de um ano | Tempo |
+|---|---|
+| primeira, sem cache | 12,9 s |
+| seguintes, com cache | **2,9 – 3,3 s** |
+| ordenada por valor atualizado, com cache | 3,9 s |
+| primeira depois de uma escrita | 12,0 s |
+
+Com cache, a agregação some do query log: no lugar dela entram a leitura da
+versão dos dados (1,1 ms) e a do cache (1,7 ms). O que sobra são os 2,2 s da
+página e os 0,35 s do `COUNT` — o cache não toca as linhas, e o próximo gargalo
+do recorte de um ano é a consulta da página.
+
+### O que invalida
+
+Os totais guardados valem para três coisas ao mesmo tempo, e qualquer uma que
+mude faz a próxima consulta recalcular:
+
+- **A versão dos dados.** Um contador numa tabela de uma linha só, que sobe a
+  cada escrita em `billings`, dentro da transação da escrita. Cadastro, edição,
+  pagamento, estorno e alteração pelo console sobem pelo observer do Eloquent;
+  a importação, que grava em lote sem passar por ele, sobe na mesma transação de
+  cada lote; o seeder de volume sobe ao terminar.
+- **A data de referência.** Os juros mudam de um dia para o outro sem escrita
+  nenhuma, e nenhuma invalidação por evento pegaria isso. A data guardada é a
+  mesma que o SQL usa — o `InterestCalculator` passou a expô-la —, e não um
+  `now()` paralelo que poderia virar o dia entre um e outro.
+- **O recorte.** Período, base da data, cliente e status. Ordenação, direção e
+  página ficam de fora: mudam quais linhas aparecem e em que ordem, não o
+  conjunto. Reordenar a tela reaproveita os totais, que é o uso mais comum.
+
+Cada uma dessas invalidações tem teste, e o CSV aproveita os totais que a tela
+já calculou — o PDF também, pelo mesmo método.
+
+### A primeira ideia tinha uma corrida
+
+A versão começou derivada dos dados, sem escrita nenhuma: `MAX(id)` de
+`billings`, que muda a cada cobrança criada, e `MAX(id)` de `billing_audits`,
+que muda a cada alteração — e a entrada da trilha é gravada na mesma transação
+da alteração desde o commit da auditoria. Custava 1 ms cada, sem trava e sem
+tabela nova.
+
+Ela foi descartada antes de virar código, porque o autoincremento entrega ids na
+ordem de **alocação**, não na de **commit**. Duas alterações simultâneas: T1
+recebe o id 100, T2 recebe o 101, e T2 faz commit primeiro. Um leitor vê
+`MAX(id) = 101`, calcula sem a alteração de T1 e guarda. T1 faz commit — e o
+`MAX(id)` continua 101. O total sem T1 seria servido até a próxima escrita. Com
+commit custando 0,3 s neste ambiente, dois pagamentos ao mesmo tempo bastam.
+
+### Uma linha travada, e o preço dela
+
+O contador sobe **dentro** da transação da escrita. A linha fica travada até o
+commit, duas escritas simultâneas sobem o número em fila, e a versão cresce na
+ordem de commit — a corrida acima não tem como acontecer. Os dados novos e a
+versão nova ficam visíveis no mesmo instante.
+
+Subir o contador fora da transação, depois do commit, tiraria a fila e abriria
+duas janelas: o intervalo entre o commit dos dados e o da versão, em que o cache
+serve o total de antes, e o processo que morre entre um e outro, que deixa o
+total velho valendo até o dia virar.
+
+O preço é a fila: **toda escrita em cobrança passa por esta linha.** Para
+pagamentos feitos por pessoas é imperceptível. Para escrita concorrente pesada —
+várias importações grandes em paralelo — vira gargalo, e aí a resposta é outra:
+tabela de agregados atualizada por evento. O `increment` do driver de cache em
+banco foi considerado e ficou de fora: ele devolve `false` quando a chave não
+existe, em vez de criá-la, e faz o próprio `SELECT ... FOR UPDATE` — a mesma
+trava, com mais passos e escondida.
+
+A outra garantia é de ordem, e está no código: a versão é lida **antes** de
+calcular. Os totais guardados foram calculados sobre dados no mínimo tão novos
+quanto a versão que os acompanha. Se uma escrita entrar no meio, a versão
+corrente sobe e a entrada não é servida; o inverso — dado velho sob versão nova
+— não tem por onde acontecer.
+
+### Uma entrada por recorte, e não uma por versão
+
+O driver de cache em banco só apaga uma entrada vencida quando alguém a lê. Com a
+versão dentro da chave, cada escrita abandonaria uma linha na tabela de cache
+para sempre. Por isso a chave é só o recorte, e o **valor** guarda
+`{versão, data, totais}`: quando a versão ou a data não batem, a entrada é
+recalculada e sobrescrita. A tabela cresce com o número de recortes
+consultados, não com o número de escritas — 306 bytes por recorte, medido. A
+validade de um dia só existe para o recorte que ninguém mais consulta.
+
+O driver é o de banco, o default do projeto. Um Redis leria mais rápido, mas é
+um quinto serviço fora da stack fixa do teste — e trocar o driver depois não
+mexe na correção, que vem da tabela de versão, não do cache. Uma consulta sem
+cache paga, além da agregação, a gravação da entrada: um commit a mais.
+
+---
+
 ## Página pública
 
 A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
@@ -1978,7 +2110,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 243 testes.
+0,84s para o painel, 255 testes.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados
@@ -2172,8 +2304,9 @@ de preencher segredo nenhum. Os valores do serviço `mysql` espelham os de
 
 ## Melhorias que ficariam para produção
 
-Nenhuma foi aplicada: estão fora do que o teste pede, e implementá-las
-aumentaria a superfície sem pontuar. Ficam registradas porque são as que a
+Nenhuma foi aplicada na etapa 1: estão fora do que o teste pede, e
+implementá-las aumentaria a superfície sem pontuar. A etapa 2 vai fechando os
+itens um a um, e cada item fechado sai daqui ou fica só com o que resta dele. Ficam registradas porque são as que a
 medição deste projeto realmente indica, não uma lista genérica.
 
 **Dimensionar o `innodb_buffer_pool_size`.** É a primeira e a mais barata. A
@@ -2182,11 +2315,13 @@ default — nada cabe, e toda varredura vai ao disco. Foi o que derrubou a
 inserção do seeder de ~1.900 para ~150 linhas por segundo na segunda metade da
 carga.
 
-**Cachear ou materializar os totalizadores.** Eles são O(n) por natureza: somar
-juros exige calcular `POW` para cada linha do conjunto filtrado, e nenhum
-índice dispensa a conta. Um cache por combinação de filtros, ou uma tabela de
-agregados atualizada por evento de cobrança, resolveria o recorte largo — que
-é justamente onde o índice não ajuda.
+**Materializar os totalizadores.** O cache por recorte [foi feito na etapa
+2](#cache-dos-totalizadores) e leva o recorte de um ano de 12,9 s para cerca de
+3 s nas consultas seguintes. Mas a primeira consulta de cada recorte, e a
+primeira depois de cada escrita, ainda pagam a agregação inteira — que é O(n)
+por natureza. Uma tabela de agregados atualizada por evento de cobrança tiraria
+esse custo também, com um cuidado que o cache não tem: os juros do que está
+pendente mudam com o dia, então a parte pendente precisaria de recálculo diário.
 
 **Particionar `billings` por data.** Com o relatório sempre recortando por
 período, partições por ano ou trimestre tornariam a varredura de um recorte

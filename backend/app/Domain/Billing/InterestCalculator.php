@@ -61,7 +61,14 @@ final class InterestCalculator
         private readonly CarbonInterface|string|null $reference = null,
     ) {}
 
-    private function referenceDate(): CarbonImmutable
+    /**
+     * A data em que os juros são calculados.
+     *
+     * Pública para o cache dos totalizadores: a chave precisa da MESMA data que
+     * o SQL usa, e não de um `now()` paralelo que poderia virar o dia entre um
+     * e outro.
+     */
+    public function referenceDate(): CarbonImmutable
     {
         return $this->reference === null
             ? CarbonImmutable::now()->startOfDay()

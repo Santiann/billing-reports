@@ -319,7 +319,10 @@ class BillingReportTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        // count da paginação + linhas + clientes + agregação dos totais.
-        $this->assertLessThanOrEqual(4, count($queries));
+        // count da paginação + linhas + clientes + versão dos dados + agregação
+        // dos totais. A versão entrou com o cache dos totalizadores: é uma
+        // consulta fixa por chamada, e o que este teste prova — o número de
+        // consultas não cresce com o número de linhas — continua valendo.
+        $this->assertLessThanOrEqual(5, count($queries));
     }
 }

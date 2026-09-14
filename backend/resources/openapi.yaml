@@ -1355,7 +1355,10 @@ paths:
 
         - **`totals`** — agregação sobre o conjunto filtrado **inteiro**, de
           consulta própria. Não é a soma da página: quem está na página 3 de um
-          relatório de mil cobranças precisa do total do relatório.
+          relatório de mil cobranças precisa do total do relatório. Fica em
+          cache por recorte e nunca é servida velha: qualquer escrita em
+          cobrança e a virada do dia recalculam. Ordenação e página não entram
+          no recorte — reordenar reaproveita os totais.
         - **`filters`** — eco do recorte aplicado, já normalizado. A tela
           reexibe e as exportações imprimem no cabeçalho do arquivo a partir
           desta mesma fonte.

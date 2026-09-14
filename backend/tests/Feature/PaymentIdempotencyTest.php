@@ -100,7 +100,7 @@ class PaymentIdempotencyTest extends TestCase
         $primeira = $this->pagar($cobranca, self::CHAVE)->assertOk();
 
         // Vinte e três horas depois — dentro da validade da chave, e já no dia
-        // seguinte: recalcular daria 31 dias de atraso, R$ 1.020,66.
+        // seguinte: recalcular daria 31 dias de atraso, R$ 1.020,67.
         $this->travelTo('2026-06-16 08:30:00');
         $segunda = $this->pagar($cobranca, self::CHAVE)->assertOk();
 

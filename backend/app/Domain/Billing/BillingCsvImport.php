@@ -31,6 +31,10 @@ final class BillingCsvImport
 {
     private const LOTE = 500;
 
+    public function __construct(
+        private readonly BillingDataVersion $versao = new BillingDataVersion(),
+    ) {}
+
     private const COLUNAS = [
         'document' => ['documento', 'document', 'cliente', 'cpf', 'cnpj', 'cpfcnpj'],
         'description' => ['descricao', 'description', 'historico', 'referencia'],
@@ -149,7 +153,13 @@ final class BillingCsvImport
         }
 
         if ($gravar && $inserir !== []) {
-            DB::table('billings')->insert($inserir);
+            // O insert em lote não passa pelo Eloquent, então não dispara o
+            // observer: a versão dos dados sobe aqui, na mesma transação do lote.
+            DB::transaction(function () use ($inserir): void {
+                DB::table('billings')->insert($inserir);
+                $this->versao->bump();
+            });
+
             $relatorio->importedCount += count($inserir);
         }
     }

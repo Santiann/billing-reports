@@ -16,6 +16,7 @@ use App\Http\Resources\BillingResource;
 use App\Models\Billing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class BillingController extends Controller
 {
@@ -61,7 +62,9 @@ class BillingController extends Controller
 
     public function store(StoreBillingRequest $request): JsonResponse
     {
-        $billing = Billing::create($request->validated());
+        // Em transação: a versão dos dados sobe junto com o INSERT, e o cache
+        // dos totalizadores nunca enxerga a cobrança nova sem a versão nova.
+        $billing = DB::transaction(fn () => Billing::create($request->validated()));
 
         return BillingResource::make($billing->load('customer'))
             ->response()

@@ -82,6 +82,26 @@ final class BillingReportFilters
     }
 
     /**
+     * O que define o CONJUNTO, e portanto os totais.
+     *
+     * Ordenação e direção ficam de fora: mudam a ordem das linhas, não quais
+     * linhas entram. Recalcular os totais a cada clique de ordenação
+     * desperdiçaria o cache no uso mais comum da tela.
+     *
+     * @return array<string, mixed>
+     */
+    public function scope(): array
+    {
+        return [
+            'date_field' => $this->dateField,
+            'start_date' => $this->startDate,
+            'end_date' => $this->endDate,
+            'customer_id' => $this->customerId,
+            'status' => $this->status,
+        ];
+    }
+
+    /**
      * Eco para a tela e para o cabeçalho dos arquivos exportados.
      *
      * @return array<string, mixed>

@@ -2,10 +2,12 @@
 
 namespace App\Domain\Report;
 
+use App\Domain\Billing\BillingDataVersion;
 use App\Domain\Billing\BillingStatus;
 use App\Domain\Billing\InterestCalculator;
 use App\Models\Billing;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Monta a consulta do relatório e a dos totalizadores.
@@ -15,10 +17,14 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class BillingReportQuery
 {
+    private const CACHE_PREFIX = 'report-totals:';
+
     private readonly InterestCalculator $calculator;
 
-    public function __construct(?InterestCalculator $calculator = null)
-    {
+    public function __construct(
+        ?InterestCalculator $calculator = null,
+        private readonly BillingDataVersion $version = new BillingDataVersion(),
+    ) {
         $this->calculator = $calculator ?? new InterestCalculator();
     }
 
@@ -51,6 +57,43 @@ final class BillingReportQuery
     }
 
     /**
+     * Totalizadores, do cache quando ainda valem.
+     *
+     * Uma entrada por recorte, e não uma por versão: o valor guarda a versão
+     * dos dados e a data de referência com que foi calculado, e é sobrescrito
+     * quando uma das duas muda. Assim a tabela de cache cresce com o número de
+     * recortes consultados, e não com o número de escritas — o driver de banco
+     * só apaga entrada vencida quando alguém a lê, e chave abandonada ficaria
+     * lá para sempre.
+     *
+     * A ordem das duas leituras é a garantia. A versão é lida ANTES de
+     * calcular, então os totais gravados foram calculados sobre dados no mínimo
+     * tão novos quanto a versão que os acompanha. Se uma escrita entrar no meio,
+     * a versão corrente sobe e a entrada simplesmente não é servida. O inverso
+     * — dado velho sob versão nova — não tem como acontecer.
+     *
+     * @return array<string, mixed>
+     */
+    public function totals(BillingReportFilters $filters): array
+    {
+        $versao = $this->version->current();
+        $data = $this->calculator->referenceDate()->toDateString();
+        $chave = self::CACHE_PREFIX.hash('sha256', (string) json_encode($filters->scope()));
+
+        $guardado = Cache::get($chave);
+
+        if (is_array($guardado) && $guardado['version'] === $versao && $guardado['date'] === $data) {
+            return $guardado['totals'];
+        }
+
+        $totais = $this->computeTotals($filters);
+
+        Cache::put($chave, ['version' => $versao, 'date' => $data, 'totals' => $totais], now()->addDay());
+
+        return $totais;
+    }
+
+    /**
      * Totalizadores sobre o conjunto filtrado INTEIRO.
      *
      * Consulta de agregação separada, nunca a soma da página corrente: o
@@ -58,7 +101,7 @@ final class BillingReportQuery
      *
      * @return array<string, mixed>
      */
-    public function totals(BillingReportFilters $filters): array
+    private function computeTotals(BillingReportFilters $filters): array
     {
         $query = Billing::query();
 

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Domain\Billing\Audit\BillingAuditObserver;
+use App\Domain\Billing\BillingDataVersionObserver;
 use App\Domain\Billing\BillingStatus;
 use Database\Factories\BillingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -24,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'paid_amount',
     'paid_interest_amount',
 ])]
-#[ObservedBy(BillingAuditObserver::class)]
+#[ObservedBy([BillingAuditObserver::class, BillingDataVersionObserver::class])]
 class Billing extends Model
 {
     /** @use HasFactory<BillingFactory> */

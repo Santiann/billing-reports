@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Billing\BillingDataVersion;
 use App\Domain\Billing\BillingStatus;
 use App\Domain\Billing\RegisterPayment;
 use App\Domain\Customer\CustomerStatus;
@@ -92,6 +93,10 @@ class BillingVolumeSeeder extends Seeder
         $customerIds = DB::table('customers')->pluck('id')->all();
 
         $this->seedBillings($total, $customerIds);
+
+        // Insert cru em lote não passa pelo observer. Sem isto, um total em
+        // cache de antes da carga continuaria sendo servido depois dela.
+        app(BillingDataVersion::class)->bump();
 
         $this->command?->info(sprintf(
             'Concluído em %s.',
