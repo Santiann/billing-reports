@@ -69,6 +69,8 @@ tags:
     description: Cadastro de clientes. Documento é CPF ou CNPJ, só dígitos.
   - name: Cobranças
     description: Cadastro, edição e registro de pagamento.
+  - name: Operação
+    description: Health check para monitoramento.
   - name: Relatório
     description: |
       Relatório de faturamento por período, com totalizadores sobre o conjunto
@@ -76,6 +78,71 @@ tags:
       PDF.
 
 paths:
+  # ------------------------------------------------------------- operação ---
+
+  /api/health:
+    get:
+      tags: [Operação]
+      summary: Health check das dependências
+      description: |
+        Pública, porque sonda de monitoramento não faz login.
+
+        Responde **200** com `status: ok` quando todas as dependências
+        respondem, e **503** com `status: degraded` quando alguma falha — com o
+        nome da que falhou e a mensagem do erro. Um health que responde 200
+        sempre é pior que nenhum: o monitoramento passa a confiar nele e para de
+        avisar.
+
+        A checagem do cache é de **leitura**. Escrever provaria mais e custaria
+        um commit por sonda: com o driver de banco, cada gravação vai ao disco.
+
+        O `/up` do Laravel continua existindo e responde outra pergunta — se o
+        PHP subiu. Esta rota responde se as dependências estão de pé.
+      operationId: health
+      security: []
+      responses:
+        200:
+          description: Todas as dependências responderam.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded]
+                  checks:
+                    type: object
+              example:
+                status: ok
+                checks:
+                  database:
+                    ok: true
+                    duration_ms: 1.14
+                  cache:
+                    ok: true
+                    duration_ms: 0.42
+        503:
+          description: Alguma dependência não respondeu.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  checks:
+                    type: object
+              example:
+                status: degraded
+                checks:
+                  database:
+                    ok: false
+                    error: 'SQLSTATE[HY000] [2002] Connection refused'
+                  cache:
+                    ok: true
+                    duration_ms: 0.39
+
   # ----------------------------------------------------------------- auth ---
 
   /api/auth/login:
@@ -133,6 +200,28 @@ paths:
                 message: Credenciais inválidas.
         422:
           $ref: '#/components/responses/ErroDeValidacao'
+        429:
+          description: |
+            Tentativas demais. São duas contagens, por minuto: **5** para a
+            mesma conta a partir do mesmo IP, que é a força bruta contra uma
+            conta, e **20** para o mesmo IP somando todas as contas, que é a
+            varredura de e-mails. O cabeçalho `Retry-After` traz os segundos
+            que faltam.
+
+            Requisição sem e-mail nem senha não conta: não é tentativa de
+            autenticação. E um login correto zera a contagem da conta — não a
+            do IP.
+          headers:
+            Retry-After:
+              description: Segundos até a próxima tentativa ser aceita.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mensagem'
+              example:
+                message: Muitas tentativas de login. Tente de novo em 42 segundos.
 
   /api/auth/logout:
     post:

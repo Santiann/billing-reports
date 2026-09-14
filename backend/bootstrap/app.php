@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureUserCanWrite;
 use App\Http\Middleware\IdempotentRequest;
+use App\Http\Middleware\RequestId;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Primeiro de todos: o identificador precisa existir antes de qualquer
+        // linha de log da requisição, inclusive as de erro.
+        $middleware->api(prepend: [RequestId::class]);
+
         $middleware->alias([
             'can.write' => EnsureUserCanWrite::class,
             'idempotent' => IdempotentRequest::class,

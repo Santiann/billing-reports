@@ -292,6 +292,9 @@ foi autenticar. E-mail inexistente e senha errada devolvem a **mesma**
 mensagem, para a resposta não revelar quais e-mails existem. Payload malformado
 (campo faltando) é que responde 422, com os erros por campo.
 
+Tentativas demais respondem **429**, com `Retry-After` — ver
+[rate limit no login](#rate-limit-no-login).
+
 ---
 
 ## Documentação da API
@@ -1359,7 +1362,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (265 tests, 972 assertions)
+OK (278 tests, 1055 assertions)
 ```
 
 ### Cobertura
@@ -2206,6 +2209,152 @@ estimativa de linhas cai de 994 mil para 221 mil.
 
 ---
 
+## Rate limit no login
+
+Era a única pendência da etapa 1 com uma desculpa em vez de um número:
+*"escolher um limite que não deixe a própria suíte intermitente exige
+cuidado"*. O cuidado está aqui, e são **duas contagens por minuto**, porque são
+dois ataques diferentes e uma contagem só deixaria um passar:
+
+| Contagem | Limite | Pega |
+|---|---|---|
+| e-mail + IP | 5 | força bruta contra uma conta |
+| IP | 20 | varredura de e-mails, uma tentativa em cada |
+
+O limite por credencial inclui o IP **de propósito**. Contar só por e-mail
+deixaria qualquer pessoa trancar a conta de outra de fora, errando a senha cinco
+vezes: negação de serviço disfarçada de segurança. O limite por IP é folgado em
+relação ao outro pelo motivo oposto — escritório com IP único faz login legítimo
+de várias pessoas, e o que se quer pegar ali passa das dezenas.
+
+Três detalhes que o teste fixa:
+
+- **Requisição sem e-mail nem senha não conta.** O limite é verificado depois da
+  validação: payload incompleto não é tentativa de autenticação, e contá-lo
+  deixaria um formulário com bug trancar o próprio usuário.
+- **Login correto zera a contagem da conta, não a do IP.** Acertar a senha prova
+  que aquela conta não está sob força bruta; não prova nada sobre o IP, porque
+  quem varre e-mails pode ter acertado o próprio.
+- **O 429 diz quanto falta**, no corpo e no cabeçalho `Retry-After`.
+
+Medido contra a aplicação rodando: cinco tentativas erradas respondem 401, a
+sexta responde `429` com `Retry-After: 56`.
+
+### Por que não o middleware `throttle`
+
+O `throttle` do Laravel resolve o caso comum, e este tem um pedaço a mais: o
+login correto precisa **zerar** a contagem. Zerar exige a mesma chave que o
+middleware usa, e essa chave é derivada do nome do limitador por dentro do
+framework — depender dela é depender de detalhe de implementação. O limitador
+próprio tem as três operações (perguntar, contar, zerar) num arquivo de
+cinquenta linhas, e a mensagem em português sai de graça.
+
+### E a suíte não ficou intermitente
+
+Três coisas garantem isso, e vale dizer porque era a razão da pendência: o
+limite é **por credencial**, então um teste que erra a senha de um usuário não
+atrapalha os outros; o cache da suíte é o de memória, então cada teste começa
+com a contagem limpa; e nenhum teste faz mais de duas tentativas seguidas na
+mesma conta — os que testam o limite usam e-mails próprios.
+
+---
+
+## Log estruturado
+
+Uma linha de log é um objeto JSON, em `stderr`:
+
+```json
+{"message":"login.falhou","level_name":"WARNING","context":{
+  "user_id":null,"request_id":"5903634cb4dbf38c8aba4a1464858b4f",
+  "method":"POST","path":"api/auth/login","ip":"172.20.0.1",
+  "email":"descartavel@billing.test"}}
+```
+
+`stderr` e não arquivo porque é onde `docker compose logs` procura — e porque a
+imagem oficial do php-fpm já liga `catch_workers_output` e aponta o `error_log`
+para o descritor 2, então a linha escrita pelo worker chega ao log do container.
+Conferido antes de escolher: arquivo dentro do container só serve a quem já está
+dentro dele.
+
+### O identificador atravessa a borda
+
+Quem gera o identificador é o **nginx**, com `$request_id`, e a aplicação o
+recebe, devolve no cabeçalho da resposta e o repete em toda linha de log. Se o
+cliente já mandou um `X-Request-Id`, ele é preservado: quem correlaciona
+chamadas entre serviços é quem está mais acima na cadeia, e sobrescrever
+quebraria a ligação.
+
+O log de acesso do nginx imprime o mesmo id, e é isso que faz as duas pontas se
+encontrarem:
+
+```
+nginx   req_id=caf4414de833cec75d085738f392eab2 rt=0.024
+laravel {"message":"login.bloqueado", …, "request_id":"caf4414de833cec75d085738f392eab2", "retry_after":56}
+```
+
+### Um processador, e não `Log::withContext()`
+
+O contexto é montado por um processador do Monolog, avaliado no momento em que
+cada linha é escrita. A alternativa óbvia era um middleware chamando
+`Log::withContext()`, e ela tem um defeito que só apareceria em produção:
+**middleware de grupo roda antes do `auth:sanctum`**, então ali o usuário ainda
+não existe e o `user_id` sairia nulo — enquanto no teste, onde `actingAs`
+resolve o usuário mais cedo, pareceria funcionar. Teste verde pelo motivo
+errado.
+
+O processador também pergunta `hasUser()` antes de `id()`: pedir o id resolveria
+o guard a partir do logger, invertendo a ordem das coisas. Linha escrita antes da
+autenticação — uma tentativa de login falha — sai sem usuário, que é a verdade.
+
+E houve um segundo engano no caminho, pego pelo próprio teste: a guarda dos
+campos de requisição era `runningInConsole()`. Parece a pergunta certa e não é —
+**a suíte roda pelo artisan**, ou seja, em console, então o teste jamais veria o
+contexto que a produção vê. A guarda passou a ser a presença do cabeçalho de
+identificador, que só existe quando o middleware passou.
+
+### O que vai para o log, e o que não vai
+
+O log responde "o que aconteceu nesta requisição". O que aconteceu com o **dado**
+é a [trilha de auditoria](#trilha-de-auditoria), que é tabela e não texto.
+
+Do login vão as três transições que interessam a quem investiga: `login.falhou`,
+`login.bloqueado` e `login.ok`. As duas primeiras levam o **e-mail tentado** —
+sem ele não há como distinguir alguém que errou a senha de uma varredura de
+contas, que é exatamente a pergunta que se faz. É dado pessoal num log, e a
+troca fica registrada aqui: o benefício é investigar tentativa de invasão em
+massa, o custo é o e-mail no log de operação.
+
+---
+
+## Health check
+
+```
+GET /api/health
+
+{"status":"ok","checks":{"database":{"ok":true,"duration_ms":10.05},
+                         "cache":{"ok":true,"duration_ms":6.06}}}
+```
+
+Pública, porque sonda de monitoramento não faz login. Responde **503** com
+`status: degraded` quando alguma dependência falha, dizendo qual e com a
+mensagem do erro. Um health que responde 200 sempre é pior que nenhum: o
+monitoramento passa a confiar nele e para de avisar.
+
+A checagem do cache é de **leitura**. Escrever provaria mais e custaria um commit
+por sonda — com o driver de banco, cada gravação vai ao disco, e um monitoramento
+de dez em dez segundos escreveria 8.640 vezes por dia para responder uma pergunta
+que a leitura já responde: o driver está acessível.
+
+O `/up` do Laravel continua existindo e responde outra pergunta — se o PHP subiu.
+Esta rota responde se as dependências respondem.
+
+Um detalhe da documentação: o linter da spec avisa que a operação não declara
+nenhum 4xx. Não declara porque não há — a rota é pública e não recebe entrada.
+Inventar um 4xx para calar o aviso seria documentar o que não existe, então o
+aviso fica.
+
+---
+
 ## Página pública
 
 A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
@@ -2232,7 +2381,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 265 testes.
+0,84s para o painel, 278 testes.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados
@@ -2452,10 +2601,6 @@ largo proporcional ao recorte, e não à tabela.
 **Índice FULLTEXT em `description`.** A busca usa `LIKE '%termo%'`, que não é
 indexável por ter curinga à esquerda. Aceitável na tela de CRUD, não numa base
 que cresce.
-
-**Rate limit no login.** Deixado de fora porque escolher um limite que não
-deixe a própria suíte intermitente exige cuidado que não agrega ao que o teste
-avalia. Em produção é obrigatório.
 
 **Ler linhas cruas na exportação CSV.** Medido: dos 55s de uma exportação de
 56.680 linhas, ~18s são banco e o resto é hidratar model Eloquent e instanciar

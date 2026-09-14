@@ -1,5 +1,7 @@
 <?php
 
+use App\Logging\RequestContextProcessor;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -56,6 +58,28 @@ return [
             'driver' => 'stack',
             'channels' => explode(',', (string) env('LOG_STACK', 'single')),
             'ignore_exceptions' => false,
+        ],
+
+        /*
+         * Log estruturado: uma linha, um objeto JSON.
+         *
+         * Vai para `stderr` porque é o que `docker compose logs` lê — e porque
+         * a imagem oficial do php-fpm já liga `catch_workers_output` e aponta o
+         * `error_log` para o fd 2, então a linha do worker chega ao log do
+         * container. Arquivo dentro do container só serviria a quem já está
+         * dentro dele.
+         *
+         * O `RequestContextProcessor` acrescenta identificador da requisição,
+         * usuário, método, caminho e IP a cada linha, no momento em que ela é
+         * escrita.
+         */
+        'json' => [
+            'driver' => 'monolog',
+            'handler' => StreamHandler::class,
+            'with' => ['stream' => env('LOG_JSON_STREAM', 'php://stderr')],
+            'formatter' => JsonFormatter::class,
+            'processors' => [PsrLogMessageProcessor::class, RequestContextProcessor::class],
+            'level' => env('LOG_LEVEL', 'debug'),
         ],
 
         'single' => [

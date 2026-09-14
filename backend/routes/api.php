@@ -9,7 +9,17 @@ use App\Http\Controllers\Api\BillingReportPdfController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\CustomerImportController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\HealthController;
 use Illuminate\Support\Facades\Route;
+
+/*
+ * Health para monitoramento: pública, porque sonda não faz login.
+ *
+ * Fora de qualquer grupo autenticado de propósito. O `/up` do Laravel continua
+ * existindo e responde só "o PHP subiu"; esta rota responde se as dependências
+ * respondem.
+ */
+Route::get('health', HealthController::class)->name('health');
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
