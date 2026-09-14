@@ -70,14 +70,20 @@ Route::middleware(['auth:sanctum', 'can.write'])->group(function () {
         ->name('billings.import');
 
     /*
-     * A única rota idempotente, e é a que precisa ser.
+     * As duas rotas idempotentes, e são as que precisam ser.
      *
-     * Duplo clique e retry de rede aqui cobram duas vezes. Nas outras, o
-     * estrago de repetir é menor ou inexistente: criar dois clientes com o
-     * mesmo documento esbarra no índice único, e a importação de CSV já
-     * responde o relatório do que gravou.
+     * Nelas, repetir muda dinheiro de lugar: duplo clique no pagamento cobra
+     * duas vezes, e um retry atrasado do estorno — depois de a cobrança ter
+     * sido paga de novo — desfaz um pagamento que ninguém pediu para desfazer.
+     * Nas outras, o estrago de repetir é menor ou inexistente: criar dois
+     * clientes com o mesmo documento esbarra no índice único, e a importação
+     * de CSV já responde o relatório do que gravou.
      */
     Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
         ->middleware('idempotent')
         ->name('billings.pay');
+
+    Route::post('billings/{billing}/reversal', [BillingController::class, 'reverse'])
+        ->middleware('idempotent')
+        ->name('billings.reverse');
 });

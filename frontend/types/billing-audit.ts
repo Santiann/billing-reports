@@ -14,7 +14,7 @@ export type BillingAuditChange = {
 
 export type BillingAuditEntry = {
   id: number;
-  event: "updated" | "paid";
+  event: "updated" | "paid" | "reversed";
   event_label: string;
   /** Nulo quando a alteração não veio de uma requisição: console, comando. */
   user: { id: number; name: string } | null;

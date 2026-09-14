@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BillingAuditTrail } from "@/components/billings/billing-audit-trail";
 import { BillingStatusBadge } from "@/components/billings/billing-status-badge";
 import { PaymentForm } from "@/components/billings/payment-form";
+import { ReversalForm } from "@/components/billings/reversal-form";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Definitions } from "@/components/ui/definitions";
@@ -122,8 +123,20 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
 
           <p className="mt-3 text-sm text-ink-muted">
             Cobrança paga não acumula juros: estes valores foram congelados na
-            data do pagamento e não mudam mais.
+            data do pagamento e não mudam mais — a menos que o pagamento seja
+            estornado.
           </p>
+
+          {/* Some para o perfil de consulta; o endpoint recusa de qualquer
+              forma. */}
+          {podeEscrever ? (
+            <Card className="mt-8">
+              <CardHeader title="Estornar pagamento" />
+              <CardBody className="p-6">
+                <ReversalForm billingId={billing.id} />
+              </CardBody>
+            </Card>
+          ) : null}
         </section>
       ) : (
         <>

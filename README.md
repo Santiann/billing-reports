@@ -1351,7 +1351,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (233 tests, 822 assertions)
+OK (243 tests, 886 assertions)
 ```
 
 ### Cobertura
@@ -1524,10 +1524,11 @@ já operava o sistema.
 
 ## Idempotência no pagamento
 
-Registrar pagamento é a única operação da API em que repetir **cobra duas
-vezes**. Criar dois clientes iguais esbarra no índice único do documento;
-reimportar um CSV devolve o relatório do que gravou. Pagar duas vezes grava dois
-valores congelados, e o segundo é o de outro dia.
+Registrar pagamento é a operação da API em que repetir **cobra duas vezes** — e,
+desde o [estorno](#estorno-de-pagamento), não é mais a única em que repetir muda
+dinheiro de lugar. Criar dois clientes iguais esbarra no índice único do
+documento; reimportar um CSV devolve o relatório do que gravou. Pagar duas vezes
+grava dois valores congelados, e o segundo é o de outro dia.
 
 O usuário não precisa fazer nada de errado para isso acontecer: um clique duplo,
 uma conexão que cai depois de o servidor ter processado, um `F5` na tela de
@@ -1601,9 +1602,10 @@ respondeu. Isso funciona porque o `Illuminate\Routing\Pipeline` renderiza a
 exceção dentro da pilha: o middleware recebe o 422 já como resposta, não como
 `ValidationException`.
 
-O middleware é registrado como alias `idempotent` e aplicado a uma rota só. Não
-é preguiça: aplicá-lo ao grupo de escrita inteiro criaria linha de tabela para
-toda importação de CSV e todo cadastro de cliente, sem cobrir risco nenhum.
+O middleware é registrado como alias `idempotent` e aplicado a duas rotas: o
+pagamento e o estorno. Não é preguiça: aplicá-lo ao grupo de escrita inteiro
+criaria linha de tabela para toda importação de CSV e todo cadastro de cliente,
+sem cobrir risco nenhum.
 
 ### O que a chave NÃO faz
 
@@ -1660,8 +1662,8 @@ usava por outro motivo.
 
 ## Trilha de auditoria
 
-Toda **edição** e todo **pagamento** de cobrança registram quem alterou, o quê e
-quando. O estorno entra no commit seguinte pela mesma regra. A trilha é lida em
+Toda **edição**, todo **pagamento** e todo **estorno** de cobrança registram quem
+alterou, o quê e quando. A trilha é lida em
 `GET /api/billings/{id}/audit` e aparece no fim da página da cobrança, como
 "Histórico de alterações" — inclusive para o perfil de consulta, porque ler o
 histórico é leitura.
@@ -1683,9 +1685,9 @@ Cada entrada guarda **só o que mudou**, com o valor de antes e o de depois:
 }
 ```
 
-A entrada de pagamento carrega os valores congelados, e é isso que o estorno vai
-precisar: quando a cobrança voltar a pendente e as colunas de pagamento forem
-limpas, o que foi pago continua registrado aqui.
+A entrada de pagamento carrega os valores congelados no `to`, e a de estorno os
+traz no `from`: as colunas de pagamento da cobrança são limpas, e o que foi pago
+continua registrado aqui.
 
 Uma trilha vale pelo que garante, e são três garantias — cada uma com teste.
 
@@ -1698,9 +1700,10 @@ alteração pelo Eloquent, venha do controller, do registro de pagamento ou do
 tinker.
 
 O **evento sai da transição de status**, não de quem chamou. Nenhum ponto do
-código declara "isto é um pagamento": pendente que vira paga é pagamento, venha
-de onde vier. Nenhum caminho novo consegue rotular errado, e o estorno vai ser
-classificado pela mesma regra.
+código declara "isto é um pagamento": pendente que vira paga é pagamento, paga
+que volta a pendente é estorno, venha de onde vier. Nenhum caminho novo consegue
+rotular errado — o estorno entrou na trilha sem uma linha nova no observer, só
+com um caso a mais no enum.
 
 O preço do observer é conhecido: **consulta crua passa por fora sem aviso.** Um
 `DB::table('billings')->update(...)` altera a cobrança e a trilha nunca fica
@@ -1808,6 +1811,147 @@ linhas. A medição foi feita com **200.080 entradas sintéticas** na base de
 
 ---
 
+## Estorno de pagamento
+
+O estorno desfaz um pagamento que não se sustentou — cheque devolvido,
+transferência revertida, baixa lançada na cobrança errada.
+`POST /api/billings/{id}/reversal`, sem corpo, e na tela um cartão "Estornar
+pagamento" na cobrança paga, para o perfil de administrador.
+
+Três regras, cada uma com teste:
+
+- **A cobrança volta a pendente**, com data e valores de pagamento nulos.
+- **Os valores congelados não somem.** Vão para a trilha de auditoria, no `from`
+  da entrada de estorno, e a entrada do pagamento original continua lá, intacta.
+- **Os juros voltam a correr desde o vencimento original.**
+
+### Desde o vencimento, e não de outra data
+
+Havia três datas candidatas para o relógio dos juros recomeçar, e elas dão três
+valores diferentes. Uma cobrança de R$ 1.000,00 a 2% ao mês, vencida em 16/05,
+paga em 20/05 e estornada em 15/06:
+
+| Juros correndo desde | Dias | Valor em 15/06 |
+|---|---|---|
+| **o vencimento, 16/05** | **30** | **R$ 1.020,00** |
+| o pagamento, 20/05 | 26 | R$ 1.017,31 |
+| o estorno, 15/06 | 0 | R$ 1.000,00 |
+
+A regra é a primeira. O pagamento que não se sustentou não aconteceu para o
+devedor: ele continua devendo desde o vencimento, e contar do pagamento ou do
+estorno transformaria o estorno num desconto de juros para quem pagou com um
+cheque sem fundo.
+
+### Não precisou de regra nova de juros
+
+O `ReversePayment` só limpa as colunas de pagamento e devolve o status a
+pendente. Os juros voltam a correr sem nenhuma linha no cálculo, porque o
+`InterestCalculator` só lê as colunas congeladas quando a cobrança está paga —
+nas duas faces. É a [regra que governa a arquitetura](#cálculo-de-juros)
+pagando de novo: se o valor atualizado dependesse de algo gravado no pagamento
+além dessas colunas, o estorno teria que desfazê-lo em dois lugares.
+
+Conferido na base de 2.000.000 de cobranças com uma cobrança paga em 2023, dois
+dias depois do vencimento, por R$ 1.291,90. Estornada, ela passou a valer
+**R$ 7.302,09** nos três lugares em que o valor pode ser lido: o endpoint da
+cobrança (face PHP), a expressão SQL que a listagem e o relatório usam no
+`SELECT`, e a conta feita à parte, com os 1.067 dias desde o vencimento.
+
+A cobrança estornada pode ser paga de novo, e aí os juros congelam na nova data.
+
+### Estorno e idempotência
+
+O estorno aceita `Idempotency-Key`, e o caso que justifica é concreto: pagou,
+estornou, pagou de novo — e o retry atrasado do estorno chega. Sem a chave, ele
+**estornaria o segundo pagamento**, que ninguém pediu para estornar. Com a
+chave, recebe o resultado do estorno original.
+
+O outro lado da mesma pergunta pedia uma decisão: **o estorno invalida a chave
+do pagamento?** Não, e é de propósito. A chave descreve a operação de pagar, que
+aconteceu. Um retry atrasado do pagamento que chegue depois do estorno recebe o
+resultado original, com `Idempotent-Replay`, em vez de pagar de novo.
+Invalidar a chave no estorno transformaria esse retry exatamente no pagamento
+em dobro que ela existe para impedir. Quem quer pagar de novo depois de um
+estorno faz uma operação nova, com chave nova — que é o que a tela faz, porque
+o formulário de pagamento que reaparece é outra montagem, com outro sorteio.
+
+Os dois testes que cobrem isso acontecem no mesmo dia, de propósito: a chave vale
+24 horas, e um teste que viajasse de maio a junho a venceria e passaria pelo
+motivo errado.
+
+Escrevê-los mostrou uma armadilha do próprio harness: `withHeaders()` guarda o
+cabeçalho para **todas** as requisições seguintes do teste. A chave do pagamento
+vazava para o estorno "sem chave", o middleware respondia 422 de chave
+reaproveitada, e o teste falhava pelo motivo errado. Ficou registrada como a
+armadilha 7 da skill de testes.
+
+### Sem campo de motivo
+
+Um motivo do estorno seria o campo óbvio, e ficou de fora. O enunciado não o
+pede, e o quem e o quando já estão na trilha. Acrescentá-lo não é só um campo no
+formulário: a trilha é gravada por um observer que só enxerga o model, e o
+motivo não é coluna da cobrança. Seria preciso uma coluna em `billing_audits` e
+um jeito de passar contexto da requisição para o observer — mecanismo que só
+vale construir quando houver o requisito.
+
+### Na tela: dois passos, sem modal
+
+O primeiro clique só abre a confirmação, que diz o que vai acontecer com o
+dinheiro antes de acontecer. O botão de confirmar usa a variante destrutiva, que
+neste sistema é a cor de vencida — no domínio, vermelho já significa perda.
+Modal seria mais um componente para uma pergunta de uma linha, e tiraria de
+vista os valores pagos que estão logo acima, que são justamente o que a pessoa
+precisa conferir antes de estornar.
+
+### Quanto custa, e para onde vai o tempo
+
+O primeiro estorno na base real levou 3,3 segundos, e esse número não podia
+ficar sem explicação. A primeira hipótese — o buffer pool de 128 MB forçando
+leitura de disco nos índices que contêm status e colunas de pagamento — **caiu
+na medição**: escritas com zero páginas lidas do disco levavam o mesmo tempo.
+
+O que o tempo acompanha é o **número de transações de escrita**. Medido na base
+de 2.000.000 de cobranças, três repetições por cenário, com os contadores do
+MySQL calibrados contra o que as próprias consultas de medição somam:
+
+| Requisição | Tempo mediano | Transações de escrita |
+|---|---|---|
+| GET de uma cobrança | 0,40 s | 1 |
+| pagamento, sem chave | 0,46 s | 2 |
+| estorno, sem chave | 0,58 s | 2 |
+| pagamento, com chave | 1,41 s | 4 |
+| estorno, com chave | 1,23 s | 4 |
+
+O trabalho do estorno no banco é pequeno: o `UPDATE` da cobrança e o `INSERT` da
+trilha somam **4 ms** medidos direto no MySQL, dentro de uma transação desfeita.
+O resto é commit. Um commit isolado — um `INSERT` de uma linha em autocommit —
+leva **de 183 a 360 ms** neste ambiente, porque a durabilidade está no máximo
+(`innodb_flush_log_at_trx_commit = 1`, `sync_binlog = 1`, binlog ligado: redo e
+binlog vão ao disco a cada commit) e o disco é o do Docker dentro do WSL2. Num
+servidor com disco decente o mesmo fsync custa milissegundos; a proporção entre
+as linhas da tabela é o que se leva daqui.
+
+As transações de cada requisição, uma a uma:
+
+- **`last_used_at` do token.** O Sanctum grava a cada requisição autenticada que
+  cai num segundo novo — inclusive no GET, que por isso faz um commit para ler.
+  Duas leituras no mesmo segundo levaram 0,51 s e 0,03 s.
+- **A transação do estorno ou do pagamento**, com a trilha dentro.
+- **A reserva da chave de idempotência**, antes de processar, e **a resposta
+  guardada**, depois. São as duas que a chave acrescenta, e não dá para
+  juntá-las à transação do negócio: a reserva precisa estar gravada *antes* de
+  processar, senão a requisição concorrente não a enxerga e as duas processam —
+  que é o caso inteiro que a chave existe para impedir.
+
+Afrouxar a durabilidade (`innodb_flush_log_at_trx_commit = 2`) tiraria a maior
+parte desse tempo, trocando por até um segundo de pagamentos confirmados ao
+cliente e perdidos numa queda do servidor. Para uma escrita de dinheiro é a
+troca errada, e ajuste de configuração do MySQL é assunto do bloco de
+[pendências](#melhorias-que-ficariam-para-produção), com medição própria — não
+de um commit de funcionalidade.
+
+---
+
 ## Página pública
 
 A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
@@ -1834,7 +1978,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 233 testes.
+0,84s para o painel, 243 testes.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados

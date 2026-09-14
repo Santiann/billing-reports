@@ -76,3 +76,60 @@ export async function registerPayment(
   revalidatePath(`/cobrancas/${id}`);
   redirect(`/cobrancas/${id}?sucesso=pago`);
 }
+
+export type ReversalFormState = {
+  message?: string | null;
+};
+
+/**
+ * Estorna o pagamento.
+ *
+ * Mesma forma do registro de pagamento, inclusive a chave de idempotência
+ * vinda do browser: o estorno é a outra operação em que repetir muda dinheiro
+ * de lugar. Pagou, estornou, pagou de novo — um retry atrasado do estorno sem
+ * chave desfaria o segundo pagamento.
+ */
+export async function reversePayment(
+  id: number,
+  _previous: ReversalFormState,
+  formData: FormData,
+): Promise<ReversalFormState> {
+  const idempotencyKey = String(formData.get("idempotency_key") ?? "");
+
+  try {
+    await fetchAsUser(`/api/billings/${id}/reversal`, {
+      method: "POST",
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {},
+      body: {},
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 422) {
+      const payload = error.payload as ValidationPayload | null;
+
+      // Não há campo no formulário: o erro possível é de estado, "esta
+      // cobrança não está paga", e vem na chave status.
+      return {
+        message:
+          payload?.errors?.status?.[0] ??
+          payload?.message ??
+          "Não foi possível estornar o pagamento.",
+      };
+    }
+
+    if (error instanceof ApiError && error.status === 401) {
+      redirect("/api/auth/expire");
+    }
+
+    if (error instanceof ApiError && error.status === 409) {
+      return {
+        message: "Este estorno já está sendo registrado. Aguarde um instante.",
+      };
+    }
+
+    return { message: "Não foi possível estornar o pagamento." };
+  }
+
+  revalidatePath("/cobrancas");
+  revalidatePath(`/cobrancas/${id}`);
+  redirect(`/cobrancas/${id}?sucesso=estornado`);
+}

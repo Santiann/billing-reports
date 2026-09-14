@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Billing\InterestCalculator;
 use App\Domain\Billing\RegisterPayment;
+use App\Domain\Billing\ReversePayment;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Billing\IndexBillingRequest;
 use App\Http\Requests\Billing\RegisterPaymentRequest;
+use App\Http\Requests\Billing\ReversePaymentRequest;
 use App\Http\Requests\Billing\StoreBillingRequest;
 use App\Http\Requests\Billing\UpdateBillingRequest;
 use App\Http\Resources\BillingAuditResource;
@@ -78,6 +80,19 @@ class BillingController extends Controller
         $billing->updateOrFail($request->validated());
 
         return BillingResource::make($billing->load('customer'));
+    }
+
+    /**
+     * Estorna o pagamento: pendente de novo, juros desde o vencimento original.
+     */
+    public function reverse(
+        ReversePaymentRequest $request,
+        Billing $billing,
+        ReversePayment $reversePayment,
+    ): BillingResource {
+        $reversePayment($billing);
+
+        return BillingResource::make($billing->fresh()->load('customer'));
     }
 
     /**

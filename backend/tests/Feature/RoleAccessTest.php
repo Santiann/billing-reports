@@ -64,6 +64,7 @@ class RoleAccessTest extends TestCase
             'editar cobrança' => ['put', '/api/billings/{cobranca}'],
             'importar cobranças' => ['post', '/api/billings/import'],
             'registrar pagamento' => ['post', '/api/billings/{cobranca}/payment'],
+            'estornar pagamento' => ['post', '/api/billings/{cobranca}/reversal'],
         ];
     }
 

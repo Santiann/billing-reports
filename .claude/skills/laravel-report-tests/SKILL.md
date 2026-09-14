@@ -110,6 +110,25 @@ isso.
 
 ---
 
+## Armadilha 7 — `withHeaders()` vale para o resto do teste
+
+`$this->withHeaders([...])` não é da próxima requisição: ele guarda o cabeçalho
+para **todas** as requisições seguintes do mesmo teste. Num teste de uma
+chamada só não faz diferença, e é por isso que passa despercebido.
+
+Com `Idempotency-Key` é fatal. Pagar com a chave e depois estornar "sem chave"
+manda a chave do pagamento junto com o estorno — outro caminho, outra impressão
+digital — e o middleware responde 422 de chave reaproveitada. O teste falha
+pelo motivo errado, ou pior, passa pelo motivo errado.
+
+Cabeçalho que muda entre requisições vai no argumento da própria chamada:
+
+```php
+$this->postJson($uri, $corpo, ['Idempotency-Key' => $chave]);
+```
+
+---
+
 ## Convenções
 
 - Feature tests para tudo que passa por HTTP; unit test apenas para o

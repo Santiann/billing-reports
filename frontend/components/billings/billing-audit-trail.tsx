@@ -15,6 +15,17 @@ const DATAS = new Set(["issue_date", "due_date", "payment_date"]);
 const TEXTO = new Set(["description"]);
 
 /**
+ * A cor do marcador é a do estado em que a cobrança FICOU: paga depois do
+ * pagamento, pendente depois do estorno. A edição não muda estado e fica
+ * neutra.
+ */
+const MARCADOR: Record<BillingAuditEntry["event"], string> = {
+  updated: "bg-ink-faint",
+  paid: "bg-paid",
+  reversed: "bg-pending",
+};
+
+/**
  * Formata pelo campo, com as mesmas funções da ficha da cobrança.
  *
  * O valor pago na trilha e o valor pago na ficha são o mesmo número, e
@@ -76,7 +87,7 @@ export function BillingAuditTrail({
                       aria-hidden
                       className={
                         "inline-block size-2 rounded-full " +
-                        (entrada.event === "paid" ? "bg-paid" : "bg-ink-faint")
+                        MARCADOR[entrada.event]
                       }
                     />
                     <span className="font-semibold text-ink">

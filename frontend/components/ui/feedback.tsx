@@ -2,6 +2,8 @@ const MESSAGES: Record<string, string> = {
   criado: "Cliente cadastrado com sucesso.",
   editado: "Alterações salvas com sucesso.",
   pago: "Pagamento registrado. Os juros foram congelados na data informada.",
+  estornado:
+    "Pagamento estornado. A cobrança voltou a pendente e os juros voltaram a correr desde o vencimento.",
 };
 
 /**
