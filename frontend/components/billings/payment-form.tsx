@@ -5,6 +5,7 @@ import { useActionState, useRef, useTransition, type FormEvent } from "react";
 import { registerPayment, type PaymentFormState } from "@/app/actions/payments";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
+import { novaChaveDeIdempotencia } from "@/lib/idempotency";
 import { formatCurrency } from "@/lib/format";
 import type { Billing } from "@/types/billing";
 
@@ -40,7 +41,7 @@ export function PaymentForm({ billing }: { billing: Billing }) {
     ]);
 
     if (tentativa.current?.conteudo !== conteudo) {
-      tentativa.current = { chave: crypto.randomUUID(), conteudo };
+      tentativa.current = { chave: novaChaveDeIdempotencia(), conteudo };
     }
 
     return tentativa.current.chave;
@@ -48,10 +49,10 @@ export function PaymentForm({ billing }: { billing: Billing }) {
 
   /*
    * O envio passa por `onSubmit` porque a chave só pode nascer no browser:
-   * `crypto.randomUUID()` durante a renderização daria um valor no servidor e
-   * outro na hidratação. Aqui ela é sorteada no clique, quando só existe um
-   * lado. De quebra o formulário não é resetado pelo React, então os valores
-   * digitados sobrevivem a um erro de validação.
+   * sorteá-la durante a renderização daria um valor no servidor e outro na
+   * hidratação. Aqui ela é sorteada no clique, quando só existe um lado. De
+   * quebra o formulário não é resetado pelo React, então os valores digitados
+   * sobrevivem a um erro de validação.
    */
   function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();

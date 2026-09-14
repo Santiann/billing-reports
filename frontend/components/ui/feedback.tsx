@@ -1,5 +1,15 @@
+/*
+ * Um código por operação, e não por verbo.
+ *
+ * `criado` servia a cliente e a cobrança, e as duas listas renderizam este
+ * mesmo componente — então cadastrar uma COBRANÇA exibia "Cliente cadastrado
+ * com sucesso". Foi o teste de ponta a ponta que mostrou, ao procurar a
+ * confirmação na tela. `editado` continua servindo aos dois porque a mensagem
+ * dele não nomeia entidade nenhuma.
+ */
 const MESSAGES: Record<string, string> = {
-  criado: "Cliente cadastrado com sucesso.",
+  "cliente-criado": "Cliente cadastrado com sucesso.",
+  "cobranca-criada": "Cobrança cadastrada com sucesso.",
   editado: "Alterações salvas com sucesso.",
   pago: "Pagamento registrado. Os juros foram congelados na data informada.",
   estornado:

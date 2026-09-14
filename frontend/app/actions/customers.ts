@@ -68,7 +68,7 @@ export async function createCustomer(
   // redirect() fora do try: ele sinaliza por exceção, e ser capturado pelo
   // catch acima viraria "erro ao cadastrar" num cadastro que deu certo.
   revalidatePath("/clientes");
-  redirect("/clientes?sucesso=criado");
+  redirect("/clientes?sucesso=cliente-criado");
 }
 
 export async function updateCustomer(

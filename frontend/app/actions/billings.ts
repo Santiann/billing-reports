@@ -58,7 +58,7 @@ export async function createBilling(
   }
 
   revalidatePath("/cobrancas");
-  redirect("/cobrancas?sucesso=criado");
+  redirect("/cobrancas?sucesso=cobranca-criada");
 }
 
 export async function updateBilling(

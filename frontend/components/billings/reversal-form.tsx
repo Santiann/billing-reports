@@ -10,6 +10,7 @@ import {
 
 import { reversePayment, type ReversalFormState } from "@/app/actions/payments";
 import { Button } from "@/components/ui/button";
+import { novaChaveDeIdempotencia } from "@/lib/idempotency";
 
 const INITIAL: ReversalFormState = {};
 
@@ -42,7 +43,7 @@ export function ReversalForm({ billingId }: { billingId: number }) {
   function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
 
-    chave.current ??= crypto.randomUUID();
+    chave.current ??= novaChaveDeIdempotencia();
 
     const dados = new FormData();
     dados.set("idempotency_key", chave.current);
