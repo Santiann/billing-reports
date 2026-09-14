@@ -1,0 +1,145 @@
+# Integração contínua: a mesma verificação que `make lint` e `make test` fazem
+# na máquina, rodando a cada push.
+#
+# Dois jobs em paralelo, porque backend e frontend não dependem um do outro
+# para serem verificados — e porque assim o typecheck não espera os minutos da
+# suíte para falhar.
+name: CI
+
+# `push` cobre o caso deste projeto: o PR sai de um fork, e é no fork que o
+# workflow roda. `pull_request` cobre a verificação a partir do repositório
+# base, quando ela for habilitada lá.
+on:
+  push:
+  pull_request:
+
+# Push novo no mesmo ref cancela a execução anterior: o resultado dela já não
+# descreve o código atual.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Só leitura. Nada aqui escreve no repositório, e o default de um token com
+# escrita é superfície que este workflow não precisa.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — Pint e suíte
+    runs-on: ubuntu-latest
+
+    # A suíte roda em MySQL de propósito (ver README): a regra central do
+    # projeto é que o valor atualizado seja calculável em SQL, e o teste de
+    # consistência compara a face SQL do cálculo com a face PHP. Em SQLite ele
+    # validaria outro motor.
+    #
+    # O nome do banco e as credenciais são os que o phpunit.xml espera.
+    # `MYSQL_DATABASE` cria o banco no primeiro boot, o que dispensa aqui o
+    # script de init que o Compose usa.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: faturamento_test
+          MYSQL_USER: faturamento
+          MYSQL_PASSWORD: secret
+        # O job roda no runner, não dentro de um container, então a porta
+        # precisa ser publicada: o rótulo `mysql` só resolve entre containers
+        # da mesma rede do Docker.
+        ports:
+          - 3306:3306
+        # Sem healthcheck, o primeiro passo tentaria conectar antes de o MySQL
+        # terminar o init.
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      # Esta variável VENCE o `<env name="DB_HOST" value="mysql"/>` do
+      # phpunit.xml, porque o PHPUnit não sobrescreve variável de ambiente que
+      # já existe — só com `force="true"`. Conferido nesta instalação antes de
+      # escrever o workflow, não assumido: com a variável presente, a suíte
+      # tentou 127.0.0.1 e o erro de conexão nomeou o host.
+      DB_HOST: 127.0.0.1
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # As mesmas extensões que o Dockerfile compila. `pcov` fica fora:
+          # aqui não se mede cobertura, e ele instrumenta o código.
+          extensions: pdo_mysql, bcmath
+          coverage: none
+
+      # O diretório de cache vem do próprio Composer, em vez de um caminho
+      # chutado: ele muda com a plataforma e com a versão.
+      - name: Onde o Composer guarda cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache do Composer
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Dependências
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: .env e APP_KEY
+        # O .env é gitignored, como em qualquer Laravel. O entrypoint do
+        # container faz isto na subida; aqui é o mesmo passo, explícito.
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # Pint antes da suíte: ele leva segundos, a suíte leva minutos, e
+      # descobrir formatação errada depois de esperar a suíte é desperdício.
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: Suíte
+        run: php artisan test
+
+  frontend:
+    name: Frontend — typecheck e ESLint
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22, a mesma versão do Dockerfile do frontend. O cache de npm sai
+      # da própria ação, que é o que a documentação recomenda para gerenciador
+      # suportado.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` e não `npm install`: instala exatamente o lockfile e falha se
+      # ele divergir do package.json.
+      - name: Dependências
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npx eslint

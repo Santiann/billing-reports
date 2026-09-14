@@ -3,6 +3,8 @@
 Aplicação de faturamento com autenticação e relatório de cobranças projetado
 para tabelas na casa dos milhões de registros.
 
+[![CI](https://github.com/Santiann/billing-reports/actions/workflows/ci.yml/badge.svg)](https://github.com/Santiann/billing-reports/actions/workflows/ci.yml)
+
 | | |
 |---|---|
 | **Backend** | PHP 8.3 + Laravel 13 (API REST) |
@@ -14,7 +16,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 
 | | |
 |---|---|
-| **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) |
+| **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) · [CI](#integração-contínua) |
 | **Domínio** | [Perfis de acesso](#perfis-de-acesso) · [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Importação CSV](#importação-por-csv) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
@@ -1427,6 +1429,59 @@ volume que já existe, o init script não roda — aplique o arquivo à mão:
 ```bash
 docker compose exec -T mysql mysql -u root -proot < docker/mysql/init/01-create-test-database.sql
 ```
+
+---
+
+## Integração contínua
+
+`.github/workflows/ci.yml` roda a cada push a mesma verificação que `make test`
+e `make lint` fazem na máquina, em **dois jobs paralelos** — backend e frontend
+não dependem um do outro para serem verificados, e assim o typecheck não espera
+os minutos da suíte para falhar.
+
+| Job | O que roda |
+|---|---|
+| Backend | MySQL 8 como serviço, PHP 8.3 com `pdo_mysql` e `bcmath`, `pint --test`, `php artisan test` |
+| Frontend | Node 22, `npm ci`, `tsc --noEmit`, `eslint` |
+
+As versões e as extensões não foram escolhidas de novo: são as dos Dockerfiles,
+e o banco da suíte é o `faturamento_test` com as credenciais que o
+`phpunit.xml` espera. O `MYSQL_DATABASE` do serviço cria o banco no primeiro
+boot, o que dispensa no CI o script de init que o Compose usa.
+
+### O job roda no runner, e não dentro de um container
+
+A [documentação de containers de
+serviço](https://docs.github.com/en/actions/tutorials/communicating-with-docker-service-containers)
+é explícita sobre a diferença, e ela decide o desenho: job **dentro de um
+container** alcança o serviço pelo rótulo (`mysql`), sem publicar porta; job no
+**runner** alcança por `localhost`, e a porta precisa ser publicada.
+
+O caminho do container era tentador, porque o rótulo `mysql` é exatamente o
+`DB_HOST` que o `phpunit.xml` fixa — zero variável de ambiente a mais. Ficou de
+fora porque dentro de um `php:8.3-cli` seria preciso compilar as extensões e
+instalar o Composer à mão, enquanto no runner o `setup-php` entrega os três.
+
+O preço é uma variável: `DB_HOST: 127.0.0.1`. E ela funciona por um detalhe do
+PHPUnit que eu **conferi antes de escrever o workflow**, em vez de assumir: o
+`<env>` do `phpunit.xml` não sobrescreve variável de ambiente que já existe, só
+com `force="true"`. Rodando a suíte com a variável presente, o erro de conexão
+nomeou o host — `Host: 127.0.0.1` —, provando quem vence. O `phpunit.xml`
+continua sendo a fonte da verdade para o ambiente documentado, o do Compose.
+
+### Três ajustes que valem o comentário
+
+- **Pint antes da suíte.** Ele leva segundos e a suíte leva minutos; descobrir
+  formatação errada depois de esperar a suíte é desperdício.
+- **`concurrency` com `cancel-in-progress`.** Push novo no mesmo ref cancela a
+  execução anterior, cujo resultado já não descreve o código atual.
+- **`permissions: contents: read`.** Nada aqui escreve no repositório, e um
+  token com escrita seria superfície que este workflow não precisa.
+
+Cobertura fica de fora do CI: o `pcov` instrumenta o código e o relatório é
+coisa de `make coverage`, rodado quando se quer olhar. E a suíte roda em MySQL
+no CI pelo mesmo motivo que roda no Compose — [em SQLite ela validaria outro
+motor](#banco-de-testes).
 
 ---
 
