@@ -94,14 +94,18 @@ final class BillingReportQuery
     }
 
     /**
-     * Totalizadores sobre o conjunto filtrado INTEIRO.
+     * Totalizadores sobre o conjunto filtrado INTEIRO, sem passar pelo cache.
      *
      * Consulta de agregação separada, nunca a soma da página corrente: o
      * usuário na página 3 precisa ver o total do relatório, não o da página.
      *
+     * Pública porque o comando `report:explain` precisa da consulta, e não do
+     * resultado: se ele chamasse `totals()`, o cache esconderia dele a
+     * agregação — a consulta mais cara do relatório, e a razão do comando.
+     *
      * @return array<string, mixed>
      */
-    private function computeTotals(BillingReportFilters $filters): array
+    public function computeTotals(BillingReportFilters $filters): array
     {
         $query = Billing::query();
 

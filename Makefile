@@ -25,7 +25,7 @@ PHP := $(COMPOSE) exec -T php
 FRONTEND := $(COMPOSE) exec -T frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down logs shell test coverage seed seed-volume fresh lint wait-migrations
+.PHONY: help install up down logs shell test coverage seed seed-volume fresh lint explain wait-migrations
 
 help: ## Lista os alvos disponíveis
 	@printf '\n  \033[1mGerador de Relatórios\033[0m — alvos disponíveis\n\n'
@@ -59,6 +59,11 @@ test: ## Roda a suíte do backend
 
 coverage: ## Roda a suíte com relatório de cobertura
 	$(PHP) php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text
+
+# Passa opções pelo ARGS, porque o make não repassa flags soltas:
+# make explain ARGS="--start=2026-01-01 --end=2026-12-31 --analyze"
+explain: ## EXPLAIN das consultas do relatório (use ARGS="--analyze")
+	$(PHP) php artisan report:explain $(ARGS)
 
 seed: ## Cria o usuário de acesso
 	$(PHP) php artisan db:seed --force

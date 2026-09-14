@@ -76,6 +76,7 @@ ou prefere digitar à mão.
 | `make seed-volume` | `docker compose exec php php artisan db:seed --class=BillingVolumeSeeder` |
 | `make fresh` | `docker compose exec php php artisan migrate:fresh --seed` |
 | `make lint` | `pint --test` no backend, `tsc --noEmit` e `eslint` no frontend |
+| `make explain` | `docker compose exec php php artisan report:explain` — passe opções com `ARGS="--analyze"` |
 
 Duas decisões que o arquivo registra:
 
@@ -1018,6 +1019,11 @@ relatório em silêncio.
 
 ### Planos de execução, antes e depois
 
+Os planos abaixo foram colhidos à mão, colando consultas no cliente do MySQL.
+A partir da etapa 2 dá para reproduzi-los com um comando —
+[`report:explain`](#o-plano-de-execução-como-ferramenta) —, que pega as
+consultas do mesmo caminho que a API usa.
+
 | Consulta | Antes | Depois |
 |---|---|---|
 | período por vencimento | `ALL` · sem chave · **1.989.965 linhas** | `range` · `due_date_index` · **107.694** |
@@ -1353,7 +1359,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (255 tests, 946 assertions)
+OK (265 tests, 972 assertions)
 ```
 
 ### Cobertura
@@ -2084,6 +2090,122 @@ cache paga, além da agregação, a gravação da entrada: um commit a mais.
 
 ---
 
+## O plano de execução como ferramenta
+
+```bash
+docker compose exec php php artisan report:explain --start=2026-01-01 --end=2026-12-31
+make explain ARGS="--start=2026-01-01 --end=2026-12-31 --analyze"
+```
+
+As medições de índice da etapa 1 foram feitas colando consultas no cliente do
+MySQL. O trabalho não era o problema: o problema é que **consulta colada à mão
+envelhece sem avisar**. Ela continua explicando bem um SQL que o código já não
+gera — e o `EXPLAIN` de uma consulta que não existe mais é pior do que nenhum,
+porque parece informação.
+
+O comando **não tem SQL escrito dentro dele.** Ele roda o mesmo caminho que a
+API usa, escuta o que o Eloquent mandou para o banco e explica cada consulta
+capturada. Se o relatório mudar, o comando muda junto. Foi assim que a
+`Contagem da paginação` entrou na lista: ninguém a escreveu, ela sai do
+`paginate()`, e é a única das quatro que não estava documentada.
+
+Duas escolhas que o comando faz de propósito:
+
+- **Não passa pelo cache dos totalizadores.** Chama a agregação direto, porque
+  o cache é justamente o que a ferramenta não pode enxergar — senão a consulta
+  mais cara do relatório desapareceria da ferramenta feita para olhá-la.
+- **Recusa opção inválida em voz alta.** O objeto de filtros descarta valor fora
+  da allowlist e cai no default, o que é a proteção certa para a API porque
+  esses valores viram nome de coluna em SQL. Num diagnóstico, cair no default em
+  silêncio faria alguém medir um recorte que não é o que pediu e concluir a
+  coisa errada.
+
+`--analyze` troca o `EXPLAIN` por `EXPLAIN ANALYZE`: o MySQL executa e devolve o
+tempo real de cada operação. `--literals` explica o mesmo SQL duas vezes, com
+parâmetro vinculado e com os valores embutidos.
+
+### O que a primeira rodada encontrou
+
+No recorte de um ano da base de 2.000.000, as quatro consultas do relatório:
+
+| Consulta | `type` | Chave | Linhas estimadas | Extra |
+|---|---|---|---|---|
+| Contagem da paginação | `range` | `billings_status_due_date_index` | 221.013 | `Using index for skip scan` |
+| Página do relatório | **`ALL`** | **nenhuma** | **1.989.515** | **`Using where; Using filesort`** |
+| Clientes da página | — | (PK, 25 ids) | 25 | — |
+| Totalizadores | `range` | `billings_due_date_index` | 994.757 | `Using index condition; Using MRR` |
+
+**A hipótese do commit anterior caiu.** A medição do cache deixou aberta uma
+pergunta: a aplicação manda as datas como parâmetro vinculado e a medição à mão
+as mandou literais, o que poderia mudar o plano. Com `--literals`, os planos são
+**idênticos** nas três consultas sobre `billings` — mesma chave, mesmas linhas
+estimadas, mesmo `Extra`. A diferença de tempo entre as duas medições não vem
+daí; vem do estado do buffer pool e da contenção da máquina, que neste ambiente
+move o tempo da agregação de 4 s para 27 s com a suíte rodando ao lado.
+
+**E apareceu outra coisa, que não estava sendo procurada:** a consulta da página
+faz **varredura completa com filesort**, mesmo com `billings_due_date_index`
+entre as candidatas. É o que explica os 2,2 a 3,2 s que sobraram depois do cache
+dos totalizadores — o recorte de um ano é 26% da tabela, o `SELECT` pede a linha
+inteira, e o otimizador conclui que varrer sai mais barato que 520 mil acessos
+aleatórios à chave primária; aí ordena meio milhão de linhas em filesort para
+devolver 25. Achado registrado, não corrigido neste commit: a correção é índice,
+e índice tem medição própria.
+
+### `--analyze`: onde o tempo vai, operação por operação
+
+Com a máquina parada, no mesmo recorte de um ano. A leitura é de dentro para
+fora — a operação mais interna acontece primeiro:
+
+```
+── Página do relatório · executada em 2.416 ms
+-> Limit: 25 row(s)                                    (actual time=2811..2811 rows=25)
+    -> Sort: due_date DESC, id, limit input to 25       (actual time=2811..2811 rows=25)
+        -> Filter: due_date entre 01/01 e 31/12         (actual time=0.174..2576 rows=519986)
+            -> Table scan on billings                   (actual time=0.169..2273 rows=2e+6)
+```
+
+Dois milhões de linhas lidas para entregar 25: a varredura sozinha custa
+2.273 ms, o filtro deixa 519.986 e a ordenação é sobre esse meio milhão.
+
+```
+── Totalizadores · executada em 8.583 ms
+-> Aggregate: sum(...), count(0)                       (actual time=9262..9262 rows=1)
+    -> Index range scan using billings_due_date_index   (actual time=28..5776 rows=519986)
+```
+
+Aqui o índice é usado: 5.776 ms para percorrer as 519.986 linhas do recorte, e o
+resto até 9.262 ms é a conta — `POW` e `CAST` por linha, que nenhum índice
+dispensa.
+
+```
+── Contagem da paginação · executada em 362 ms
+-> Aggregate: count(0)                                 (actual time=478..478 rows=1)
+    -> Covering index skip scan on billings            (actual time=0.121..334 rows=519986)
+```
+
+Duas leituras a fazer neste último. A primeira é que 519.986 linhas em 334 ms
+mostram o que um índice de cobertura faz: nenhuma volta à tabela. A segunda é que
+a estimativa do otimizador para esse caminho era **221.013 linhas contra 519.986
+reais** — errada por 2,4x, e ainda assim o caminho escolhido foi o mais barato
+dos três.
+
+Um aviso sobre os números do `--analyze`: a instrumentação cobra. As mesmas
+consultas medidas sem ela deram 362, 2.416 e 8.583 ms, contra 478, 2.811 e
+9.262 ms com ela. Serve para ver a forma e a proporção, não para cravar o tempo
+absoluto.
+
+### A contagem da paginação usa um índice que ninguém pediu
+
+`billings_status_due_date_index` existe para o filtro de vencidas. A contagem
+não filtra status nenhum, e o MySQL o usa mesmo assim, em **skip scan**: ele
+percorre o índice uma vez por valor distinto da primeira coluna — `pending` e
+`paid` — e dentro de cada um aproveita o range de `due_date`. Duas passadas por
+um índice estreito custam menos que uma pelo índice de `due_date` largo, e a
+estimativa de linhas cai de 994 mil para 221 mil.
+
+---
+
 ## Página pública
 
 A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
@@ -2110,7 +2232,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 255 testes.
+0,84s para o painel, 265 testes.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados
