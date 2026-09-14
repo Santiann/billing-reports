@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright: relatório e artefatos de falha (trace, screenshot) são saída de
+# execução, não fonte.
+/playwright-report/
+/test-results/

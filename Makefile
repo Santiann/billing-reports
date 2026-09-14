@@ -25,7 +25,7 @@ PHP := $(COMPOSE) exec -T php
 FRONTEND := $(COMPOSE) exec -T frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down logs shell test coverage seed seed-volume fresh lint explain wait-migrations
+.PHONY: help install up down logs shell test coverage e2e seed seed-volume fresh lint explain wait-migrations
 
 help: ## Lista os alvos disponíveis
 	@printf '\n  \033[1mGerador de Relatórios\033[0m — alvos disponíveis\n\n'
@@ -64,6 +64,12 @@ coverage: ## Roda a suíte com relatório de cobertura
 # make explain ARGS="--start=2026-01-01 --end=2026-12-31 --analyze"
 explain: ## EXPLAIN das consultas do relatório (use ARGS="--analyze")
 	$(PHP) php artisan report:explain $(ARGS)
+
+# `run --rm` e não `up`: o serviço roda até terminar, e assim o código de saída
+# do Playwright vira o código de saída do make. A primeira execução baixa a
+# imagem oficial do Playwright, que é grande.
+e2e: ## Testes de ponta a ponta (Playwright) contra a stack em execução
+	$(COMPOSE) --profile e2e run --rm e2e
 
 seed: ## Cria o usuário de acesso
 	$(PHP) php artisan db:seed --force

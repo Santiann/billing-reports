@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Saída do Playwright: o relatório em HTML embute um bundle minificado, e
+    // sem isto o ESLint o analisa — 3.054 problemas em código que não é nosso.
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 

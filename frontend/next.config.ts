@@ -6,6 +6,21 @@ const nextConfig: NextConfig = {
   // carregar node_modules inteiro na imagem final.
   output: "standalone",
 
+  /*
+   * Origens que o servidor de DESENVOLVIMENTO aceita além de localhost.
+   *
+   * O Next bloqueia por padrão as requisições a recursos de desenvolvimento —
+   * `/_next/hmr` entre eles — vindas de host diferente daquele em que subiu.
+   * Os testes de ponta a ponta rodam num container e chegam por
+   * `http://frontend:3000`, o nome do serviço no Compose: sem esta linha o HMR
+   * é recusado, a hidratação não conclui e nenhum formulário responde a
+   * clique. Foi o Playwright que mostrou, e o log do próprio container nomeou
+   * a opção.
+   *
+   * Não afeta produção: lá não há recurso de desenvolvimento a proteger.
+   */
+  allowedDevOrigins: ["frontend"],
+
   experimental: {
     serverActions: {
       /*

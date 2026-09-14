@@ -16,7 +16,7 @@ O enunciado original do teste está preservado na íntegra [mais abaixo](#teste-
 
 | | |
 |---|---|
-| **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) · [CI](#integração-contínua) |
+| **Começar** | [Como executar](#como-executar) · [Makefile](#os-alvos-do-makefile) · [Serviços](#serviços) · [Gerando volume](#gerando-volume-para-teste) · [Testes](#testes) · [Ponta a ponta](#testes-de-ponta-a-ponta) · [CI](#integração-contínua) |
 | **Domínio** | [Perfis de acesso](#perfis-de-acesso) · [Modelagem](#modelagem) · [Cálculo de juros](#cálculo-de-juros) · [Autenticação](#autenticação) · [API](#documentação-da-api) |
 | **Módulos** | [Clientes](#módulo-de-clientes) · [Importação CSV](#importação-por-csv) · [Cobranças](#módulo-de-cobranças) · [Relatório](#relatório-de-faturamento) |
 | **Performance** | [Dashboard](#dashboard) · [Índices](#índices) · [Exportação CSV](#exportação-em-csv) · [Exportação PDF](#exportação-em-pdf) |
@@ -78,6 +78,7 @@ ou prefere digitar à mão.
 | `make seed-volume` | `docker compose exec php php artisan db:seed --class=BillingVolumeSeeder` |
 | `make fresh` | `docker compose exec php php artisan migrate:fresh --seed` |
 | `make lint` | `pint --test` no backend, `next typegen`, `tsc --noEmit` e `eslint` no frontend |
+| `make e2e` | `docker compose --profile e2e run --rm e2e` — Playwright contra a stack em execução |
 | `make explain` | `docker compose exec php php artisan report:explain` — passe opções com `ARGS="--analyze"` |
 
 Duas decisões que o arquivo registra:
@@ -1508,6 +1509,88 @@ motor](#banco-de-testes).
 
 ---
 
+## Testes de ponta a ponta
+
+```bash
+make e2e          # docker compose --profile e2e run --rm e2e
+```
+
+Playwright cobrindo o que o enunciado pede como diferencial de frontend: login,
+cadastro de cliente, registro de pagamento — mais o estorno — e exportação.
+**10 testes, 3,4 minutos.**
+
+Eles rodam contra a **stack do Compose**, e não contra um servidor que o
+Playwright sobe. É deliberado: o que se quer provar é a aplicação como ela é
+entregue — o Next falando com o nginx pelo nome do serviço, a sessão num cookie
+httpOnly, o MySQL de verdade. Um `webServer` do Playwright subiria um Next
+isolado, sem backend, e os fluxos de cadastro e pagamento não existiriam.
+
+| Decisão | Por quê |
+|---|---|
+| Serviço no Compose com perfil `e2e` | `docker compose up -d` não sobe o que roda e termina |
+| Imagem oficial do Playwright | a do frontend é Alpine, e os navegadores do projeto são compilados contra glibc |
+| Um worker, sem paralelismo | os testes escrevem no MESMO banco; dois cadastros ao mesmo tempo disputariam a unique do documento |
+| Sufixo único por execução | o banco não é limpo entre execuções, e sem isso a segunda rodada do dia falharia por conflito |
+| Fora do CI | exigiria subir MySQL, php-fpm, nginx e Next no runner; o CI roda a suíte e o lint |
+
+Dois testes rodam numa viewport de **360px** e afirmam a ausência de rolagem
+horizontal — nas telas públicas e nas autenticadas. É o critério de aceite do
+enunciado para telas pequenas, verificado por teste em vez de por captura.
+
+### Quatro problemas reais que ele encontrou
+
+Esta é a parte que justifica a suíte. Na primeira execução, **8 dos 10 testes
+falharam** — e nenhum por causa do Playwright.
+
+**1. O Next bloqueava a hidratação, e o log dizia isso.** Os testes chegam por
+`http://frontend:3000`, o nome do serviço. O Next recusa requisições a recursos
+de desenvolvimento vindas de host diferente daquele em que subiu, o HMR era
+negado, a hidratação não concluía e **nenhum formulário respondia a clique**. O
+container imprimia a opção pelo nome — `allowedDevOrigins` — e eu não havia
+lido o log. Corrigido no `next.config.ts`, que vale só em desenvolvimento.
+
+**2. O botão de pagar estava morto fora do `localhost`.** `crypto.randomUUID()`,
+usado para sortear a chave de idempotência, existe **apenas em contexto
+seguro**: HTTPS, ou `localhost` por exceção do browser. Servida por HTTP simples
+em qualquer outro host — um IP na rede interna, o nome de um serviço —, a função
+é `undefined`, o handler morria com `TypeError` antes de enviar e a tela não
+dava aviso nenhum. Medido no container: `isSecureContext: false`,
+`randomUUID: undefined`, `getRandomValues: function`. A correção monta o UUID v4
+com `getRandomValues`, que não tem a restrição, e mantém aleatoriedade
+criptográfica nos dois caminhos.
+
+Este é o tipo de defeito que nenhum teste de unidade acha e nenhum clique em
+`localhost` revela.
+
+**3. A tela mostrava a mensagem de sucesso errada.** O código `sucesso=criado`
+servia a cliente e a cobrança, e as duas listas renderizam o mesmo componente
+de aviso: cadastrar uma **cobrança** exibia *"Cliente cadastrado com sucesso"*.
+Agora são dois códigos, e `editado` continua servindo aos dois porque a mensagem
+dele não nomeia entidade.
+
+**4. A espera certa não é tempo, é hidratação.** O formulário de login é
+controlado (`value` + `onChange`). Antes de o React assumir, preencher grava no
+DOM um valor que a hidratação descarta, e clicar dispara o **envio nativo** do
+formulário, que recarrega a página limpa — era exatamente o que o retrato de
+falha mostrava. Os testes esperam pela chave que o React DOM pendura no nó
+(`__reactProps$`) quando passa a tratar os eventos dele. É API interna do React,
+e por isso só aparece no teste; a alternativa era `waitForTimeout`, que troca
+uma corrida por uma aposta.
+
+### Duas coisas que a suíte exigiu do ambiente
+
+**Aquecimento das rotas.** O alvo é o servidor de desenvolvimento, que compila
+cada rota na primeira visita — e a primeira visita é justamente o que estes
+testes fazem. Três testes falharam por tempo, com o botão "Entrando…" ainda
+desabilitado no retrato. Um `globalSetup` entra uma vez e visita as telas antes
+da suíte, então cada teste mede a aplicação em vez do compilador.
+
+**Ignorar a saída do Playwright no ESLint.** O relatório em HTML embute um
+bundle minificado, e o `eslint` passou a analisá-lo: 3.054 problemas em código
+que não é nosso.
+
+---
+
 ## Estados de erro e carregamento
 
 Quatro arquivos de convenção do App Router, e nenhum deles é decorativo.
@@ -2459,7 +2542,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 278 testes.
+0,84s para o painel, 288 testes — 278 no backend e 10 de ponta a ponta.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados
