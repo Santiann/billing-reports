@@ -1172,6 +1172,98 @@ paths:
                   status:
                     - Esta cobrança já está paga.
 
+  /api/billings/{billing}/audit:
+    parameters:
+      - $ref: '#/components/parameters/IdDaCobranca'
+    get:
+      tags: [Cobranças]
+      summary: Trilha de auditoria da cobrança
+      description: |
+        Quem alterou o quê, e quando — da alteração mais recente para a mais
+        antiga, cinquenta por página.
+
+        Entram a **edição** e o **pagamento**. O cadastro e a importação não
+        entram: a trilha começa na primeira alteração, e `created_at` da
+        cobrança já diz quando ela nasceu.
+
+        `from` e `to` vêm como o banco guarda — dinheiro em string decimal,
+        data em `YYYY-MM-DD`, status pelo valor do enum, cliente pelo id. Só
+        entra o campo que mudou de fato: `"1000"` sobre `"1000.00"` é o mesmo
+        número e não aparece.
+
+        A entrada de pagamento guarda os valores congelados. É o que preserva o
+        que foi pago mesmo quando as colunas de pagamento da cobrança deixarem
+        de tê-lo.
+
+        `user` é nulo quando a alteração não veio de uma requisição — console
+        ou comando artisan.
+      operationId: trilhaDaCobranca
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        200:
+          description: Entradas da trilha, da mais recente para a mais antiga.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EntradaDeAuditoria'
+                  links:
+                    type: object
+                  meta:
+                    type: object
+              example:
+                data:
+                  - id: 2
+                    event: paid
+                    event_label: Pagamento registrado
+                    user:
+                      id: 1
+                      name: Administrador
+                    changes:
+                      - field: status
+                        label: Status
+                        from: pending
+                        to: paid
+                      - field: payment_date
+                        label: Data do pagamento
+                        from: null
+                        to: "2026-09-14"
+                      - field: paid_amount
+                        label: Valor pago
+                        from: null
+                        to: "1530.00"
+                      - field: paid_interest_amount
+                        label: Juros no pagamento
+                        from: null
+                        to: "30.00"
+                    created_at: "2026-09-14T13:02:11+00:00"
+                  - id: 1
+                    event: updated
+                    event_label: Editada
+                    user:
+                      id: 1
+                      name: Administrador
+                    changes:
+                      - field: due_date
+                        label: Vencimento
+                        from: "2026-08-09"
+                        to: "2026-08-15"
+                    created_at: "2026-09-14T12:58:40+00:00"
+        401:
+          $ref: '#/components/responses/NaoAutenticado'
+        404:
+          $ref: '#/components/responses/NaoEncontrado'
+
   # ------------------------------------------------------------ relatório ---
 
   /api/reports/billings:
@@ -1588,6 +1680,40 @@ components:
                 - O campo nome é obrigatório.
 
   schemas:
+    EntradaDeAuditoria:
+      type: object
+      properties:
+        id:
+          type: integer
+        event:
+          type: string
+          enum: [updated, paid]
+        event_label:
+          type: string
+        user:
+          type: [object, "null"]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              label:
+                type: string
+              from:
+                type: [string, integer, "null"]
+              to:
+                type: [string, integer, "null"]
+        created_at:
+          type: string
+          format: date-time
+
     Dinheiro:
       type: string
       description: |

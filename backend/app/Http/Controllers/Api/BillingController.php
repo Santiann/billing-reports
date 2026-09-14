@@ -9,6 +9,7 @@ use App\Http\Requests\Billing\IndexBillingRequest;
 use App\Http\Requests\Billing\RegisterPaymentRequest;
 use App\Http\Requests\Billing\StoreBillingRequest;
 use App\Http\Requests\Billing\UpdateBillingRequest;
+use App\Http\Resources\BillingAuditResource;
 use App\Http\Resources\BillingResource;
 use App\Models\Billing;
 use Illuminate\Http\JsonResponse;
@@ -72,9 +73,21 @@ class BillingController extends Controller
 
     public function update(UpdateBillingRequest $request, Billing $billing): BillingResource
     {
-        $billing->update($request->validated());
+        // `updateOrFail` abre transação: a trilha é gravada dentro dela, e sem
+        // trilha a edição não fica.
+        $billing->updateOrFail($request->validated());
 
         return BillingResource::make($billing->load('customer'));
+    }
+
+    /**
+     * A trilha de auditoria, da alteração mais recente para a mais antiga.
+     */
+    public function audit(Billing $billing): AnonymousResourceCollection
+    {
+        return BillingAuditResource::collection(
+            $billing->audits()->with('user')->latest('id')->paginate(50),
+        );
     }
 
     /**

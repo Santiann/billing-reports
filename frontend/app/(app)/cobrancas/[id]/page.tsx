@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BillingAuditTrail } from "@/components/billings/billing-audit-trail";
 import { BillingStatusBadge } from "@/components/billings/billing-status-badge";
 import { PaymentForm } from "@/components/billings/payment-form";
 import { buttonClasses } from "@/components/ui/button";
@@ -9,10 +10,12 @@ import { Definitions } from "@/components/ui/definitions";
 import { Feedback } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/page-header";
 import { ApiError } from "@/lib/api";
-import { getBilling } from "@/lib/billings";
+import { getBilling, getBillingAudit } from "@/lib/billings";
 import { getSessionUser } from "@/lib/session-user";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import type { Billing } from "@/types/billing";
+import type { BillingAuditEntry } from "@/types/billing-audit";
+import type { Paginated } from "@/types/pagination";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -24,9 +27,12 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
   const query = await searchParams;
 
   let billing: Billing;
+  let trilha: Paginated<BillingAuditEntry>;
 
   try {
-    billing = await getBilling(id);
+    // Em paralelo: a trilha não depende da cobrança para ser buscada, e em
+    // sequência a página esperaria as duas respostas uma depois da outra.
+    [billing, trilha] = await Promise.all([getBilling(id), getBillingAudit(id)]);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       notFound();
@@ -163,6 +169,8 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
           ) : null}
         </>
       )}
+
+      <BillingAuditTrail entries={trilha.data} total={trilha.meta.total} />
     </div>
   );
 }

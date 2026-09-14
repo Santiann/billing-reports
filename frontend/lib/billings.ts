@@ -1,5 +1,6 @@
 import { fetchAsUser } from "@/lib/server-api";
 import type { Billing } from "@/types/billing";
+import type { BillingAuditEntry } from "@/types/billing-audit";
 import type { Paginated } from "@/types/pagination";
 
 export type BillingListParams = {
@@ -38,4 +39,12 @@ export async function getBilling(id: string): Promise<Billing> {
   const { data } = await fetchAsUser<{ data: Billing }>(`/api/billings/${id}`);
 
   return data;
+}
+
+export async function getBillingAudit(
+  id: string,
+): Promise<Paginated<BillingAuditEntry>> {
+  return fetchAsUser<Paginated<BillingAuditEntry>>(
+    `/api/billings/${id}/audit`,
+  );
 }

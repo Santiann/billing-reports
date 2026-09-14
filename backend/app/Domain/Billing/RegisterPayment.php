@@ -23,7 +23,9 @@ final class RegisterPayment
         CarbonInterface|string|null $paymentDate = null,
         ?string $paidAmount = null,
     ): Billing {
-        $billing->update($this->freeze($billing, $paymentDate, $paidAmount));
+        // Em transação: a trilha grava o pagamento dentro dela, e um pagamento
+        // sem registro na trilha não fica.
+        $billing->updateOrFail($this->freeze($billing, $paymentDate, $paidAmount));
 
         return $billing;
     }

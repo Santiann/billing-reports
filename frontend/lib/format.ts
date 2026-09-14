@@ -31,3 +31,23 @@ export function formatPercent(rate: string | number): string {
     maximumFractionDigits: 2,
   })}% a.m.`;
 }
+
+/*
+ * Instante com hora, para a trilha de auditoria.
+ *
+ * O fuso é fixo porque quem formata é o servidor: um Server Component não
+ * conhece o fuso do browser, e o container roda em UTC. Sem o fuso explícito,
+ * um pagamento registrado às 21h de Brasília apareceria no dia seguinte.
+ *
+ * O formatador é criado uma vez só: montar um `Intl.DateTimeFormat` por
+ * chamada custa mais que formatar.
+ */
+const DATA_HORA = new Intl.DateTimeFormat("pt-BR", {
+  dateStyle: "short",
+  timeStyle: "short",
+  timeZone: "America/Sao_Paulo",
+});
+
+export function formatDateTime(iso: string): string {
+  return DATA_HORA.format(new Date(iso));
+}

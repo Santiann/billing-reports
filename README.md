@@ -1351,7 +1351,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (219 tests, 769 assertions)
+OK (233 tests, 822 assertions)
 ```
 
 ### Cobertura
@@ -1658,6 +1658,156 @@ usava por outro motivo.
 
 ---
 
+## Trilha de auditoria
+
+Toda **edição** e todo **pagamento** de cobrança registram quem alterou, o quê e
+quando. O estorno entra no commit seguinte pela mesma regra. A trilha é lida em
+`GET /api/billings/{id}/audit` e aparece no fim da página da cobrança, como
+"Histórico de alterações" — inclusive para o perfil de consulta, porque ler o
+histórico é leitura.
+
+Cada entrada guarda **só o que mudou**, com o valor de antes e o de depois:
+
+```json
+{
+  "event": "paid",
+  "event_label": "Pagamento registrado",
+  "user": { "id": 1, "name": "Administrador" },
+  "changes": [
+    { "field": "status",               "from": "pending", "to": "paid" },
+    { "field": "payment_date",         "from": null,      "to": "2026-09-14" },
+    { "field": "paid_amount",          "from": null,      "to": "9996.90" },
+    { "field": "paid_interest_amount", "from": null,      "to": "3677.72" }
+  ],
+  "created_at": "2026-09-14T12:54:17+00:00"
+}
+```
+
+A entrada de pagamento carrega os valores congelados, e é isso que o estorno vai
+precisar: quando a cobrança voltar a pendente e as colunas de pagamento forem
+limpas, o que foi pago continua registrado aqui.
+
+Uma trilha vale pelo que garante, e são três garantias — cada uma com teste.
+
+### Completa: observer, e não chamada explícita
+
+A trilha é gravada por um observer do Eloquent em `Billing`, e não por uma
+chamada em cada ponto que altera cobrança. Chamada explícita é exatamente o tipo
+de coisa que o próximo caminho de escrita esquece; o observer pega toda
+alteração pelo Eloquent, venha do controller, do registro de pagamento ou do
+tinker.
+
+O **evento sai da transição de status**, não de quem chamou. Nenhum ponto do
+código declara "isto é um pagamento": pendente que vira paga é pagamento, venha
+de onde vier. Nenhum caminho novo consegue rotular errado, e o estorno vai ser
+classificado pela mesma regra.
+
+O preço do observer é conhecido: **consulta crua passa por fora sem aviso.** Um
+`DB::table('billings')->update(...)` altera a cobrança e a trilha nunca fica
+sabendo. Por isso existe um teste que varre `app/` atrás desse padrão — e o
+limite dele fica dito no próprio teste: pega a escrita encadeada na mesma
+instrução, não o construtor guardado numa variável e alterado três linhas
+depois. Ele existe para o erro óbvio não passar na revisão, não para
+substituí-la.
+
+As bibliotecas conhecidas para isso — `spatie/laravel-activitylog` e
+`owen-it/laravel-auditing` — foram consideradas e ficaram de fora. As duas se
+apoiam nos mesmos eventos do Eloquent, então a porta da consulta crua continuaria
+aberta do mesmo jeito; guardam tudo numa tabela polimórfica genérica, pensada
+para auditar muitos models, quando aqui há um; e a distinção entre pagamento e
+edição precisaria ser escrita por cima delas de qualquer forma. O que existe
+aqui é um observer, um enum e um model.
+
+### Atômica: sem trilha, sem alteração
+
+A edição e o pagamento gravam com `updateOrFail`, que abre transação. O observer
+escreve a trilha dentro dela, então se a escrita da trilha falhar, a alteração
+volta junto. Uma cobrança alterada sem registro na trilha é o furo que uma
+trilha não pode ter.
+
+O teste simula a falha no evento `creating` do próprio model da trilha, e não
+renomeando a tabela: DDL no meio do teste encerraria a transação do
+`RefreshDatabase` por commit implícito — a [armadilha que já custou 50
+segundos por teste](#o-teste-do-seeder-não-emite-ddl).
+
+### Imutável: registro errado se corrige com outro registro
+
+O model da trilha **recusa `update` e `delete`** com exceção, e a tabela não tem
+`updated_at` porque não há o que atualizar. As chaves estrangeiras são
+`RESTRICT`: apagar uma cobrança ou um usuário que tem histórico falha, em vez de
+levar o histórico junto.
+
+A recusa vale para todo caminho que passe pelo Eloquent, e só para ele. SQL cru
+com o usuário da aplicação ainda altera a tabela. Fechar isso de verdade é
+permissão no banco — um usuário de aplicação sem `UPDATE` e `DELETE` em
+`billing_audits` —, e este projeto usa um usuário só para a aplicação e para as
+migrations. Fica dito aqui em vez de parecer resolvido.
+
+### Só entra o que mudou de fato
+
+Quem decide o que mudou são os casts do model. O valor que chega como `"1000"`
+sobre um `"1000.00"` gravado é o mesmo número, o Eloquent não o marca como
+alterado, e ele não aparece na trilha — registrar isso encheria o histórico de
+ruído que esconde a alteração verdadeira. Os carimbos `updated_at` e
+`created_at` ficam de fora pelo mesmo motivo, e uma edição que não muda nada não
+registra nada.
+
+### A criação fica de fora, de propósito
+
+O que o enunciado pede na trilha é edição, pagamento e estorno — alterações. O
+quando da criação já está em `created_at`.
+
+Registrar a criação **de forma consistente** exigiria o id de cada cobrança que a
+importação grava, e a importação grava em lote, com um `INSERT` de quinhentas
+linhas. O MySQL não devolve os ids de um insert em lote, e com
+`innodb_autoinc_lock_mode = 2` — o default do MySQL 8, conferido neste servidor
+— os ids de um mesmo insert em lote não têm garantia de serem consecutivos
+quando há inserts concorrentes. Calcular `LAST_INSERT_ID() + n` seria um
+palpite. As alternativas eram gravar linha a linha, desfazendo o lote que a
+importação usa, ou registrar a criação só para quem cadastra pela tela.
+
+A segunda é pior do que não registrar: uma trilha em que metade das cobranças
+tem "criada" e a outra metade não **mente por omissão**. A trilha começa, para
+toda cobrança igual, na primeira alteração.
+
+O seeder de volume também não grava trilha. Os dois milhões de linhas entram por
+insert cru, e as pagas recebem os valores congelados na própria linha, pelo
+`RegisterPayment::freeze()` — não houve alteração feita por alguém para
+registrar. O `truncate()` do seeder passou a limpar `billing_audits` junto,
+porque o `TRUNCATE` reinicia os ids das cobranças e a trilha antiga passaria a
+descrever cobranças que não são as dela.
+
+### O MySQL reordena as chaves do JSON
+
+`changes` é uma coluna JSON, e o MySQL não guarda a ordem das chaves: ele
+reordena por tamanho. `{"from": "a", "to": "b"}` volta do banco como
+`{"to": "b", "from": "a"}`, e `description` volta depois de `due_date`. Foi o
+teste que mostrou, com três asserções falhando por ordem e não por conteúdo.
+
+A ordem que a API entrega é imposta pelo resource — `field`, `label`, `from`,
+`to`, e os campos na ordem da ficha da cobrança, com o status primeiro —, e o
+teste compara o conteúdo gravado sem depender da ordem, mas com tipos estritos:
+`assertEquals` resolveria a ordem aceitando `null` igual a `''`, e o `from` nulo
+do pagamento é justamente o que importa.
+
+### A leitura, medida com volume
+
+A trilha não tem índice além dos das chaves estrangeiras, e não precisa. A
+leitura é `WHERE billing_id = ? ORDER BY id DESC LIMIT 50`, e o índice que a
+chave estrangeira cria em `billing_id` já está em ordem de id dentro de cada
+cobrança: no InnoDB o índice secundário carrega a chave primária no fim.
+
+Uma tabela vazia não prova isso — o otimizador escolhe outro plano quando não há
+linhas. A medição foi feita com **200.080 entradas sintéticas** na base de
+2.000.000 de cobranças, 81 delas numa cobrança só, apagadas depois:
+
+| Consulta | Plano | Tempo |
+|---|---|---|
+| página de 50 da cobrança | `Index lookup ... (reverse)` na FK, sem filesort | 0,127 ms |
+| contagem para a paginação | `Covering index lookup` na FK | 0,049 ms |
+
+---
+
 ## Página pública
 
 A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
@@ -1684,7 +1834,7 @@ A skill de copywriting é explícita sobre estatística fabricada, e aqui a regr
 fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
 de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
 medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 219 testes.
+0,84s para o painel, 233 testes.
 
 A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
 mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados

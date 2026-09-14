@@ -118,6 +118,9 @@ class BillingVolumeSeeder extends Seeder
         }
 
         Schema::disableForeignKeyConstraints();
+        // A trilha vai junto: o TRUNCATE reinicia os ids das cobranças, e a
+        // trilha antiga passaria a descrever cobranças que não são as dela.
+        DB::table('billing_audits')->truncate();
         DB::table('billings')->truncate();
         DB::table('customers')->truncate();
         Schema::enableForeignKeyConstraints();

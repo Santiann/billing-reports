@@ -114,6 +114,7 @@ class RoleAccessTest extends TestCase
             'exibir cliente' => ['/api/customers/{cliente}'],
             'listar cobranças' => ['/api/billings'],
             'exibir cobrança' => ['/api/billings/{cobranca}'],
+            'trilha da cobrança' => ['/api/billings/{cobranca}/audit'],
             'relatório' => ['/api/reports/billings'],
             'dashboard' => ['/api/dashboard'],
         ];

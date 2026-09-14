@@ -36,6 +36,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('billings', BillingController::class)
         ->only(['index', 'show']);
 
+    Route::get('billings/{billing}/audit', [BillingController::class, 'audit'])
+        ->name('billings.audit');
+
     Route::get('reports/billings', BillingReportController::class)
         ->name('reports.billings');
 

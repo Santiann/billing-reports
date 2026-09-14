@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Domain\Billing\Audit\BillingAuditObserver;
 use App\Domain\Billing\BillingStatus;
 use Database\Factories\BillingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'customer_id',
@@ -21,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'paid_amount',
     'paid_interest_amount',
 ])]
+#[ObservedBy(BillingAuditObserver::class)]
 class Billing extends Model
 {
     /** @use HasFactory<BillingFactory> */
@@ -75,5 +79,13 @@ class Billing extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * @return HasMany<BillingAudit, $this>
+     */
+    public function audits(): HasMany
+    {
+        return $this->hasMany(BillingAudit::class);
     }
 }
