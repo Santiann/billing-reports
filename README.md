@@ -1376,9 +1376,9 @@ make coverage                               # docker compose exec php php -d pco
 
 | | |
 |---|---|
-| **Linhas** | **99,84%** (627/628) |
-| Métodos | 99,08% (108/109) |
-| Classes | 96,88% (31/32) |
+| **Linhas** | **97,44%** (1333/1368) |
+| Métodos | 90,87% (189/208) |
+| Classes | 81,36% (48/59) |
 
 Usa **pcov**, não xdebug: ele existe só para cobertura e custa uma fração do
 tempo. Fica desligado por padrão (`pcov.enabled = 0`) para não pesar na
@@ -1388,11 +1388,49 @@ O `-d` precisa ir direto no `phpunit` porque `artisan test --coverage` roda o
 PHPUnit em subprocesso e a flag não propaga — ele responde
 "No code coverage driver available" mesmo com a extensão carregada.
 
-**A linha não coberta**, e por quê: `BillingReportCsvExport.php:68`, o
-`flush()` que dispara a cada 500 linhas escritas. Cobri-la exigiria criar 500
-cobranças num teste para afirmar um efeito colateral sem resultado observável.
-Fica descoberta de propósito — perseguir o último ponto percentual produziria
-um teste pior, não um sistema melhor.
+A etapa 1 fechou com 99,84% de linhas sobre 628. A etapa 2 triplicou o código
+coberto — 1.368 linhas — e a cobertura caiu 2,4 pontos. As 35 linhas
+descobertas não estão espalhadas: elas se concentram nas classes novas, e quase
+todas são **ramos de defesa**.
+
+| Classe | Linhas |
+|---|---|
+| `IdempotentRequest` | 83,02% (44/53) |
+| `IdempotencyStore` | 85,45% (47/55) |
+| `CsvReader` | 90,20% (46/51) |
+| `BillingAudit` | 91,67% (11/12) |
+| `ExplainReportCommand` | 95,37% (103/108) |
+| `BillingAuditObserver` | 95,45% (21/22) |
+| `BillingAuditResource` | 96,15% (25/26) |
+| `BillingCsvImport` | 98,00% (98/100) |
+| `DashboardQuery` | 98,55% (68/69) |
+| `BillingReportCsvExport` | 98,63% (72/73) |
+
+O que está descoberto, nomeado:
+
+- **A devolução da chave de idempotência no erro 500.** Cobri-la exigiria
+  forçar um erro de servidor no meio de uma requisição com chave — encenação
+  que testaria o teste, não o sistema.
+- **A limpeza das chaves vencidas por sorteio.** Ela roda numa chance em
+  duzentas, de propósito; um teste que a force teria de fixar o sorteio, e aí
+  afirma sobre a fixação.
+- **O `deleted()` dos observers.** Nada no sistema apaga cobrança. O gancho
+  existe para o dia em que apagar, e é isso que o deixa descoberto.
+- **A guarda de resposta em stream e o teto de 255 caracteres da chave.** Duas
+  defesas para uso futuro do middleware de idempotência, que hoje vale para
+  duas rotas que não exportam arquivo.
+- **O rótulo de campo desconhecido na trilha.** Aparece só se uma coluna nova
+  chegar sem rótulo — existe para a trilha não perder a alteração em silêncio.
+- **O `flush()` da exportação CSV**, a cada 500 linhas escritas: exigiria criar
+  500 cobranças para afirmar um efeito colateral sem resultado observável.
+
+É a mesma decisão da etapa 1, com mais casos: perseguir o último ponto
+percentual aqui produziria testes que provam encenação. O que esses ramos têm
+em comum é serem o caminho do erro — e o caminho do erro que importa, aquele em
+que o sistema **recusa** a operação, tem teste: [sem trilha não há
+alteração](#atômica-sem-trilha-sem-alteração), [chave repetida devolve o
+primeiro resultado](#idempotência-no-pagamento), [perfil de consulta não
+escreve](#a-barreira-é-o-backend-não-a-tela).
 
 O relatório de cobertura foi o que expôs três lacunas reais, que já estão
 fechadas: o filtro `status=pending` do relatório nunca era exercitado (os
@@ -2916,6 +2954,18 @@ origem e o hash do conteúdo de cada uma. É o mesmo motivo de um `composer.lock
 uma dependência sem versão fixada não é uma dependência, é uma aposta. A
 diferença é que aqui ela entra no contexto de quem escreve o código.
 
+Outras skills guiaram commits específicos **sem estar no repositório**: elas
+vivem no ambiente de quem desenvolve. Ficam declaradas aqui porque o enunciado
+pede transparência sobre o uso de IA, e porque em cada caso é possível apontar
+onde elas mudaram o resultado.
+
+| Skill | Onde mudou o resultado |
+|---|---|
+| `dataviz` | Reprovou a primeira paleta do gráfico do dashboard por contraste insuficiente entre séries adjacentes — [ΔE 14,6 contra um piso de 15](#dashboard) — e corrigiu o uso de `tabular-nums`: figura proporcional para valor isolado, tabular só em coluna que alinha na vertical |
+| `frontend-design` | A [fundação visual](#fundação-visual): tipografia com personalidade, tokens semânticos e a decisão de não usar uma única classe `dark:` |
+| `landing-page-design` e `copywriting` | A [página pública](#página-pública): estrutura acima da dobra, e a recusa explícita de estatística fabricada — [nenhum número dela é inventado](#nenhum-número-da-página-é-inventado) |
+| `vercel-react-best-practices` | Padrões de Server Component, e o paralelismo de busca na ficha da cobrança, onde a trilha e a cobrança são buscadas juntas em vez de em sequência |
+
 ### O que a configuração efetivamente evitou
 
 Vale mais mostrar onde ela mudou o resultado do que descrevê-la:
@@ -2941,7 +2991,7 @@ Vale mais mostrar onde ela mudou o resultado do que descrevê-la:
 ### Onde as instruções estavam erradas
 
 Isto importa tanto quanto o resto: instrução de agente não é verdade revelada,
-e duas delas não sobreviveram ao contato com a medição.
+e três delas não sobreviveram ao contato com a medição.
 
 - **O teto do PDF era 5.000.** Os testes passavam, porque testes usam poucas
   linhas. A exportação contra a base real estourou a memória com 3.577. A curva
@@ -2952,6 +3002,12 @@ e duas delas não sobreviveram ao contato com a medição.
   php-fpm — que fala FastCGI, não HTTP. Todo fetch de Server Component
   falharia, e só dentro do Docker. O nginx passou a se chamar `backend` e o
   `CLAUDE.md` ganhou a nota de que o nome é load-bearing.
+- **O `make lint` não provava o que dizia provar.** Ele passava na máquina de
+  quem desenvolve porque o servidor de desenvolvimento havia gerado os tipos de
+  rota do Next; num clone limpo, o typecheck falha. Quem mostrou foi o
+  [CI](#integração-contínua), no primeiro push. O passo que faltava entrou no
+  alvo e no workflow, e a regra — verificação que depende de artefato gerado
+  precisa gerá-lo — voltou para o `CLAUDE.md`.
 
 Ambas as correções voltaram para o `CLAUDE.md`, que é o ponto: a configuração é
 mantida junto do código e corrigida quando o código prova que ela está errada.

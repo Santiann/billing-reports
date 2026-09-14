@@ -132,6 +132,22 @@ docker compose exec php php artisan test
 Regra geral: antes de escrever código de regra de negócio, escrever o teste que
 ela precisa passar.
 
+**Ponta a ponta com Playwright**, contra a stack em execução:
+
+```
+make e2e
+```
+
+Serviço próprio no Compose, com perfil `e2e` para não subir junto do resto.
+Roda contra a aplicação como ela é entregue — Next falando com o nginx pelo
+nome do serviço, sessão em cookie, MySQL de verdade —, e não contra um servidor
+que o Playwright levante. Fica fora do CI de propósito: exigiria subir a stack
+inteira no runner.
+
+**CI em `.github/workflows/ci.yml`**: dois jobs paralelos rodando o que
+`make test` e `make lint` fazem aqui. Um push que quebra o typecheck ou a suíte
+aparece vermelho no PR.
+
 ---
 
 ## Commits
@@ -171,14 +187,19 @@ Três decisões valem para a etapa inteira e não se reabrem a cada commit:
 - **A etapa 1 é a base, não rascunho.** O que já está entregue só muda quando
   o commit desta etapa pede — e aí a mudança é o assunto do commit.
 
-Ordem planejada, em blocos. Um bloco não emenda no outro: cada commit para,
-mostra o diff e espera.
+Ordem em blocos. Um bloco não emenda no outro: cada commit para, mostra o diff
+e espera.
+
+**Blocos A a F — entregues.** A lista abaixo é o que aconteceu, não o que foi
+planejado: quatro commits não estavam no plano e nasceram de achado durante a
+etapa, e estão marcados.
 
 ```
 A — fundação
 docs: plan stage two
 chore: add project skills
 fix: seed paid billings with frozen interest
+fix: agree on the half cent in both faces          <- achado: 1 divergência em 13.654
 feat: add global error and loading boundaries
 chore: add makefile
 refactor: trim excessive comments
@@ -193,6 +214,7 @@ refactor: restyle authentication and app shell
 refactor: restyle customers and billings
 refactor: restyle billing report
 feat: add dashboard
+chore: add readme and skill discovery skills
 
 D — importação e landing page
 feat: add customer csv import
@@ -208,12 +230,20 @@ feat: cache report totals
 feat: add report explain command
 feat: add rate limiting and structured logging
 ci: add continuous integration pipeline
+fix: generate next route types before the typecheck <- achado: o CI pegou o que
+                                                      passava na máquina
 
 F — qualidade
 test: add end to end frontend tests
+fix: make payment and reversal work outside localhost <- achado: o E2E pegou
+                                                        crypto.randomUUID
 chore: apply security review
 docs: update project documentation
+```
 
+**Blocos G e H — restantes.**
+
+```
 G — subida do zero, cronometrada
 perf: build report indexes after bulk seed
 docs: document clean install timing
@@ -250,3 +280,18 @@ listada como intenção.
   todos os testes com um valor uma ordem de grandeza acima do possível, porque
   teste usa poucas linhas. Decisão sobre volume, limite ou performance exige
   medição fora da suíte, com os 2 milhões de registros carregados.
+- **O que passa nesta máquina pode falhar em clone limpo.** O `make lint`
+  passava com tipos de rota que o servidor de desenvolvimento havia gerado e que
+  não existem num checkout novo. Quem pegou foi o CI. Verificação que depende de
+  artefato gerado precisa gerá-lo.
+- **Antes de teorizar, ler o log do container.** A hidratação não concluía nos
+  testes de ponta a ponta, e o log do Next nomeava a opção que faltava. Foram
+  duas execuções perdidas por não ter lido.
+- **Ferramenta que varre `vendor/` mede a internet, não o projeto.** O scanner
+  de vulnerabilidade acusou 23 achados críticos, todos em código minificado de
+  terceiros. Relatório de ferramenta entra no README com o recorte explícito do
+  que foi varrido.
+- **Contexto seguro no browser.** `crypto.randomUUID()` e a família
+  `crypto.subtle` só existem em HTTPS ou `localhost`. Código de cliente que
+  dependa delas quebra em qualquer outro host servido por HTTP — e quebra
+  silenciosamente, dentro do handler.
