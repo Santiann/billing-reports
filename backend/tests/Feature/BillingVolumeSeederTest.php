@@ -9,6 +9,7 @@ use App\Domain\Report\BillingReportQuery;
 use App\Models\Billing;
 use Database\Seeders\BillingVolumeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -164,5 +165,29 @@ class BillingVolumeSeederTest extends TestCase
 
         $this->assertGreaterThan(0, (float) $totais['paid_amount'], 'Recebido zerado.');
         $this->assertGreaterThan(0, (float) $totais['interest_amount'], 'Juros recebidos zerados.');
+    }
+
+    /**
+     * Carga pequena não emite DDL — nem derruba índice, nem recria.
+     *
+     * É o que mantém esta classe segura dentro do RefreshDatabase: DDL faz
+     * commit implícito, encerra a transação do teste e obriga cada teste
+     * seguinte da suíte a refazer as migrations. O seeder só adia os índices a
+     * partir de um limiar, e este teste é quem avisa se o limiar um dia descer
+     * até o tamanho da amostra.
+     */
+    public function test_carga_pequena_nao_emite_ddl(): void
+    {
+        $ddl = [];
+
+        DB::listen(function ($consulta) use (&$ddl): void {
+            if (preg_match('/^\s*(alter|create|drop)\b/i', $consulta->sql)) {
+                $ddl[] = $consulta->sql;
+            }
+        });
+
+        (new BillingVolumeSeeder(total: self::COBRANCAS))->run();
+
+        $this->assertSame([], $ddl, 'A carga pequena emitiu DDL: '.implode(' | ', $ddl));
     }
 }

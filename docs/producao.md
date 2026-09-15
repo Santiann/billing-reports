@@ -6,14 +6,21 @@
 
 Nenhuma foi aplicada na etapa 1: estão fora do que o teste pede, e
 implementá-las aumentaria a superfície sem pontuar. A etapa 2 vai fechando os
-itens um a um, e cada item fechado sai daqui ou fica só com o que resta dele. Ficam registradas porque são as que a
-medição deste projeto realmente indica, não uma lista genérica.
+itens um a um, e cada item fechado sai daqui ou fica só com o que resta dele.
+
+Ficam registradas porque são as que a medição deste projeto realmente indica,
+não uma lista genérica.
 
 **Dimensionar o `innodb_buffer_pool_size`.** É a primeira e a mais barata. A
-tabela tem 177 MB de dados e 322 MB de índices contra um pool de 128 MB no
-default — nada cabe, e toda varredura vai ao disco. Foi o que derrubou a
-inserção do seeder de ~1.900 para ~150 linhas por segundo na segunda metade da
-carga.
+tabela tem 170 MB de dados e **471 MB de índices** contra um pool de 128 MB no
+default — nada cabe, e toda varredura vai ao disco. A carga dos 2.000.000 de
+linhas com os índices presentes mostrou o efeito com a máquina parada: a vazão
+caiu de 440 para **62 linhas por segundo** conforme os índices passaram do
+tamanho do pool.
+
+O seeder já contorna isso [adiando os índices](performance.md#índices-adiados-na-carga)
+— 310 minutos viraram 51 —, mas contornar a carga não resolve as consultas: o
+relatório continua lendo índices que não cabem na memória.
 
 **Materializar os totalizadores.** O cache por recorte [foi feito na etapa
 2](performance.md#cache-dos-totalizadores) e leva o recorte de um ano de 12,9 s para cerca de

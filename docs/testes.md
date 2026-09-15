@@ -20,7 +20,7 @@ validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
 precisão de `DECIMAL` divergem.
 
 ```
-OK (278 tests, 1055 assertions)
+OK (283 tests, 1070 assertions)
 ```
 
 ### Cobertura

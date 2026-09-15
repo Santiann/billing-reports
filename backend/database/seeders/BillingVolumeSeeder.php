@@ -61,6 +61,19 @@ class BillingVolumeSeeder extends Seeder
     private const CHUNK = 2_000;
 
     /**
+     * A partir de quantas cobranças os índices são derrubados antes da carga.
+     *
+     * Índice não acelera insert, desacelera: cada linha mantém oito árvores a
+     * mais. Numa carga grande, derrubar e recriar no fim sai mais barato — a
+     * medição está no docs/performance.md. Numa carga pequena não compensa, e
+     * há um motivo mais forte para não fazer: o teste do seeder semeia uma
+     * amostra, e DDL dentro de teste encerra a transação do RefreshDatabase
+     * por commit implícito, fazendo cada teste seguinte da suíte refazer as
+     * migrations.
+     */
+    private const DEFER_INDEXES_FROM = 100_000;
+
+    /**
      * O total também entra por construtor, e não só por env, para o teste
      * conseguir semear uma amostra pequena: sobrescrever `env()` de dentro do
      * teste mexeria no ambiente do processo inteiro.
@@ -89,10 +102,20 @@ class BillingVolumeSeeder extends Seeder
         $startedAt = microtime(true);
 
         $this->truncate();
+
+        // Cura de uma execução anterior interrompida à força: se ela morreu com
+        // os índices derrubados, eles voltam agora — com a tabela recém-
+        // truncada, recriar é instantâneo. Sem nada faltando, é só uma leitura.
+        $this->recreateMissingIndexes();
+
         $this->seedCustomers($customers);
         $customerIds = DB::table('customers')->pluck('id')->all();
 
-        $this->seedBillings($total, $customerIds);
+        if ($total >= self::DEFER_INDEXES_FROM) {
+            $this->withDeferredIndexes(fn () => $this->seedBillings($total, $customerIds));
+        } else {
+            $this->seedBillings($total, $customerIds);
+        }
 
         // Insert cru em lote não passa pelo observer. Sem isto, um total em
         // cache de antes da carga continuaria sendo servido depois dela.
@@ -129,6 +152,123 @@ class BillingVolumeSeeder extends Seeder
         DB::table('billings')->truncate();
         DB::table('customers')->truncate();
         Schema::enableForeignKeyConstraints();
+    }
+
+    /**
+     * Roda a carga com os índices secundários derrubados, e os recria depois.
+     *
+     * A recriação está num `finally`: se a carga falhar no meio, a tabela não
+     * fica sem índices — ficaria, para quem subisse a aplicação em seguida, um
+     * relatório varrendo dois milhões de linhas a cada consulta, sem nenhum
+     * erro que apontasse a causa.
+     *
+     * O `finally` não cobre o processo morto à força. Esse caso é o que o
+     * `recreateMissingIndexes()` no início de `run()` cura.
+     *
+     * Pública para o teste exercitar a garantia com uma carga que falha.
+     */
+    public function withDeferredIndexes(callable $load): void
+    {
+        $startedAt = microtime(true);
+        $this->ensureForeignKeySupport();
+        $this->dropIndexes();
+        $this->command?->info(sprintf('  índices derrubados em %s', $this->humanize(microtime(true) - $startedAt)));
+
+        try {
+            $load();
+        } finally {
+            $startedAt = microtime(true);
+            $this->recreateMissingIndexes();
+            $this->removeForeignKeySupport();
+            $this->command?->info(sprintf('  índices recriados em %s', $this->humanize(microtime(true) - $startedAt)));
+        }
+    }
+
+    /** @return array<int, string> */
+    private function existingIndexes(): array
+    {
+        return DB::table('information_schema.STATISTICS')
+            ->where('TABLE_SCHEMA', DB::raw('DATABASE()'))
+            ->where('TABLE_NAME', 'billings')
+            ->distinct()
+            ->pluck('INDEX_NAME')
+            ->all();
+    }
+
+    private function ensureForeignKeySupport(): void
+    {
+        if (! in_array(ReportIndexes::FOREIGN_KEY_SUPPORT, $this->existingIndexes(), true)) {
+            DB::statement(sprintf(
+                'ALTER TABLE billings ADD INDEX %s (customer_id)',
+                ReportIndexes::FOREIGN_KEY_SUPPORT,
+            ));
+        }
+    }
+
+    private function dropIndexes(): void
+    {
+        $present = array_intersect(array_keys(ReportIndexes::DEFINITIONS), $this->existingIndexes());
+
+        if ($present === []) {
+            return;
+        }
+
+        // Uma instrução só: cada ALTER separado pegaria o bloqueio de metadados
+        // da tabela de novo.
+        DB::statement('ALTER TABLE billings '.implode(', ', array_map(
+            fn (string $name) => "DROP INDEX {$name}",
+            $present,
+        )));
+    }
+
+    /**
+     * Cria o que estiver faltando, um ALTER por índice.
+     *
+     * Idempotente de propósito: é chamada tanto no `finally` da carga quanto na
+     * cura do início, e nos dois casos pode encontrar parte dos índices já de
+     * pé.
+     *
+     * Um ALTER por índice, e não um só com todos — e a primeira versão deste
+     * método fazia o contrário, com um comentário afirmando que era mais
+     * barato. A medição sobre os 2.000.000 de linhas em repouso desmentiu: os
+     * oito num ALTER único levaram 19min12s, e um por um, 10min44s.
+     *
+     * O manual do MySQL documenta que o buffer de DDL é dividido entre as
+     * threads de DDL; como ele se reparte entre vários índices construídos na
+     * mesma instrução, não documenta. O número decide a implementação — a
+     * explicação fica em aberto.
+     */
+    private function recreateMissingIndexes(): void
+    {
+        $missing = array_diff_key(ReportIndexes::DEFINITIONS, array_flip($this->existingIndexes()));
+
+        foreach ($missing as $name => $columns) {
+            DB::statement(sprintf(
+                'ALTER TABLE billings ADD INDEX %s (%s)',
+                $name,
+                implode(', ', $columns),
+            ));
+        }
+    }
+
+    /**
+     * Tira o índice provisório — e só se os índices que começam por
+     * `customer_id` já estiverem de volta. Se a recriação tiver falhado, o
+     * provisório fica: a chave estrangeira não pode ficar sem apoio.
+     */
+    private function removeForeignKeySupport(): void
+    {
+        $existing = $this->existingIndexes();
+
+        $supported = array_filter(
+            ReportIndexes::DEFINITIONS,
+            fn (array $columns, string $name) => $columns[0] === 'customer_id' && in_array($name, $existing, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        if ($supported !== [] && in_array(ReportIndexes::FOREIGN_KEY_SUPPORT, $existing, true)) {
+            DB::statement(sprintf('ALTER TABLE billings DROP INDEX %s', ReportIndexes::FOREIGN_KEY_SUPPORT));
+        }
     }
 
     private function seedCustomers(int $customers): void

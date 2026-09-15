@@ -662,6 +662,102 @@ Uma exceção: ele **não trunca tabela já vazia**. `TRUNCATE` é DDL e custa ~
 por tabela nesta base mesmo sem ter o que apagar, e há um efeito colateral pior
 do que o tempo — descrito em [Testes](testes.md#o-teste-do-seeder-não-emite-ddl).
 
+### Índices adiados na carga
+
+Índice não acelera insert, desacelera: cada linha inserida mantém as **oito**
+árvores de índice secundário da tabela. Derrubar antes e recriar depois
+compensa? Foram medidas as duas estratégias de ponta a ponta, sobre os mesmos
+2.000.000 de linhas, com a máquina parada e a mesma configuração do MySQL —
+buffer pool de 128 MB, redo log de 100 MB, commit durável.
+
+| Estratégia | Total |
+|---|---|
+| A — carregar com os 8 índices presentes | **310min07s** |
+| B — derrubar, carregar e recriar | **45min55s** |
+
+**B é 6,8× mais rápida, e é a que o seeder usa.** O número de A fica registrado
+porque é ele que justifica a escolha. A primeira medição de B, ainda recriando
+os índices num ALTER único, deu 51min06s — a diferença está logo abaixo.
+
+Onde o tempo de B vai:
+
+| Fase | Tempo |
+|---|---|
+| Truncate e 5.000 clientes | 38 s |
+| Derrubar os 8 índices | 7,3 s |
+| Carregar 2.000.000 de linhas | 29min32s |
+| Recriar os 8 índices, um ALTER por índice | 15min38s |
+
+**Por que A perde tanto está na curva.** A vazão de A por bloco de 100 mil
+linhas:
+
+| Até | Vazão no bloco |
+|---|---|
+| 500.000 | 421 linhas/s |
+| 700.000 | 146 linhas/s |
+| 1.000.000 | 92 linhas/s |
+| 1.500.000 | 75 linhas/s |
+| 2.000.000 | **62 linhas/s** |
+
+Até cerca de meio milhão de linhas, os índices cabem no buffer pool de 128 MB.
+Dali em diante, cada insert precisa de páginas de índice que já não estão na
+memória, e a vazão cai **7×**. B não mantém índice secundário nenhum durante a
+carga, e a vazão fica **plana**, entre 893 e 1.408 linhas/s do primeiro ao
+último bloco. Recriar os oito índices em B leva 15min38s — menos que um único
+bloco de 100 mil linhas no fim de A, que levou 26min50s.
+
+Quatro cuidados que a estratégia exigiu:
+
+- **A chave estrangeira de `customer_id` não tem índice próprio.** Ela se apoia
+  nos três índices que começam por `customer_id`, e derrubar os três faz o MySQL
+  recusar o `DROP INDEX`. Durante a carga existe um índice provisório só em
+  `customer_id` — o mesmo recurso do `down()` da migration de índices —, e ele
+  sai no fim, **só** se os índices de `customer_id` tiverem voltado.
+- **Os índices voltam mesmo se a carga falhar.** A recriação está num `finally`,
+  e um teste a exercita com uma carga que lança exceção. O `finally` não cobre o
+  processo morto à força; para esse caso, cada execução do seeder começa
+  recriando o que estiver faltando, logo depois do truncate, quando recriar
+  sobre a tabela vazia é instantâneo.
+- **A lista dos índices é uma cópia das migrations, e a cópia é vigiada.** Um
+  teste compara a lista do seeder com o que as migrations criam. Sem ele, um
+  índice novo esquecido na lista seria derrubado na primeira carga e nunca mais
+  recriado, sem erro nenhum.
+- **Só acima de 100.000 linhas.** Numa carga pequena a troca não compensa, e há
+  um motivo mais forte: o teste do seeder semeia uma amostra, e DDL dentro de
+  teste encerra a transação do `RefreshDatabase` — [a armadilha que custava 50
+  segundos por teste](testes.md#o-teste-do-seeder-não-emite-ddl). Um teste
+  afirma que a carga pequena não emite DDL nenhum. Os testes que precisam de DDL
+  de verdade ficam numa classe própria, fora do `RefreshDatabase`, e só mexem na
+  estrutura de uma tabela vazia.
+
+**Um ALTER por índice, e não um só.** A primeira implementação recriava os oito
+índices numa instrução única, com um comentário no código afirmando que isso
+saía mais barato. A afirmação não tinha medição, e a medição a desmentiu:
+
+| Recriação dos 8 índices, 2.000.000 de linhas | Tempo |
+|---|---|
+| **um ALTER por índice**, tabela em repouso | **10min44s** |
+| um ALTER único, tabela em repouso | 19min12s |
+| um ALTER por índice, logo depois da carga | 15min38s |
+| um ALTER único, logo depois da carga | 22min03s |
+
+Um por um é **1,8× mais rápido** em repouso, e o seeder passou a fazer assim.
+As quatro linhas separam as duas causas possíveis. O momento pesa: logo depois
+da carga, com o MySQL ainda descarregando páginas recém-escritas, as duas
+estratégias custam mais do que em repouso. Mas a estratégia pesa mais — nos dois
+momentos, um por um vence com folga.
+
+Um por um, o índice de cobertura do dashboard é o mais caro: 1min59s, contra
+cerca de 1 minuto para cada índice de coluna única.
+
+Sobre o porquê, só vai aqui o que está verificado. O
+[manual do MySQL](https://dev.mysql.com/doc/refman/8.0/en/online-ddl-memory-management.html)
+documenta que o buffer de DDL — 1 MB por padrão — é dividido entre as threads de
+DDL, que são 4 por padrão: 256 KB para cada. Como essa memória se reparte entre
+vários índices construídos na mesma instrução, ele não documenta. A explicação
+óbvia — oito ordenações disputando o mesmo buffer — fica registrada como
+hipótese, e a implementação segue o número.
+
 ### Pagas em atraso, com juros congelados de verdade
 
 Quarenta por cento das cobranças nascem pagas, e **35% dessas foram pagas com

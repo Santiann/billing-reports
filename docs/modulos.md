@@ -171,7 +171,9 @@ conjunto filtrado inteiro, toda vez.
 O segundo é que a tabela não cabe no buffer pool. Com 149 MB de dados e 128 MB
 de pool, cada varredura completa vai ao disco — e foi isso que derrubou a taxa
 de inserção do seeder de ~1.900 para ~150 linhas por segundo na segunda metade
-da carga.
+da carga. (Medido com a máquina ocupada. A remedição da etapa 2, com a máquina
+parada e os oito índices de hoje, está em [índices adiados na
+carga](performance.md#índices-adiados-na-carga).)
 
 Ambos são endereçados em `feat: add report indexes`, com medição antes e
 depois.

@@ -52,7 +52,7 @@ que cada um faz estão em [docs/operacao.md](docs/operacao.md#os-alvos-do-makefi
 ## Como testar
 
 ```bash
-make test     # 278 testes, 1.055 asserções · 97,44% de linhas cobertas
+make test     # 283 testes, 1.070 asserções · 97,44% de linhas cobertas
 make e2e      # 10 testes de ponta a ponta (Playwright), contra a stack de pé
 make lint     # Pint no backend; typegen, typecheck e ESLint no frontend
 ```
@@ -137,7 +137,7 @@ Base de 2.000.000 de cobranças e 5.000 clientes.
 | Leitura da trilha de uma cobrança | 0,127 ms |
 | Teto do PDF | **1.000 linhas** — 420 MB para mil, mais de 3 GB para cinco mil |
 | Custo de um commit neste ambiente | 183 – 360 ms |
-| Carga dos 2.000.000 de registros | 196 min |
+| Carga dos 2.000.000 de registros | **46 min** com os índices adiados — 310 com eles presentes |
 
 Três dessas medições **mudaram decisões já tomadas**: o teto do PDF caiu de
 5.000 para 1.000, o recorte de um ano não levava 6 segundos e sim 12, e a
