@@ -300,3 +300,11 @@ listada como intenção.
   `crypto.subtle` só existem em HTTPS ou `localhost`. Código de cliente que
   dependa delas quebra em qualquer outro host servido por HTTP — e quebra
   silenciosamente, dentro do handler.
+- **`--no-cache` não é "do zero".** `docker compose build --no-cache` ignora o
+  cache de camadas, mas não baixa de novo a imagem base que já está no cache
+  do BuildKit. Medição de instalação limpa precisa cronometrar esse download à
+  parte, ou o número sai otimista sem aviso nenhum.
+- **Número medido tem cópias.** Quando uma medição muda, procurar o número
+  antigo em todo o repositório. A carga dos 2 milhões caiu de 51 para 46
+  minutos no README e em `docs/performance.md`, e `docs/producao.md` seguiu
+  dizendo 51 por um commit inteiro.

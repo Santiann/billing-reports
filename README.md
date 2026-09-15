@@ -30,6 +30,21 @@ git checkout joao-santian
 make install
 ```
 
+Medido a partir de um clone novo, sem nenhuma imagem baixada:
+
+| Fase | Tempo |
+|---|---|
+| Clone, download das imagens e build | 5min57s |
+| `make install` — primeiro boot do MySQL, dependências e migrations | 7min09s |
+| Primeira tela, compilada sob demanda | 19 s |
+| **Até a tela de login** | **13min25s** |
+| `make seed-volume` — 2.000.000 de cobranças, só para medir | 49min16s |
+| **Até a base de medição carregada** | **1h02min42s** |
+
+A fase que mais varia é o primeiro boot do MySQL: nesta mesma máquina levou
+3min52s nessa medição e 10min20s numa anterior. A tabela fase a fase, e o que
+ficou fora dela, está em [docs/operacao.md](docs/operacao.md#quanto-demora-a-subida-do-zero).
+
 Sem `make`: `docker compose up -d` e, depois das migrations,
 `docker compose exec php php artisan db:seed`.
 
@@ -42,9 +57,6 @@ Sem `make`: `docker compose up -d` e, depois das migrations,
 
 Não há `.env` para copiar nem `composer install` para rodar: o entrypoint
 instala dependências, cria o `.env`, gera a `APP_KEY` e roda as migrations.
-
-**O primeiro boot é lento** — o MySQL cria o datadir do zero, o que levou
-10min20s nesta máquina. Os seguintes sobem em segundos.
 
 Para gerar volume de medição: `make seed-volume`. Os onze alvos do Makefile e o
 que cada um faz estão em [docs/operacao.md](docs/operacao.md#os-alvos-do-makefile).
@@ -137,7 +149,7 @@ Base de 2.000.000 de cobranças e 5.000 clientes.
 | Leitura da trilha de uma cobrança | 0,127 ms |
 | Teto do PDF | **1.000 linhas** — 420 MB para mil, mais de 3 GB para cinco mil |
 | Custo de um commit neste ambiente | 183 – 360 ms |
-| Carga dos 2.000.000 de registros | **46 min** com os índices adiados — 310 com eles presentes |
+| Carga dos 2.000.000 de registros | **46 – 49 min** com os índices adiados — 310 com eles presentes |
 
 Três dessas medições **mudaram decisões já tomadas**: o teto do PDF caiu de
 5.000 para 1.000, o recorte de um ano não levava 6 segundos e sim 12, e a

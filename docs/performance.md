@@ -679,6 +679,13 @@ buffer pool de 128 MB, redo log de 100 MB, commit durável.
 porque é ele que justifica a escolha. A primeira medição de B, ainda recriando
 os índices num ALTER único, deu 51min06s — a diferença está logo abaixo.
 
+Uma segunda execução de B, dentro da [instalação do
+zero](operacao.md#quanto-demora-a-subida-do-zero), deu **49min16s**: 2,9 s para
+derrubar, 32min46s de clientes e carga, 16min27s para recriar. É 7% acima da
+primeira, e essa não teve a máquina parada do começo ao fim — rodou junto de
+consultas leves de acompanhamento e de um download de 107 MB. A faixa que vale
+citar é de 46 a 49 minutos.
+
 Onde o tempo de B vai:
 
 | Fase | Tempo |

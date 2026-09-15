@@ -19,7 +19,7 @@ caiu de 440 para **62 linhas por segundo** conforme os índices passaram do
 tamanho do pool.
 
 O seeder já contorna isso [adiando os índices](performance.md#índices-adiados-na-carga)
-— 310 minutos viraram 51 —, mas contornar a carga não resolve as consultas: o
+— 310 minutos viraram 46 a 49 —, mas contornar a carga não resolve as consultas: o
 relatório continua lendo índices que não cabem na memória.
 
 **Materializar os totalizadores.** O cache por recorte [foi feito na etapa

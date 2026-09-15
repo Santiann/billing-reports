@@ -27,7 +27,8 @@ migrations do entrypoint terminarem** e cria o usuário de acesso. No fim ele
 imprime as URLs e as credenciais.
 
 Sem `make`, são dois comandos — e o segundo só funciona depois que as
-migrations terminam, o que na primeira subida demora:
+migrations terminam, o que na primeira subida
+[demora](#quanto-demora-a-subida-do-zero):
 
 ```bash
 docker compose up -d
@@ -82,7 +83,9 @@ Dockerfile: `docker compose up -d --build`.
 quando os containers sobem, mas o entrypoint do php roda as migrations depois
 disso. Semear sem esperar falha com *table users doesn't exist* — e falha
 exatamente na primeira subida, que é a única em que `make install` importa.
-Medido aqui: a espera durou 35 segundos com o datadir do MySQL já criado.
+Medido aqui: a espera durou 35 segundos com o datadir do MySQL já criado, e
+perto de 1min45s numa instalação do zero, em que o entrypoint ainda roda o
+`composer install` antes das migrations.
 
 **O `lint` precisou de um `pint.json`.** O preset `laravel` do Pint remove os
 parênteses de `new` sem argumento — `new InterestCalculator` em vez de
@@ -138,13 +141,63 @@ Derrubar apagando o banco (volume nomeado `mysql_data`):
 docker compose down -v
 ```
 
-### O primeiro boot é lento, e isso é esperado
+### Quanto demora a subida do zero
 
-O MySQL 8 cria o datadir do zero na primeira subida, e em disco lento — WSL2 e
-virtiofs, principalmente — isso é bem mais demorado do que se espera. Medição
-real nesta máquina: **10 minutos e 20 segundos** entre `Initializing database
-files` e `ready for connections` na porta 3306. Nesse intervalo o backend fica
-parado esperando o healthcheck, e é o comportamento correto.
+Medido nesta máquina (WSL2 com Docker Desktop) a partir de um clone novo da
+branch — sem `vendor/`, sem `.env`, sem `node_modules`, sem imagem do projeto
+e sem o volume do banco. Cada fase foi cronometrada separada.
+
+| Fase | Tempo |
+|---|---|
+| `git clone --depth 1` | 5 s |
+| Download das imagens base `php`, `node` e `nginx` | 25 s |
+| Build das imagens `php` e `frontend` | 4min36s |
+| Download da imagem `mysql:8.0` | 51 s |
+| `make install` | **7min09s** |
+| Primeira tela: `/login` compilado sob demanda pelo Next | 19 s |
+| **Até a tela de login** | **13min25s** |
+| `make seed-volume` — 2.000.000 de cobranças | 49min16s |
+| **Até a base de medição carregada** | **1h02min42s** |
+
+A carga de volume se divide em 2,9 s para derrubar os índices, cerca de 32
+minutos de inserção e **16min27s** para recriá-los. Na medição do commit que
+adiou os índices, a mesma estratégia levou 45min55s — esta saiu 7% mais lenta,
+e as duas estão em [Índices adiados na carga](performance.md#índices-adiados-na-carga).
+
+Dentro do `make install`, pelos horários dos logs de cada container:
+
+| Etapa | Tempo |
+|---|---|
+| Rede, volume e os quatro containers criados, até o MySQL iniciar | 1min13s |
+| MySQL: criação do datadir | 2min59s |
+| MySQL: scripts de init — banco de teste e usuário da aplicação | 47 s |
+| MySQL: reinício na porta 3306 até o healthcheck passar | 16 s |
+| Entrypoint do php: `composer install`, 119 pacotes | 36 s |
+| Entrypoint do php: `.env`, `APP_KEY` e as 12 migrations | 1min13s |
+| Última sonda do `wait-migrations` e seeder base | 5 s |
+
+Quem já tem a stack e roda `docker compose down -v && make install` na mesma
+árvore pula o build e os downloads, e o entrypoint pula o `composer install`
+porque `vendor/` já existe: pela tabela, algo perto de **7 minutos** até a
+tela de login. Esse número é derivado, não medido separado.
+
+**O que a medição não cobriu diretamente.** As imagens base não saíram do
+cache, e por dois motivos diferentes. `php:8.3-fpm-alpine` e `node:22-alpine`
+moram no cache do BuildKit, e `build --no-cache` ignora o cache de camadas,
+não a imagem base — não baixa de novo. `nginx:1.27-alpine` está em uso por um
+container de outro projeto nesta máquina e não foi apagada. Os 25 s vêm de uma
+medição à parte: as camadas comprimidas das três (107 MB) baixadas direto do
+registry, uma depois da outra, sem extração. Para comparar, o `mysql:8.0` são
+222,8 MB comprimidos e levou 51 s já com a extração. Download é banda: aqui
+variou de 3 a 7 MB/s.
+
+**A fase que varia é a do MySQL.** A primeira medição do first-init, na etapa
+1, levou **10min20s** entre `Initializing database files` e `ready for
+connections` na porta 3306. Esta levou **3min52s** — mesma máquina, mesma
+configuração do Compose. A imagem baixada agora é a 8.0.46; a versão da
+primeira medição não ficou registrada, e não medi a causa da diferença. Nesse
+intervalo o backend fica parado esperando o healthcheck, e é o comportamento
+correto.
 
 Por isso o healthcheck tem `start_period` de 900s. O primeiro valor que tentei,
 600s, falhou por 20 segundos e derrubou a subida inteira com
