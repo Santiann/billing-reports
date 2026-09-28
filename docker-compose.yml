@@ -15,6 +15,12 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      # 1 GB cabe a tabela de cobranças inteira com os 2 milhões de linhas —
+      # 177 MB de dados e 400 MB de índices —, e não só o pedaço que o
+      # relatório toca. No default de 128 MB, a agregação de um ano relia 114
+      # mil páginas do disco por execução; de 512 MB para cima, nenhuma. A
+      # medição completa está em docs/performance.md.
+      - --innodb-buffer-pool-size=1G
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: faturamento
@@ -26,8 +32,8 @@ services:
       # vazio — num volume já existente, aplicar o .sql à mão.
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
     # O first-init do MySQL 8 cria o datadir do zero e, em disco lento
-    # (WSL2/virtiofs), é brutalmente demorado: 10m20s medidos nesta máquina,
-    # do "Initializing database files" ao "ready for connections" na 3306.
+    # (WSL2/virtiofs), é demorado e varia: de 3min52s a 10min20s medidos nesta
+    # máquina, do "Initializing database files" ao "ready for connections" na 3306.
     # Daí a janela de 900s — 600s chegaram a falhar por 20 segundos aqui.
     #
     # Falhas dentro do start_period não consomem retries, então a janela larga

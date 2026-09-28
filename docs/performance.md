@@ -205,8 +205,8 @@ cache não bastar — e ele não basta para a primeira consulta de cada recorte.
 | Índices | 43 MB | **322 MB** |
 
 Os índices passaram a pesar quase o dobro dos dados. Com `innodb_buffer_pool_size`
-no default de 128 MB, nada disso cabe em memória — dimensionar o pool para o
-conjunto de trabalho é a primeira coisa a fazer em produção.
+no default de 128 MB, nada disso cabia em memória. O pool foi dimensionado na
+etapa 2, com medição — ver [Buffer pool do InnoDB](#buffer-pool-do-innodb).
 
 A migration levou **9min38s** para construir os sete índices sobre dois milhões
 de linhas. Num ambiente limpo ela roda sobre tabela vazia e é instantânea; o
@@ -668,7 +668,9 @@ do que o tempo — descrito em [Testes](testes.md#o-teste-do-seeder-não-emite-d
 árvores de índice secundário da tabela. Derrubar antes e recriar depois
 compensa? Foram medidas as duas estratégias de ponta a ponta, sobre os mesmos
 2.000.000 de linhas, com a máquina parada e a mesma configuração do MySQL —
-buffer pool de 128 MB, redo log de 100 MB, commit durável.
+buffer pool de 128 MB, redo log de 100 MB, commit durável. O pool foi
+dimensionado depois, e nesta máquina o pool maior deixou a carga mais lenta: a
+remedição está em [Buffer pool do InnoDB](#buffer-pool-do-innodb).
 
 | Estratégia | Total |
 |---|---|

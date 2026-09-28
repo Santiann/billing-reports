@@ -187,7 +187,7 @@ A lista completa, com as skills usadas e o efeito de cada uma:
 
 ## O que ficaria para produção
 
-Buffer pool dimensionado, totalizadores materializados, particionamento por
-data, índice FULLTEXT na descrição, exportação assíncrona e réplica de leitura.
+Totalizadores materializados, particionamento por data, índice FULLTEXT na
+descrição, exportação assíncrona e réplica de leitura.
 Cada item está em [docs/producao.md](docs/producao.md) com a medição que o
 justifica — uma pendência só vale registrada se vier com número.

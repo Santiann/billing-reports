@@ -308,3 +308,8 @@ listada como intenção.
   antigo em todo o repositório. A carga dos 2 milhões caiu de 51 para 46
   minutos no README e em `docs/performance.md`, e `docs/producao.md` seguiu
   dizendo 51 por um commit inteiro.
+- **Ajuste que acelera a leitura pode atrasar a escrita.** O buffer pool de
+  1 GB deixou as consultas do relatório 1,5 a 2 vezes mais rápidas e a carga
+  dos 2 milhões 34% mais lenta nesta máquina. Mediu o ganho de um lado, medir o
+  outro — e, quando o número estranho aparecer, rodar um controle na
+  configuração antiga antes de culpar a máquina ou o ajuste.
