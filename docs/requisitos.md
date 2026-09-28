@@ -1,12 +1,15 @@
-# Enunciado original do teste
+# Requisitos do projeto
 
 [← README](../README.md)
 
-Preservado na íntegra, como recebido.
+A especificação funcional e técnica que este projeto responde, preservada na
+íntegra. Serve como referência do escopo: o que foi pedido, e com que
+restrições. O que foi entregue está no [README](../README.md); as decisões, em
+`docs/`.
 
 ---
 
-# Teste Técnico — Desenvolvedor Fullstack
+# Especificação funcional e técnica
 
 ## Objetivo
 
@@ -349,94 +352,11 @@ chore: add docker environment
 docs: update project instructions
 ```
 
-Os commits também serão considerados durante a avaliação.
-
----
-
-## Entrega
-
-O candidato deverá realizar a entrega seguindo obrigatoriamente este fluxo:
-
-1. Criar um **fork** do repositório disponibilizado para o teste.
-2. Criar uma nova branch dentro do fork utilizando o próprio nome.
-
-Exemplo:
-
-```text
-joao-silva
-```
-
-3. Desenvolver toda a solução nessa branch.
-4. Manter o histórico de commits pequenos, semânticos e separados por responsabilidade.
-5. Ao finalizar, abrir um **Pull Request da branch criada no fork para o repositório original do teste**.
-
-Exemplo do fluxo:
-
-```text
-fork-do-candidato:joao-silva
-    ↓
-repositorio-original:main
-```
-
-O Pull Request deverá conter:
-
-* Título claro e objetivo
-* Resumo da solução desenvolvida
-* Instruções para executar o projeto
-* Instruções para executar os testes
-* Explicação das decisões técnicas
-* Explicação da estratégia de performance
-* Explicação da geração dos relatórios
-* Pontos que não foram concluídos, caso existam
-
-O repositório deverá conter:
-
-* Código do backend
-* Código do frontend
-* Dockerfiles
-* Arquivo `docker-compose.yml`
-* Migrations
-* Factories e seeders
-* Testes automatizados
-* Arquivo `.env.example`
-* Instruções para executar o projeto
-* Instruções para executar os testes
-* Explicação das decisões técnicas
-* Explicação da estratégia de performance
-
-Não serão aceitas entregas por arquivo compactado, e-mail, link para outro repositório ou qualquer outro meio externo.
-
-A entrega deverá ser realizada exclusivamente por meio do Pull Request aberto a partir do fork do candidato para o repositório original disponibilizado para o teste.
-
----
-
-## Critérios de avaliação
-
-Serão avaliados:
-
-* Organização e legibilidade do código
-* Arquitetura da aplicação
-* Modelagem do banco de dados
-* Qualidade da API
-* Componentização do frontend
-* Uso correto do TypeScript
-* Aplicação da regra de negócio
-* Performance das consultas
-* Estratégia de geração dos relatórios
-* Segurança e autenticação
-* Dockerização do projeto
-* Qualidade dos testes automatizados
-* Tratamento de erros
-* Documentação
-* Histórico de commits
-* Qualidade e organização do Pull Request
-* Configuração e uso de agentes de IA, caso utilizados
-
 ---
 
 ## Diferenciais
 
-Serão considerados diferenciais:
+Itens tratados como diferenciais dentro do escopo:
 
 * Testes no frontend
 * Controle de acesso por perfil
@@ -447,13 +367,3 @@ Serão considerados diferenciais:
 * Pipeline de integração contínua
 * Monitoramento ou observabilidade
 * Cobertura de testes documentada
-
----
-
-## Prazo sugerido
-
-Prazo de entrega sugerido: até 5 dias corridos.
-
-O teste foi planejado para exigir aproximadamente 8 a 12 horas de desenvolvimento.
-
-Não é necessário implementar funcionalidades além das solicitadas. O foco deve estar na qualidade da solução, nas decisões técnicas e na clareza da implementação.

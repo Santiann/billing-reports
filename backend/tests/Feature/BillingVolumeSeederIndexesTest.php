@@ -100,7 +100,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
     }
 
     /**
-     * A garantia que o enunciado pede: se a carga falhar no meio, os índices
+     * A garantia que a especificação pede: se a carga falhar no meio, os índices
      * voltam do mesmo jeito. Sem isso, quem subisse a aplicação depois teria
      * um relatório varrendo a tabela inteira, sem erro que apontasse a causa.
      */

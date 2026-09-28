@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 
 /**
- * 360px de largura, que é o critério de aceite do enunciado para telas
+ * 360px de largura, que é o critério de aceite da especificação para telas
  * pequenas.
  *
  * O que se afirma é a ausência de rolagem HORIZONTAL. É a falha típica de

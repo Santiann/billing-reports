@@ -4,7 +4,7 @@
 
 ## Melhorias que ficariam para produção
 
-Nenhuma foi aplicada na etapa 1: estão fora do que o teste pede, e
+Nenhuma foi aplicada na etapa 1: estão fora do que a especificação pede, e
 implementá-las aumentaria a superfície sem pontuar. A etapa 2 vai fechando os
 itens um a um, e cada item fechado sai daqui ou fica só com o que resta dele.
 

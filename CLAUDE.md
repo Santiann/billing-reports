@@ -3,9 +3,9 @@
 Aplicação de faturamento com autenticação e relatório de cobranças projetado para
 tabelas na casa dos milhões de registros.
 
-Este arquivo orienta os agentes de IA usados no desenvolvimento. Ele está no
-repositório porque o teste pede que as instruções de agente sejam mantidas junto
-do projeto.
+Este arquivo orienta os agentes de IA usados no desenvolvimento. Está
+versionado junto do código de propósito: as instruções que produziram o
+projeto fazem parte dele, e mudaram quando a medição contrariou o que diziam.
 
 ---
 
@@ -180,9 +180,8 @@ docs: update project instructions
 
 Três decisões valem para a etapa inteira e não se reabrem a cada commit:
 
-- **Mesma branch.** Tudo vai para `joao-santian`, que já tem o PR #5 aberto de
-  `joao-santian` para `main`. O PR cresce junto —
-  não existe branch nova nem PR novo, e o corpo do PR é atualizado no fim.
+- **Mesma branch.** Tudo vai para `main`. Não se abre branch por bloco: a
+  etapa cresce em cima do que já está entregue.
 - **Histórico preservado.** Os 14 commits da etapa 1 não são reescritos:
   mantêm o trailer `Co-Authored-By`, e os novos seguem com ele. Nada de
   rebase, squash ou amend sobre o que já foi empurrado.
@@ -275,11 +274,11 @@ listada como intenção.
 - Nenhuma decisão técnica fica só no código: se existe alternativa razoável, a
   escolha e o porquê vão para a documentação. O README é a porta de entrada e
   fica curto — o detalhe vive em `docs/`, por tema. Decisão nova entra no
-  documento do tema, e só sobe para o README se mudar o que o avaliador precisa
+  documento do tema, e só sobe para o README se mudar o que quem revisa precisa
   saber nos primeiros três minutos.
-- Não implementar nada além do que o teste pede. Escopo extra não pontua e
-  aumenta a superfície de erro. Na etapa 2 o "que o teste pede" inclui a lista
-  de diferenciais do enunciado — e nada fora do commit da vez.
+- Não implementar nada além do que a especificação pede. Escopo extra não pontua e
+  aumenta a superfície de erro. Na etapa 2 o "que a especificação pede" inclui a lista
+  de diferenciais da especificação — e nada fora do commit da vez.
 - Não trocar biblioteca ou padrão sem registrar a decisão em `docs/`.
 - **Medir contra a base real, não contra a suíte.** O teto do PDF passou em
   todos os testes com um valor uma ordem de grandeza acima do possível, porque

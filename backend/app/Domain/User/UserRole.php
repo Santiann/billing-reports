@@ -5,7 +5,7 @@ namespace App\Domain\User;
 /**
  * Os dois perfis do sistema.
  *
- * Dois, e não uma tabela de permissões: o que o teste pede é a distinção entre
+ * Dois, e não uma tabela de permissões: o que a especificação pede é a distinção entre
  * quem opera e quem consulta, e uma matriz de permissão por recurso seria
  * estrutura para um problema que este sistema não tem. Se um terceiro perfil
  * aparecer com regra própria, aí sim.

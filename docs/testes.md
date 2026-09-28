@@ -132,7 +132,7 @@ docker compose exec -T mysql mysql -u root -proot < docker/mysql/init/01-create-
 make e2e          # docker compose --profile e2e run --rm e2e
 ```
 
-Playwright cobrindo o que o enunciado pede como diferencial de frontend: login,
+Playwright cobrindo o que a especificação pede como diferencial de frontend: login,
 cadastro de cliente, registro de pagamento — mais o estorno — e exportação.
 **10 testes, 3,4 minutos.**
 
@@ -151,8 +151,8 @@ isolado, sem backend, e os fluxos de cadastro e pagamento não existiriam.
 | Fora do CI | exigiria subir MySQL, php-fpm, nginx e Next no runner; o CI roda a suíte e o lint |
 
 Dois testes rodam numa viewport de **360px** e afirmam a ausência de rolagem
-horizontal — nas telas públicas e nas autenticadas. É o critério de aceite do
-enunciado para telas pequenas, verificado por teste em vez de por captura.
+horizontal — nas telas públicas e nas autenticadas. É o critério de aceite da
+especificação para telas pequenas, verificado por teste em vez de por captura.
 
 ### Quatro problemas reais que ele encontrou
 

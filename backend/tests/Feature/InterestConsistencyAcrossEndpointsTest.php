@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * O enunciado exige que o valor calculado seja "consistente em todas as telas
+ * A especificação exige que o valor calculado seja "consistente em todas as telas
  * e relatórios".
  *
  * `InterestCalculatorTest` prova que as duas FACES do calculador concordam.

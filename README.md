@@ -26,7 +26,6 @@ Pré-requisito único: Docker com Compose v2.
 ```bash
 git clone https://github.com/Santiann/billing-reports.git
 cd billing-reports
-git checkout joao-santian
 make install
 ```
 
@@ -85,7 +84,7 @@ Detalhes, cobertura e as armadilhas que a suíte precisou resolver:
 
 O relatório ordena por valor atualizado e soma os juros do conjunto filtrado
 **inteiro**. Se o cálculo existisse apenas em PHP, qualquer uma das duas
-operações obrigaria a carregar o resultado todo em memória — o que o enunciado
+operações obrigaria a carregar o resultado todo em memória — o que a especificação
 proíbe explicitamente.
 
 Daí decorre quase todo o resto do projeto:
@@ -171,12 +170,12 @@ de virar código. As três estão contadas em
 | [docs/testes.md](docs/testes.md) | Suíte, cobertura nomeada linha a linha e testes de ponta a ponta |
 | [docs/ia.md](docs/ia.md) | Uso de IA: as skills, o que elas evitaram e onde as instruções estavam erradas |
 | [docs/producao.md](docs/producao.md) | O que ficaria para produção, com número ao lado |
-| [docs/enunciado.md](docs/enunciado.md) | O enunciado original do teste, preservado na íntegra |
+| [docs/requisitos.md](docs/requisitos.md) | A especificação funcional e técnica que o projeto responde, na íntegra |
 
 ## Uso de inteligência artificial
 
 O desenvolvimento foi conduzido com **Claude Code**, e os arquivos que orientam
-o agente estão versionados — `CLAUDE.md` e `.claude/skills/`, como o enunciado
+o agente estão versionados — `CLAUDE.md` e `.claude/skills/`, como a especificação
 pede. O que vale registrar não é a ferramenta, é onde a configuração mudou o
 resultado: teste antes do código em toda regra de negócio, tempo congelado nos
 testes de juros, e **duas instruções que não sobreviveram à medição** e voltaram

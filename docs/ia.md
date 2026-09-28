@@ -14,7 +14,7 @@ agente estão no repositório, como o teste exige:
 | `.claude/skills/agent-browser/SKILL.md` | Automação de browser: navegar as telas, tirar screenshot e iterar sobre o que se está construindo |
 | `.claude/skills/github-actions-docs/SKILL.md` | Sintaxe de workflow do GitHub Actions ancorada na documentação oficial, em vez de memória |
 | `.claude/skills/vulnerability-scanner/SKILL.md` | Roteiro de análise de vulnerabilidade — OWASP, cadeia de suprimentos, superfície de ataque |
-| `.claude/skills/crafting-effective-readmes/SKILL.md` | Como escrever README por público: contribuidor, avaliador, o próprio autor daqui a um ano |
+| `.claude/skills/crafting-effective-readmes/SKILL.md` | Como escrever README por público: contribuidor, revisor, o próprio autor daqui a um ano |
 | `.claude/skills/find-skills/SKILL.md` | Descoberta e instalação de skills do ecossistema aberto |
 | `skills-lock.json` | Origem e hash de cada skill instalada do ecossistema |
 
@@ -29,7 +29,7 @@ uma dependência sem versão fixada não é uma dependência, é uma aposta. A
 diferença é que aqui ela entra no contexto de quem escreve o código.
 
 Outras skills guiaram commits específicos **sem estar no repositório**: elas
-vivem no ambiente de quem desenvolve. Ficam declaradas aqui porque o enunciado
+vivem no ambiente de quem desenvolve. Ficam declaradas aqui porque a especificação
 pede transparência sobre o uso de IA, e porque em cada caso é possível apontar
 onde elas mudaram o resultado.
 

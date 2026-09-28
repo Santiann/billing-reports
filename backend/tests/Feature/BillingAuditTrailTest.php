@@ -24,7 +24,7 @@ use Tests\TestCase;
  *   imutável  -> o que foi registrado não se edita nem se apaga
  *
  * A criação fica de fora de propósito — o README explica por quê. O que entra
- * é o que o enunciado pede: edição, pagamento e, no commit seguinte, estorno.
+ * é o que a especificação pede: edição, pagamento e, no commit seguinte, estorno.
  */
 class BillingAuditTrailTest extends TestCase
 {

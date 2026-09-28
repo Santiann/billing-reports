@@ -125,7 +125,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame(0, $calculation->daysLate);
     }
 
-    public function test_juros_compostos_conferem_com_a_formula_do_enunciado(): void
+    public function test_juros_compostos_conferem_com_a_formula_da_especificacao(): void
     {
         $this->travelTo(self::HOJE);
 

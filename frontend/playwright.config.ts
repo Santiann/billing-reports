@@ -60,7 +60,7 @@ export default defineConfig({
     },
     {
       /*
-       * 360px é o critério de aceite do enunciado para a navegação em telas
+       * 360px é o critério de aceite da especificação para a navegação em telas
        * pequenas. Só o arquivo de responsividade roda aqui: repetir os fluxos
        * de escrita em outra viewport duplicaria o tempo sem provar nada novo.
        */

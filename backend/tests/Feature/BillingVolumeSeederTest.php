@@ -152,7 +152,7 @@ class BillingVolumeSeederTest extends TestCase
     }
 
     /**
-     * O critério de aceite do bloco, visto de onde o avaliador vai olhar: o
+     * O critério de aceite do bloco, visto de onde quem revisa vai olhar: o
      * relatório filtrado por pagas precisa mostrar juros recebidos, não zero.
      */
     public function test_relatorio_de_pagas_mostra_juros_recebidos(): void

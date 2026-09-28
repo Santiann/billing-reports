@@ -598,12 +598,12 @@ desligados: sem SSRF por imagem remota e sem execução de PHP dentro do
 template.
 
 **Acesso a registro de outro usuário.** Qualquer usuário autenticado vê
-qualquer cobrança. Não há conceito de cliente-dono nem de organização no
-enunciado, e inventá-lo seria escopo extra; o que existe é o [perfil de
+qualquer cobrança. Não há conceito de cliente-dono nem de organização na
+especificação, e inventá-lo seria escopo extra; o que existe é o [perfil de
 consulta](modulos.md#perfis-de-acesso), que separa leitura de escrita. Fica registrado
 como limite conhecido, não como descuido.
 
-**`APP_DEBUG=true` e senhas de exemplo.** São o ambiente local que o teste pede
+**`APP_DEBUG=true` e senhas de exemplo.** São o ambiente local que a especificação pede
 — `docker compose up -d` tem que entregar a aplicação usável, com credenciais
 documentadas. Em produção, `APP_DEBUG=false`, `APP_ENV=production` e segredos
 fora do repositório são pré-requisito, não ajuste.

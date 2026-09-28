@@ -647,7 +647,7 @@ registra nada.
 
 ### A criação fica de fora, de propósito
 
-O que o enunciado pede na trilha é edição, pagamento e estorno — alterações. O
+O que a especificação pede na trilha é edição, pagamento e estorno — alterações. O
 quando da criação já está em `created_at`.
 
 Registrar a criação **de forma consistente** exigiria o id de cada cobrança que a
@@ -777,7 +777,7 @@ armadilha 7 da skill de testes.
 
 ### Sem campo de motivo
 
-Um motivo do estorno seria o campo óbvio, e ficou de fora. O enunciado não o
+Um motivo do estorno seria o campo óbvio, e ficou de fora. A especificação não o
 pede, e o quem e o quando já estão na trilha. Acrescentá-lo não é só um campo no
 formulário: a trilha é gravada por um observer que só enxerga o model, e o
 motivo não é coluna da cobrança. Seria preciso uma coluna em `billing_audits` e

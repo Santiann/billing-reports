@@ -5,7 +5,7 @@ description: Convenções e armadilhas para escrever os testes automatizados do 
 
 # Testes do backend
 
-Os cenários mínimos são definidos pelo teste técnico e todos precisam existir:
+Os cenários mínimos são definidos pela especificação e todos precisam existir:
 
 1. Usuário não autenticado não acessa o relatório
 2. Usuário não autenticado não exporta relatórios
@@ -80,7 +80,7 @@ Escrever um teste com matriz de casos que percorra:
 
 Para cada caso, afirmar que a face SQL e a face PHP devolvem o mesmo valor até o
 centavo. Este é o teste que sustenta a exigência de resultado consistente entre
-telas e relatório, e é o primeiro que um avaliador vai procurar.
+telas e relatório, e é o primeiro que quem revisa vai procurar.
 
 ---
 
