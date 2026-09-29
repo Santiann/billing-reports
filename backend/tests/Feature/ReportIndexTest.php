@@ -42,7 +42,7 @@ class ReportIndexTest extends TestCase
         ];
     }
 
-    public function test_indices_do_relatorio_existem_com_as_colunas_na_ordem_certa(): void
+    public function test_the_report_indexes_exist_with_the_columns_in_the_right_order(): void
     {
         $actual = $this->indexesOfBillings();
 
@@ -74,7 +74,7 @@ class ReportIndexTest extends TestCase
      * dois milhões de linhas — type ALL com 1.989.965 linhas antes, range
      * depois.
      */
-    public function test_filtro_por_periodo_tem_indice_aplicavel(): void
+    public function test_the_period_filter_has_an_applicable_index(): void
     {
         $plan = DB::select(
             'EXPLAIN SELECT COUNT(*) FROM billings WHERE due_date >= ? AND due_date <= ?',
@@ -88,7 +88,7 @@ class ReportIndexTest extends TestCase
         );
     }
 
-    public function test_filtro_por_cliente_com_periodo_tem_indice_composto_aplicavel(): void
+    public function test_the_customer_plus_period_filter_has_an_applicable_composite_index(): void
     {
         $plan = DB::select(
             'EXPLAIN SELECT COUNT(*) FROM billings '
@@ -102,7 +102,7 @@ class ReportIndexTest extends TestCase
         );
     }
 
-    public function test_filtro_de_vencidas_tem_indice_aplicavel(): void
+    public function test_the_overdue_filter_has_an_applicable_index(): void
     {
         $plan = DB::select(
             "EXPLAIN SELECT COUNT(*) FROM billings WHERE status = 'pending' AND due_date < ?",

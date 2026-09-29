@@ -100,7 +100,7 @@ class BillingAuditTrailTest extends TestCase
 
     // --- edição -------------------------------------------------------
 
-    public function test_a_edicao_registra_quem_o_que_e_quando(): void
+    public function test_an_edit_records_who_what_and_when(): void
     {
         $this->travelTo(self::AGORA);
         $usuario = $this->comoUsuario();
@@ -130,7 +130,7 @@ class BillingAuditTrailTest extends TestCase
      * número, e registrá-lo como alteração encheria a trilha de ruído que
      * esconde a alteração verdadeira.
      */
-    public function test_so_o_que_mudou_entra_na_trilha(): void
+    public function test_only_what_changed_enters_the_trail(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -145,7 +145,7 @@ class BillingAuditTrailTest extends TestCase
         $this->assertSame(['description'], array_keys($this->trilha($cobranca)[0]->changes));
     }
 
-    public function test_edicao_que_nao_muda_nada_nao_registra(): void
+    public function test_an_edit_that_changes_nothing_records_nothing(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -165,7 +165,7 @@ class BillingAuditTrailTest extends TestCase
      * colunas de pagamento forem limpas, o que foi pago continua registrado
      * aqui.
      */
-    public function test_o_pagamento_entra_na_trilha_com_os_valores_congelados(): void
+    public function test_a_payment_enters_the_trail_with_the_frozen_amounts(): void
     {
         $this->travelTo(self::AGORA);
         $usuario = $this->comoUsuario();
@@ -187,7 +187,7 @@ class BillingAuditTrailTest extends TestCase
     }
 
     /** A repetição com a mesma chave não reprocessa, então não registra de novo. */
-    public function test_a_repeticao_idempotente_nao_duplica_a_trilha(): void
+    public function test_an_idempotent_replay_does_not_duplicate_the_trail(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -203,7 +203,7 @@ class BillingAuditTrailTest extends TestCase
 
     // --- o que não entra ----------------------------------------------
 
-    public function test_operacao_recusada_nao_entra_na_trilha(): void
+    public function test_a_refused_operation_does_not_enter_the_trail(): void
     {
         $this->travelTo(self::AGORA);
         $cobranca = $this->cobranca();
@@ -235,7 +235,7 @@ class BillingAuditTrailTest extends TestCase
      * renomear a tabela no meio do teste encerraria a transação do
      * RefreshDatabase por commit implícito (ver a skill de testes).
      */
-    public function test_sem_trilha_a_edicao_nao_acontece(): void
+    public function test_without_the_trail_the_edit_does_not_happen(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -248,7 +248,7 @@ class BillingAuditTrailTest extends TestCase
         $this->assertSame('Mensalidade de maio', $cobranca->fresh()->description);
     }
 
-    public function test_sem_trilha_o_pagamento_nao_acontece(): void
+    public function test_without_the_trail_the_payment_does_not_happen(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -265,7 +265,7 @@ class BillingAuditTrailTest extends TestCase
     // --- imutabilidade ------------------------------------------------
 
     /** Registro errado na trilha se corrige com outro registro, nunca reescrevendo. */
-    public function test_a_trilha_nao_se_altera(): void
+    public function test_the_trail_cannot_be_altered(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -277,7 +277,7 @@ class BillingAuditTrailTest extends TestCase
         $this->trilha($cobranca)[0]->update(['changes' => []]);
     }
 
-    public function test_a_trilha_nao_se_apaga(): void
+    public function test_the_trail_cannot_be_deleted(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -293,7 +293,7 @@ class BillingAuditTrailTest extends TestCase
      * Alteração fora de uma requisição — tinker, comando artisan — também
      * entra, sem autor. Ficar de fora seria o buraco mais fácil de usar.
      */
-    public function test_alteracao_sem_usuario_autenticado_entra_sem_autor(): void
+    public function test_a_change_with_no_authenticated_user_is_recorded_without_an_author(): void
     {
         $this->travelTo(self::AGORA);
         $cobranca = $this->cobranca();
@@ -308,7 +308,7 @@ class BillingAuditTrailTest extends TestCase
 
     // --- leitura ------------------------------------------------------
 
-    public function test_a_trilha_e_lida_pela_api_da_mais_recente_para_a_mais_antiga(): void
+    public function test_the_api_reads_the_trail_newest_first(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
@@ -349,7 +349,7 @@ class BillingAuditTrailTest extends TestCase
      * O seeder fica fora da varredura: está em `database/`, grava volume de
      * teste, e dois milhões de registros de auditoria não descreveriam nada.
      */
-    public function test_nenhum_codigo_da_aplicacao_altera_cobranca_por_fora_do_eloquent(): void
+    public function test_no_application_code_changes_a_billing_outside_eloquent(): void
     {
         $padrao = '/(?:DB::table\(\s*[\'"]billings[\'"]\s*\)|Billing::(?:query|where\w*)\s*\()'
             .'[^;]*?->(?:update|delete|forceDelete|increment|decrement|upsert)\s*\(/s';

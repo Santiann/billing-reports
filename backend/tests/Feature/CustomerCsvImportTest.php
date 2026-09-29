@@ -46,7 +46,7 @@ class CustomerCsvImportTest extends TestCase
 
     // --- proteção -----------------------------------------------------
 
-    public function test_importacao_exige_autenticacao(): void
+    public function test_importing_requires_authentication(): void
     {
         $this->postJson('/api/customers/import', [
             'file' => $this->csv("nome;documento;email;status\n"),
@@ -55,7 +55,7 @@ class CustomerCsvImportTest extends TestCase
 
     // --- prévia -------------------------------------------------------
 
-    public function test_previa_nao_grava_nada(): void
+    public function test_the_preview_writes_nothing(): void
     {
         $this->actingAsUser();
 
@@ -66,7 +66,7 @@ class CustomerCsvImportTest extends TestCase
         $this->assertSame(0, Customer::query()->count());
     }
 
-    public function test_previa_conta_validas_e_invalidas_antes_de_confirmar(): void
+    public function test_the_preview_counts_valid_and_invalid_rows_before_confirming(): void
     {
         $this->actingAsUser();
 
@@ -81,7 +81,7 @@ class CustomerCsvImportTest extends TestCase
             ->assertJsonPath('imported_count', 0);
     }
 
-    public function test_previa_mostra_as_primeiras_linhas_ja_normalizadas(): void
+    public function test_the_preview_shows_the_first_rows_already_normalized(): void
     {
         $this->actingAsUser();
 
@@ -99,7 +99,7 @@ class CustomerCsvImportTest extends TestCase
 
     // --- importação ---------------------------------------------------
 
-    public function test_importa_as_validas_e_nomeia_as_que_falharam(): void
+    public function test_imports_the_valid_rows_and_names_the_ones_that_failed(): void
     {
         $this->actingAsUser();
 
@@ -120,7 +120,7 @@ class CustomerCsvImportTest extends TestCase
         $this->assertStringContainsString('e-mail', $erros[1]['messages'][0]);
     }
 
-    public function test_o_erro_traz_a_linha_crua_para_o_usuario_se_reconhecer(): void
+    public function test_the_error_carries_the_raw_row_for_the_user_to_recognize(): void
     {
         $this->actingAsUser();
 
@@ -131,7 +131,7 @@ class CustomerCsvImportTest extends TestCase
         $this->assertSame('Documento Curto ME', $erro['values']['name']);
     }
 
-    public function test_documento_repetido_dentro_do_arquivo_entra_uma_vez_so(): void
+    public function test_a_document_repeated_within_the_file_is_inserted_once(): void
     {
         $this->actingAsUser();
 
@@ -151,7 +151,7 @@ class CustomerCsvImportTest extends TestCase
         );
     }
 
-    public function test_documento_que_ja_existe_no_banco_e_recusado(): void
+    public function test_a_document_that_already_exists_is_refused(): void
     {
         $this->actingAsUser();
         Customer::factory()->create(['document' => '12345678000190']);
@@ -170,7 +170,7 @@ class CustomerCsvImportTest extends TestCase
 
     // --- formato do arquivo -------------------------------------------
 
-    public function test_aceita_virgula_como_separador(): void
+    public function test_accepts_a_comma_as_the_separator(): void
     {
         $this->actingAsUser();
 
@@ -179,7 +179,7 @@ class CustomerCsvImportTest extends TestCase
         ])->assertOk()->assertJsonPath('imported_count', 1);
     }
 
-    public function test_aceita_cabecalho_em_ingles(): void
+    public function test_accepts_an_english_header(): void
     {
         $this->actingAsUser();
 
@@ -189,7 +189,7 @@ class CustomerCsvImportTest extends TestCase
     }
 
     /** O documento pode vir com máscara: o banco guarda só dígitos. */
-    public function test_documento_com_mascara_e_normalizado(): void
+    public function test_a_formatted_document_is_normalized(): void
     {
         $this->actingAsUser();
 
@@ -200,7 +200,7 @@ class CustomerCsvImportTest extends TestCase
         $this->assertSame('12345678000190', Customer::query()->value('document'));
     }
 
-    public function test_arquivo_sem_as_colunas_obrigatorias_e_recusado_inteiro(): void
+    public function test_a_file_missing_the_required_columns_is_refused_whole(): void
     {
         $this->actingAsUser();
 
@@ -211,7 +211,7 @@ class CustomerCsvImportTest extends TestCase
             ->assertJsonPath('errors.file.0', fn (string $mensagem) => str_contains($mensagem, 'documento'));
     }
 
-    public function test_recusa_arquivo_que_nao_e_csv(): void
+    public function test_refuses_a_file_that_is_not_csv(): void
     {
         $this->actingAsUser();
 
@@ -226,7 +226,7 @@ class CustomerCsvImportTest extends TestCase
      * apertado não provam streaming sozinhas, mas provam que o conjunto inteiro
      * não está sendo materializado — que é o erro que se quer impedir.
      */
-    public function test_importa_arquivo_grande_sem_acumular_em_memoria(): void
+    public function test_imports_a_large_file_without_accumulating_it_in_memory(): void
     {
         $this->actingAsUser();
 

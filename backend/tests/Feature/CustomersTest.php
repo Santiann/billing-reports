@@ -20,26 +20,26 @@ class CustomersTest extends TestCase
 
     // --- proteção -----------------------------------------------------
 
-    public function test_listagem_exige_autenticacao(): void
+    public function test_the_listing_requires_authentication(): void
     {
         $this->getJson('/api/customers')->assertUnauthorized();
     }
 
-    public function test_listagem_responde_para_usuario_autenticado(): void
+    public function test_the_listing_responds_to_an_authenticated_user(): void
     {
         $this->actingAsUser();
 
         $this->getJson('/api/customers')->assertOk();
     }
 
-    public function test_cadastro_exige_autenticacao(): void
+    public function test_creating_requires_authentication(): void
     {
         $this->postJson('/api/customers', [])->assertUnauthorized();
     }
 
     // --- listagem -----------------------------------------------------
 
-    public function test_listagem_pagina_no_banco(): void
+    public function test_the_listing_paginates_in_the_database(): void
     {
         $this->actingAsUser();
         Customer::factory()->count(25)->create();
@@ -53,7 +53,7 @@ class CustomersTest extends TestCase
         $this->assertSame(10, $response->json('meta.per_page'));
     }
 
-    public function test_segunda_pagina_traz_registros_diferentes(): void
+    public function test_the_second_page_brings_different_records(): void
     {
         $this->actingAsUser();
         Customer::factory()->count(25)->create();
@@ -64,7 +64,7 @@ class CustomersTest extends TestCase
         $this->assertEmpty(array_intersect($primeira, $segunda));
     }
 
-    public function test_per_page_tem_teto(): void
+    public function test_per_page_is_capped(): void
     {
         $this->actingAsUser();
 
@@ -74,7 +74,7 @@ class CustomersTest extends TestCase
             ->assertJsonValidationErrors('per_page');
     }
 
-    public function test_filtra_por_status(): void
+    public function test_filters_by_status(): void
     {
         $this->actingAsUser();
         Customer::factory()->count(3)->create();
@@ -85,7 +85,7 @@ class CustomersTest extends TestCase
         $this->assertSame(2, $response->json('meta.total'));
     }
 
-    public function test_busca_por_nome_documento_e_email(): void
+    public function test_searches_by_name_document_and_email(): void
     {
         $this->actingAsUser();
         Customer::factory()->create([
@@ -103,7 +103,7 @@ class CustomersTest extends TestCase
         }
     }
 
-    public function test_ordena_por_coluna_permitida(): void
+    public function test_sorts_by_an_allowed_column(): void
     {
         $this->actingAsUser();
         Customer::factory()->create(['name' => 'Zebra']);
@@ -116,7 +116,7 @@ class CustomersTest extends TestCase
         $this->assertSame('Abelha', $nomes[0]);
     }
 
-    public function test_ordenacao_por_coluna_arbitraria_e_rejeitada(): void
+    public function test_sorting_by_an_arbitrary_column_is_rejected(): void
     {
         $this->actingAsUser();
 
@@ -128,7 +128,7 @@ class CustomersTest extends TestCase
 
     // --- cadastro -----------------------------------------------------
 
-    public function test_cadastra_cliente(): void
+    public function test_creates_a_customer(): void
     {
         $this->actingAsUser();
 
@@ -142,7 +142,7 @@ class CustomersTest extends TestCase
         $this->assertDatabaseHas('customers', ['document' => '12345678901']);
     }
 
-    public function test_documento_e_gravado_sem_mascara(): void
+    public function test_the_document_is_stored_unformatted(): void
     {
         $this->actingAsUser();
 
@@ -157,7 +157,7 @@ class CustomersTest extends TestCase
         $this->assertDatabaseHas('customers', ['document' => '12345678901']);
     }
 
-    public function test_documento_duplicado_e_rejeitado(): void
+    public function test_a_duplicate_document_is_rejected(): void
     {
         $this->actingAsUser();
         Customer::factory()->create(['document' => '12345678901']);
@@ -170,7 +170,7 @@ class CustomersTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('document');
     }
 
-    public function test_cadastro_valida_campos_obrigatorios(): void
+    public function test_creating_validates_the_required_fields(): void
     {
         $this->actingAsUser();
 
@@ -181,7 +181,7 @@ class CustomersTest extends TestCase
 
     // --- visualização e edição ---------------------------------------
 
-    public function test_visualiza_um_cliente(): void
+    public function test_shows_a_customer(): void
     {
         $this->actingAsUser();
         $customer = Customer::factory()->create(['name' => 'Acme']);
@@ -191,14 +191,14 @@ class CustomersTest extends TestCase
             ->assertJsonPath('data.name', 'Acme');
     }
 
-    public function test_cliente_inexistente_responde_404(): void
+    public function test_a_missing_customer_responds_404(): void
     {
         $this->actingAsUser();
 
         $this->getJson('/api/customers/999999')->assertNotFound();
     }
 
-    public function test_edita_cliente(): void
+    public function test_edits_a_customer(): void
     {
         $this->actingAsUser();
         $customer = Customer::factory()->create(['name' => 'Nome Antigo']);
@@ -217,7 +217,7 @@ class CustomersTest extends TestCase
         ]);
     }
 
-    public function test_edicao_nao_conflita_com_o_proprio_documento(): void
+    public function test_editing_does_not_conflict_with_its_own_document(): void
     {
         $this->actingAsUser();
         $customer = Customer::factory()->create(['document' => '12345678901']);

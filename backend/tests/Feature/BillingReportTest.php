@@ -23,12 +23,12 @@ class BillingReportTest extends TestCase
 
     // --- proteção -----------------------------------------------------
 
-    public function test_relatorio_exige_autenticacao(): void
+    public function test_report_requires_authentication(): void
     {
         $this->getJson('/api/reports/billings')->assertUnauthorized();
     }
 
-    public function test_relatorio_responde_para_usuario_autenticado(): void
+    public function test_report_responds_to_an_authenticated_user(): void
     {
         $this->actingAsUser();
 
@@ -37,7 +37,7 @@ class BillingReportTest extends TestCase
 
     // --- período e base de data ---------------------------------------
 
-    public function test_periodo_por_data_de_emissao(): void
+    public function test_period_by_issue_date(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -52,7 +52,7 @@ class BillingReportTest extends TestCase
         $this->assertSame(1, $response->json('totals.count'));
     }
 
-    public function test_periodo_por_data_de_vencimento(): void
+    public function test_period_by_due_date(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -69,7 +69,7 @@ class BillingReportTest extends TestCase
         $this->assertSame(1, $response->json('totals.count'));
     }
 
-    public function test_periodo_por_data_de_pagamento_ignora_nao_pagas(): void
+    public function test_period_by_payment_date_ignores_unpaid_billings(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -85,7 +85,7 @@ class BillingReportTest extends TestCase
         $this->assertSame(1, $response->json('totals.count'));
     }
 
-    public function test_base_de_data_invalida_e_rejeitada(): void
+    public function test_an_invalid_date_basis_is_rejected(): void
     {
         $this->actingAsUser();
 
@@ -94,7 +94,7 @@ class BillingReportTest extends TestCase
             ->assertJsonValidationErrors('date_field');
     }
 
-    public function test_data_final_anterior_a_inicial_e_rejeitada(): void
+    public function test_an_end_date_before_the_start_date_is_rejected(): void
     {
         $this->actingAsUser();
 
@@ -105,7 +105,7 @@ class BillingReportTest extends TestCase
 
     // --- demais filtros -----------------------------------------------
 
-    public function test_filtra_por_cliente(): void
+    public function test_filters_by_customer(): void
     {
         $this->actingAsUser();
         $customer = Customer::factory()->create();
@@ -117,7 +117,7 @@ class BillingReportTest extends TestCase
         $this->assertSame(2, $response->json('totals.count'));
     }
 
-    public function test_filtra_por_status_paga(): void
+    public function test_filters_by_paid_status(): void
     {
         $this->actingAsUser();
         Billing::factory()->count(3)->paid()->create();
@@ -128,7 +128,7 @@ class BillingReportTest extends TestCase
         $this->assertSame(3, $response->json('totals.count'));
     }
 
-    public function test_filtra_por_status_pendente(): void
+    public function test_filters_by_pending_status(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -144,7 +144,7 @@ class BillingReportTest extends TestCase
         $this->assertSame(6, $response->json('totals.count'));
     }
 
-    public function test_filtra_por_vencida_que_e_condicao_derivada(): void
+    public function test_filters_by_overdue_which_is_a_derived_condition(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -162,7 +162,7 @@ class BillingReportTest extends TestCase
 
     // --- ordenação ----------------------------------------------------
 
-    public function test_ordena_por_valor_atualizado(): void
+    public function test_sorts_by_updated_amount(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -185,7 +185,7 @@ class BillingReportTest extends TestCase
         $this->assertGreaterThan(900.0, (float) $valores[0]);
     }
 
-    public function test_ordenacao_por_coluna_arbitraria_e_rejeitada(): void
+    public function test_sorting_by_an_arbitrary_column_is_rejected(): void
     {
         $this->actingAsUser();
 
@@ -196,7 +196,7 @@ class BillingReportTest extends TestCase
 
     // --- totalizadores ------------------------------------------------
 
-    public function test_totalizadores_cobrem_o_conjunto_inteiro_e_nao_a_pagina(): void
+    public function test_totals_cover_the_whole_set_and_not_the_page(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -217,7 +217,7 @@ class BillingReportTest extends TestCase
         $this->assertSame('2500.00', $response->json('totals.updated_amount'));
     }
 
-    public function test_totalizadores_respeitam_o_filtro(): void
+    public function test_totals_respect_the_filter(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -236,7 +236,7 @@ class BillingReportTest extends TestCase
         $this->assertSame('300.00', $response->json('totals.original_amount'));
     }
 
-    public function test_total_de_juros_soma_o_conjunto_filtrado(): void
+    public function test_total_interest_sums_the_filtered_set(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -252,7 +252,7 @@ class BillingReportTest extends TestCase
         $this->assertSame('3060.00', $response->json('totals.updated_amount'));
     }
 
-    public function test_recebido_e_pendente_sao_separados(): void
+    public function test_received_and_outstanding_are_kept_apart(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -273,7 +273,7 @@ class BillingReportTest extends TestCase
 
     // --- eco dos filtros ----------------------------------------------
 
-    public function test_resposta_ecoa_os_filtros_aplicados(): void
+    public function test_the_response_echoes_the_applied_filters(): void
     {
         $this->actingAsUser();
 
@@ -289,7 +289,7 @@ class BillingReportTest extends TestCase
         $this->assertSame('paid', $response->json('filters.status'));
     }
 
-    public function test_resposta_informa_se_o_pdf_cabe_no_teto(): void
+    public function test_the_response_says_whether_the_pdf_fits_the_cap(): void
     {
         $this->actingAsUser();
         config(['reports.pdf_max_rows' => 3]);
@@ -309,7 +309,7 @@ class BillingReportTest extends TestCase
             ->assertJsonPath('export.pdf_available', false);
     }
 
-    public function test_listagem_nao_faz_consulta_n_mais_um(): void
+    public function test_the_listing_does_not_issue_n_plus_one_queries(): void
     {
         $this->actingAsUser();
         Billing::factory()->count(10)->create();

@@ -32,7 +32,7 @@ class ReportExplainCommandTest extends TestCase
 
     // --- o que ele encontra -------------------------------------------
 
-    public function test_explica_as_consultas_do_relatorio(): void
+    public function test_explains_the_report_queries(): void
     {
         $this->cobrancas();
 
@@ -44,7 +44,7 @@ class ReportExplainCommandTest extends TestCase
     }
 
     /** O SQL vai impresso: é o que permite conferir se é o que se pensava. */
-    public function test_imprime_o_sql_e_o_plano_de_cada_consulta(): void
+    public function test_prints_the_sql_and_the_plan_of_each_query(): void
     {
         $this->cobrancas();
 
@@ -56,7 +56,7 @@ class ReportExplainCommandTest extends TestCase
             ->expectsOutputToContain('possible_keys');
     }
 
-    public function test_o_recorte_aplicado_aparece_no_cabecalho(): void
+    public function test_the_applied_scope_appears_in_the_header(): void
     {
         $cliente = Customer::factory()->create();
         Billing::factory()->create(['customer_id' => $cliente->id]);
@@ -79,7 +79,7 @@ class ReportExplainCommandTest extends TestCase
      * totalizadores — senão a agregação desapareceria justamente da ferramenta
      * feita para olhá-la.
      */
-    public function test_o_cache_dos_totalizadores_nao_esconde_a_agregacao(): void
+    public function test_the_totals_cache_does_not_hide_the_aggregation(): void
     {
         $this->cobrancas();
 
@@ -94,7 +94,7 @@ class ReportExplainCommandTest extends TestCase
     // --- EXPLAIN ANALYZE ----------------------------------------------
 
     /** Com `--analyze`, o MySQL executa e devolve o tempo real por operação. */
-    public function test_analyze_traz_o_tempo_real_de_cada_operacao(): void
+    public function test_analyze_brings_the_actual_time_of_each_operation(): void
     {
         $this->cobrancas();
 
@@ -110,7 +110,7 @@ class ReportExplainCommandTest extends TestCase
      * aplicação manda as datas como parâmetro vinculado, e a medição à mão as
      * mandou literais. Se o plano mudar, é aqui que aparece.
      */
-    public function test_literals_explica_tambem_com_os_valores_embutidos(): void
+    public function test_literals_also_explains_with_the_values_inlined(): void
     {
         $this->cobrancas();
 
@@ -134,28 +134,28 @@ class ReportExplainCommandTest extends TestCase
      * comando de diagnóstico, cair no default em silêncio faria alguém medir o
      * recorte errado e não descobrir.
      */
-    public function test_base_de_data_invalida_e_recusada(): void
+    public function test_an_invalid_date_basis_is_refused(): void
     {
         $this->artisan('report:explain', ['--date-field' => 'data_qualquer'])
             ->assertExitCode(1)
             ->expectsOutputToContain('Base da data inválida');
     }
 
-    public function test_ordenacao_invalida_e_recusada(): void
+    public function test_an_invalid_sort_is_refused(): void
     {
         $this->artisan('report:explain', ['--sort' => 'coluna_inexistente'])
             ->assertExitCode(1)
             ->expectsOutputToContain('Ordenação inválida');
     }
 
-    public function test_status_invalido_e_recusado(): void
+    public function test_an_invalid_status_is_refused(): void
     {
         $this->artisan('report:explain', ['--status' => 'quitada'])
             ->assertExitCode(1)
             ->expectsOutputToContain('Status inválido');
     }
 
-    public function test_data_invalida_e_recusada(): void
+    public function test_an_invalid_date_is_refused(): void
     {
         $this->artisan('report:explain', ['--start' => '31/02/2026'])
             ->assertExitCode(1)

@@ -20,14 +20,14 @@ class BillingPaymentTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    public function test_registro_de_pagamento_exige_autenticacao(): void
+    public function test_recording_a_payment_requires_authentication(): void
     {
         $billing = Billing::factory()->create();
 
         $this->postJson("/api/billings/{$billing->id}/payment")->assertUnauthorized();
     }
 
-    public function test_registra_pagamento_e_congela_os_juros(): void
+    public function test_records_a_payment_and_freezes_the_interest(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -51,7 +51,7 @@ class BillingPaymentTest extends TestCase
         $this->assertSame('1020.00', $billing->paid_amount);
     }
 
-    public function test_cobranca_paga_nao_continua_acumulando_juros(): void
+    public function test_a_paid_billing_stops_accruing_interest(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -82,7 +82,7 @@ class BillingPaymentTest extends TestCase
         $this->assertSame('1020.00', $seisMesesDepois['updated_amount']);
     }
 
-    public function test_juros_sao_calculados_na_data_do_pagamento_e_nao_em_hoje(): void
+    public function test_interest_is_computed_at_the_payment_date_and_not_today(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -106,7 +106,7 @@ class BillingPaymentTest extends TestCase
         $this->assertSame('9.95', $billing->paid_interest_amount);
     }
 
-    public function test_cobranca_em_dia_e_paga_sem_juros(): void
+    public function test_a_billing_within_term_is_paid_without_interest(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -126,7 +126,7 @@ class BillingPaymentTest extends TestCase
         $this->assertSame('1000.00', $billing->paid_amount);
     }
 
-    public function test_valor_pago_informado_prevalece_sobre_o_calculado(): void
+    public function test_a_supplied_paid_amount_overrides_the_computed_one(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -148,7 +148,7 @@ class BillingPaymentTest extends TestCase
         $this->assertSame('20.00', $billing->paid_interest_amount);
     }
 
-    public function test_cobranca_ja_paga_nao_pode_ser_paga_de_novo(): void
+    public function test_an_already_paid_billing_cannot_be_paid_again(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -158,7 +158,7 @@ class BillingPaymentTest extends TestCase
         $this->postJson("/api/billings/{$billing->id}/payment")->assertUnprocessable();
     }
 
-    public function test_data_de_pagamento_no_futuro_e_rejeitada(): void
+    public function test_a_payment_date_in_the_future_is_rejected(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -170,7 +170,7 @@ class BillingPaymentTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('payment_date');
     }
 
-    public function test_pagamento_anterior_a_emissao_e_rejeitado(): void
+    public function test_a_payment_before_the_issue_date_is_rejected(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -182,7 +182,7 @@ class BillingPaymentTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('payment_date');
     }
 
-    public function test_listagem_traz_valor_atualizado_calculado_em_sql(): void
+    public function test_the_listing_brings_the_updated_amount_computed_in_sql(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();

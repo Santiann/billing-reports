@@ -57,7 +57,7 @@ class PaymentIdempotencyTest extends TestCase
 
     // --- o caso que motiva tudo ---------------------------------------
 
-    public function test_a_segunda_chamada_com_a_mesma_chave_devolve_o_primeiro_resultado(): void
+    public function test_a_second_call_with_the_same_key_returns_the_first_result(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -71,7 +71,7 @@ class PaymentIdempotencyTest extends TestCase
         $this->assertSame('1020.00', $segunda->json('data.paid_amount'));
     }
 
-    public function test_o_duplo_clique_nao_gera_dois_pagamentos(): void
+    public function test_a_double_click_does_not_create_two_payments(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -91,7 +91,7 @@ class PaymentIdempotencyTest extends TestCase
      * A repetição não pode recalcular: se o segundo pedido reprocessasse, os
      * juros congelariam na data da SEGUNDA chamada.
      */
-    public function test_a_repeticao_nao_recalcula_os_juros(): void
+    public function test_a_replay_does_not_recompute_the_interest(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -116,7 +116,7 @@ class PaymentIdempotencyTest extends TestCase
      * já paga recebe 422. Idempotência é para quem repete a MESMA operação, não
      * para transformar erro em sucesso.
      */
-    public function test_sem_chave_a_segunda_tentativa_continua_recusada(): void
+    public function test_without_a_key_the_second_attempt_is_still_refused(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -127,7 +127,7 @@ class PaymentIdempotencyTest extends TestCase
     }
 
     /** Chave nova sobre cobrança já paga também é 422: a operação é outra. */
-    public function test_chave_diferente_sobre_cobranca_paga_e_recusada(): void
+    public function test_a_different_key_against_a_paid_billing_is_refused(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -138,7 +138,7 @@ class PaymentIdempotencyTest extends TestCase
     }
 
     /** O erro também é guardado: repetir uma chamada que falhou repete a falha. */
-    public function test_a_resposta_de_erro_tambem_e_repetida(): void
+    public function test_the_error_response_is_replayed_too(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -159,7 +159,7 @@ class PaymentIdempotencyTest extends TestCase
      * Mesma chave com payload diferente é bug de quem chama, e responder o
      * resultado antigo esconderia o bug. O 422 nomeia o problema.
      */
-    public function test_mesma_chave_com_payload_diferente_e_recusada(): void
+    public function test_the_same_key_with_a_different_payload_is_refused(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -172,7 +172,7 @@ class PaymentIdempotencyTest extends TestCase
             ->assertJsonPath('message', fn (string $m) => str_contains(mb_strtolower($m), 'chave'));
     }
 
-    public function test_a_mesma_chave_em_cobrancas_diferentes_e_recusada(): void
+    public function test_the_same_key_on_different_billings_is_refused(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -182,7 +182,7 @@ class PaymentIdempotencyTest extends TestCase
     }
 
     /** A chave é de quem a usou: outro usuário com a mesma chave não é repetição. */
-    public function test_a_chave_e_por_usuario(): void
+    public function test_the_key_is_scoped_per_user(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -200,7 +200,7 @@ class PaymentIdempotencyTest extends TestCase
      * Duas chamadas ao mesmo tempo: a segunda encontra a chave reservada e
      * ainda sem resposta. Responder 409 é o que impede as duas de processarem.
      */
-    public function test_chamada_concorrente_com_a_mesma_chave_responde_409(): void
+    public function test_a_concurrent_call_with_the_same_key_responds_409(): void
     {
         $this->travelTo(self::HOJE);
         $usuario = $this->actingAsUser();
@@ -222,7 +222,7 @@ class PaymentIdempotencyTest extends TestCase
     }
 
     /** Chave vencida é chave nova: guardar resposta para sempre não é opção. */
-    public function test_chave_expirada_nao_repete_a_resposta(): void
+    public function test_an_expired_key_does_not_replay_the_response(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();

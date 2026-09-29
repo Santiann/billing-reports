@@ -46,14 +46,14 @@ class BillingCsvImportTest extends TestCase
 
     // --- proteção -----------------------------------------------------
 
-    public function test_importacao_exige_autenticacao(): void
+    public function test_importing_requires_authentication(): void
     {
         $this->postJson('/api/billings/import', [
             'file' => $this->csv("documento;descricao;valor;taxa;emissao;vencimento\n"),
         ])->assertUnauthorized();
     }
 
-    public function test_previa_nao_grava_nada(): void
+    public function test_the_preview_writes_nothing(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -70,7 +70,7 @@ class BillingCsvImportTest extends TestCase
 
     // --- resolução do cliente -----------------------------------------
 
-    public function test_cliente_e_resolvido_pelo_documento(): void
+    public function test_the_customer_is_resolved_by_document(): void
     {
         $this->actingAsUser();
         $cliente = $this->cliente('12345678000190');
@@ -86,7 +86,7 @@ class BillingCsvImportTest extends TestCase
     }
 
     /** O documento pode vir com máscara, como na importação de clientes. */
-    public function test_documento_com_mascara_encontra_o_cliente(): void
+    public function test_a_formatted_document_still_finds_the_customer(): void
     {
         $this->actingAsUser();
         $cliente = $this->cliente('12345678000190');
@@ -101,7 +101,7 @@ class BillingCsvImportTest extends TestCase
         $this->assertSame($cliente->id, Billing::query()->value('customer_id'));
     }
 
-    public function test_cliente_inexistente_falha_so_na_linha_dele(): void
+    public function test_a_missing_customer_fails_only_its_own_row(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -125,7 +125,7 @@ class BillingCsvImportTest extends TestCase
 
     // --- a cobrança nasce pendente ------------------------------------
 
-    public function test_cobranca_importada_nasce_pendente(): void
+    public function test_an_imported_billing_is_born_pending(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -150,7 +150,7 @@ class BillingCsvImportTest extends TestCase
      * Aceitar criaria cobrança paga sem os valores congelados — o mesmo motivo
      * pelo qual o formulário de cadastro não tem esses campos.
      */
-    public function test_status_e_pagamento_vindos_do_arquivo_sao_ignorados(): void
+    public function test_status_and_payment_coming_from_the_file_are_ignored(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -170,7 +170,7 @@ class BillingCsvImportTest extends TestCase
 
     // --- formatos que vêm de planilha ---------------------------------
 
-    public function test_aceita_valor_no_formato_brasileiro(): void
+    public function test_accepts_an_amount_in_brazilian_format(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -188,7 +188,7 @@ class BillingCsvImportTest extends TestCase
         $this->assertSame('0.0350', $cobranca->monthly_interest_rate);
     }
 
-    public function test_aceita_data_no_formato_brasileiro(): void
+    public function test_accepts_a_date_in_brazilian_format(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -206,7 +206,7 @@ class BillingCsvImportTest extends TestCase
         $this->assertSame('2026-08-09', $cobranca->due_date->toDateString());
     }
 
-    public function test_vencimento_antes_da_emissao_e_recusado(): void
+    public function test_a_due_date_before_the_issue_date_is_refused(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -222,7 +222,7 @@ class BillingCsvImportTest extends TestCase
         $resposta->assertJsonPath('error_count', 1);
     }
 
-    public function test_arquivo_sem_as_colunas_obrigatorias_e_recusado_inteiro(): void
+    public function test_a_file_missing_the_required_columns_is_refused_whole(): void
     {
         $this->actingAsUser();
 
@@ -236,7 +236,7 @@ class BillingCsvImportTest extends TestCase
      * natural. Duas mensalidades do mesmo cliente, mesmo valor e mesmo
      * vencimento, são duas cobranças legítimas.
      */
-    public function test_linhas_identicas_geram_duas_cobrancas(): void
+    public function test_identical_rows_create_two_billings(): void
     {
         $this->actingAsUser();
         $this->cliente('12345678000190');
@@ -257,7 +257,7 @@ class BillingCsvImportTest extends TestCase
      * resolução do cliente NÃO vira uma consulta por linha. Sem o lote, este
      * arquivo dispararia mil consultas.
      */
-    public function test_importa_arquivo_grande_sem_consulta_por_linha(): void
+    public function test_imports_a_large_file_without_a_query_per_row(): void
     {
         $this->actingAsUser();
 

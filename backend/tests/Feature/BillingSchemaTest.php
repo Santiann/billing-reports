@@ -21,7 +21,7 @@ class BillingSchemaTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_estado_base_esta_pendente_e_dentro_do_prazo(): void
+    public function test_the_base_state_is_pending_and_within_term(): void
     {
         $this->travelTo('2026-06-15 12:00:00');
 
@@ -33,7 +33,7 @@ class BillingSchemaTest extends TestCase
         $this->assertNull($billing->paid_amount);
     }
 
-    public function test_overdue_vence_no_passado_e_segue_pendente(): void
+    public function test_overdue_is_due_in_the_past_and_still_pending(): void
     {
         $this->travelTo('2026-06-15 12:00:00');
 
@@ -49,7 +49,7 @@ class BillingSchemaTest extends TestCase
         $this->assertNull($billing->paid_interest_amount);
     }
 
-    public function test_paid_congela_sem_juros_por_ter_sido_paga_em_dia(): void
+    public function test_paid_freezes_without_interest_for_having_been_paid_within_term(): void
     {
         $this->travelTo('2026-06-15 12:00:00');
 
@@ -61,7 +61,7 @@ class BillingSchemaTest extends TestCase
         $this->assertSame('0.00', $billing->paid_interest_amount);
     }
 
-    public function test_paid_late_paga_depois_do_vencimento(): void
+    public function test_paid_late_pays_after_the_due_date(): void
     {
         $this->travelTo('2026-06-15 12:00:00');
 
@@ -74,7 +74,7 @@ class BillingSchemaTest extends TestCase
         $this->assertSame(30, (int) $billing->due_date->diffInDays($billing->payment_date));
     }
 
-    public function test_cobranca_pertence_a_um_cliente(): void
+    public function test_a_billing_belongs_to_a_customer(): void
     {
         $customer = Customer::factory()->create(['name' => 'Acme Ltda']);
         $billing = Billing::factory()->for($customer)->create();
@@ -83,7 +83,7 @@ class BillingSchemaTest extends TestCase
         $this->assertTrue($customer->billings->contains($billing));
     }
 
-    public function test_valores_monetarios_nao_perdem_centavo(): void
+    public function test_monetary_amounts_lose_no_cent(): void
     {
         $billing = Billing::factory()->create(['original_amount' => 1234.56]);
 
@@ -92,7 +92,7 @@ class BillingSchemaTest extends TestCase
         $this->assertSame('1234.56', $billing->fresh()->original_amount);
     }
 
-    public function test_documento_do_cliente_e_unico(): void
+    public function test_the_customer_document_is_unique(): void
     {
         Customer::factory()->create(['document' => '12345678901']);
 

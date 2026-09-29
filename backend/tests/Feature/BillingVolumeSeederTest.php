@@ -48,7 +48,7 @@ class BillingVolumeSeederTest extends TestCase
         (new BillingVolumeSeeder(total: self::COBRANCAS))->run();
     }
 
-    public function test_gera_cobrancas_pagas_em_atraso_com_juros_congelados(): void
+    public function test_generates_late_paid_billings_with_frozen_interest(): void
     {
         $this->semear();
 
@@ -73,7 +73,7 @@ class BillingVolumeSeederTest extends TestCase
      * serviço de produção na mesma data, e exigir igualdade até o centavo. Uma
      * segunda implementação da regra dentro do seeder cairia aqui.
      */
-    public function test_juros_congelados_sao_os_que_o_registro_de_pagamento_produziria(): void
+    public function test_the_frozen_interest_is_what_recording_the_payment_would_produce(): void
     {
         $this->semear();
 
@@ -110,7 +110,7 @@ class BillingVolumeSeederTest extends TestCase
         }
     }
 
-    public function test_paga_em_dia_nao_acumula_juros(): void
+    public function test_paid_within_term_accrues_no_interest(): void
     {
         $this->semear();
 
@@ -124,7 +124,7 @@ class BillingVolumeSeederTest extends TestCase
     }
 
     /** Pagamento com data futura não existe: ninguém pagou o que ainda não aconteceu. */
-    public function test_nenhum_pagamento_cai_no_futuro(): void
+    public function test_no_payment_falls_in_the_future(): void
     {
         $this->semear();
 
@@ -135,7 +135,7 @@ class BillingVolumeSeederTest extends TestCase
         $this->assertSame(0, $noFuturo);
     }
 
-    public function test_pendente_nao_tem_coluna_de_congelamento_preenchida(): void
+    public function test_a_pending_billing_has_no_frozen_column_filled(): void
     {
         $this->semear();
 
@@ -155,7 +155,7 @@ class BillingVolumeSeederTest extends TestCase
      * O critério de aceite do bloco, visto de onde quem revisa vai olhar: o
      * relatório filtrado por pagas precisa mostrar juros recebidos, não zero.
      */
-    public function test_relatorio_de_pagas_mostra_juros_recebidos(): void
+    public function test_the_paid_report_shows_the_interest_received(): void
     {
         $this->semear();
 
@@ -176,7 +176,7 @@ class BillingVolumeSeederTest extends TestCase
      * partir de um limiar, e este teste é quem avisa se o limiar um dia descer
      * até o tamanho da amostra.
      */
-    public function test_carga_pequena_nao_emite_ddl(): void
+    public function test_a_small_load_emits_no_ddl(): void
     {
         $ddl = [];
 

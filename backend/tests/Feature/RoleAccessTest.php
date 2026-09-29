@@ -57,19 +57,19 @@ class RoleAccessTest extends TestCase
         // com 404 antes de chegar ao 403, porque o auto-increment não reinicia
         // entre os testes.
         return [
-            'criar cliente' => ['post', '/api/customers'],
-            'editar cliente' => ['put', '/api/customers/{cliente}'],
-            'importar clientes' => ['post', '/api/customers/import'],
-            'criar cobrança' => ['post', '/api/billings'],
-            'editar cobrança' => ['put', '/api/billings/{cobranca}'],
-            'importar cobranças' => ['post', '/api/billings/import'],
-            'registrar pagamento' => ['post', '/api/billings/{cobranca}/payment'],
-            'estornar pagamento' => ['post', '/api/billings/{cobranca}/reversal'],
+            'create customer' => ['post', '/api/customers'],
+            'edit customer' => ['put', '/api/customers/{cliente}'],
+            'import customers' => ['post', '/api/customers/import'],
+            'create billing' => ['post', '/api/billings'],
+            'edit billing' => ['put', '/api/billings/{cobranca}'],
+            'import billings' => ['post', '/api/billings/import'],
+            'record payment' => ['post', '/api/billings/{cobranca}/payment'],
+            'reverse payment' => ['post', '/api/billings/{cobranca}/reversal'],
         ];
     }
 
     #[DataProvider('endpointsDeEscrita')]
-    public function test_consulta_nao_escreve(string $metodo, string $rota): void
+    public function test_the_read_only_role_cannot_write(string $metodo, string $rota): void
     {
         $this->comoConsulta();
 
@@ -83,7 +83,7 @@ class RoleAccessTest extends TestCase
      * A outra metade do par. Só o 403 não provaria nada — provaria o mesmo se
      * a rota estivesse quebrada para todo mundo.
      */
-    public function test_admin_escreve(): void
+    public function test_the_admin_role_can_write(): void
     {
         $this->comoAdmin();
         $cliente = Customer::factory()->create();
@@ -111,18 +111,18 @@ class RoleAccessTest extends TestCase
     public static function endpointsDeLeitura(): array
     {
         return [
-            'listar clientes' => ['/api/customers'],
-            'exibir cliente' => ['/api/customers/{cliente}'],
-            'listar cobranças' => ['/api/billings'],
-            'exibir cobrança' => ['/api/billings/{cobranca}'],
-            'trilha da cobrança' => ['/api/billings/{cobranca}/audit'],
-            'relatório' => ['/api/reports/billings'],
+            'list customers' => ['/api/customers'],
+            'show customer' => ['/api/customers/{cliente}'],
+            'list billings' => ['/api/billings'],
+            'show billing' => ['/api/billings/{cobranca}'],
+            'billing trail' => ['/api/billings/{cobranca}/audit'],
+            'report' => ['/api/reports/billings'],
             'dashboard' => ['/api/dashboard'],
         ];
     }
 
     #[DataProvider('endpointsDeLeitura')]
-    public function test_consulta_le_tudo(string $rota): void
+    public function test_the_read_only_role_reads_everything(string $rota): void
     {
         $this->comoConsulta();
         $cobranca = Billing::factory()->create();
@@ -131,7 +131,7 @@ class RoleAccessTest extends TestCase
     }
 
     /** Exportar é leitura: o arquivo é o mesmo relatório em outro formato. */
-    public function test_consulta_exporta(): void
+    public function test_the_read_only_role_can_export(): void
     {
         $this->comoConsulta();
         Billing::factory()->create();
@@ -141,7 +141,7 @@ class RoleAccessTest extends TestCase
 
     // --- a identidade do perfil ---------------------------------------
 
-    public function test_a_sessao_informa_o_perfil(): void
+    public function test_the_session_reports_the_role(): void
     {
         Sanctum::actingAs(User::factory()->create([
             'role' => UserRole::Viewer,
@@ -160,7 +160,7 @@ class RoleAccessTest extends TestCase
      * O default é o menor privilégio de propósito: um usuário criado por
      * caminho que esqueceu de definir o perfil não pode sair escrevendo.
      */
-    public function test_o_perfil_padrao_e_o_de_menor_privilegio(): void
+    public function test_the_default_role_is_the_least_privileged(): void
     {
         $usuario = User::query()->create([
             'name' => 'Sem perfil',
@@ -172,7 +172,7 @@ class RoleAccessTest extends TestCase
     }
 
     /** Sem token, o 401 continua vindo antes do 403. */
-    public function test_sem_sessao_continua_401_e_nao_403(): void
+    public function test_with_no_session_it_is_still_401_and_not_403(): void
     {
         $this->postJson('/api/customers', [])->assertUnauthorized();
     }
@@ -181,7 +181,7 @@ class RoleAccessTest extends TestCase
      * O 403 precisa explicar. Uma resposta vazia manda o usuário achar que o
      * sistema quebrou.
      */
-    public function test_a_recusa_explica_o_motivo(): void
+    public function test_the_refusal_explains_why(): void
     {
         $this->comoConsulta();
 
@@ -190,7 +190,7 @@ class RoleAccessTest extends TestCase
             ->assertJsonPath('message', fn (string $m) => str_contains($m, 'consulta'));
     }
 
-    public function test_consulta_nao_importa_arquivo(): void
+    public function test_the_read_only_role_cannot_import_a_file(): void
     {
         $this->comoConsulta();
 

@@ -38,7 +38,7 @@ class LoginRateLimitTest extends TestCase
 
     // --- força bruta contra uma conta ---------------------------------
 
-    public function test_a_sexta_tentativa_errada_na_mesma_conta_e_recusada(): void
+    public function test_the_sixth_wrong_attempt_on_the_same_account_is_refused(): void
     {
         $this->usuario();
 
@@ -50,7 +50,7 @@ class LoginRateLimitTest extends TestCase
     }
 
     /** O 429 diz quando tentar de novo, em vez de só recusar. */
-    public function test_a_recusa_informa_quanto_falta(): void
+    public function test_the_refusal_says_how_long_is_left(): void
     {
         $this->usuario();
 
@@ -73,7 +73,7 @@ class LoginRateLimitTest extends TestCase
      * fora — e a suíte, que faz login com e-mails diferentes, ficaria
      * intermitente.
      */
-    public function test_errar_numa_conta_nao_tranca_outra(): void
+    public function test_failing_on_one_account_does_not_lock_another(): void
     {
         $this->usuario('um@billing.test');
         $this->usuario('outro@billing.test');
@@ -87,7 +87,7 @@ class LoginRateLimitTest extends TestCase
     }
 
     /** Acertar a senha limpa o contador da credencial. */
-    public function test_o_login_correto_zera_a_contagem(): void
+    public function test_a_successful_login_clears_the_count(): void
     {
         $this->usuario();
 
@@ -108,7 +108,7 @@ class LoginRateLimitTest extends TestCase
      * Uma tentativa em cada e-mail nunca estoura o limite por credencial. O
      * limite por IP é o que pega esse caso.
      */
-    public function test_varredura_de_emails_do_mesmo_ip_e_recusada(): void
+    public function test_sweeping_emails_from_the_same_ip_is_refused(): void
     {
         for ($i = 1; $i <= 20; $i++) {
             $this->tentar("inexistente-{$i}@billing.test")->assertUnauthorized();
@@ -120,7 +120,7 @@ class LoginRateLimitTest extends TestCase
     // --- o que não muda -----------------------------------------------
 
     /** Payload inválido não é tentativa de autenticação: não conta. */
-    public function test_requisicao_sem_credenciais_nao_consome_o_limite(): void
+    public function test_a_request_without_credentials_does_not_consume_the_limit(): void
     {
         $this->usuario();
 

@@ -24,7 +24,7 @@ class ApiDocumentationTest extends TestCase
         return Yaml::parseFile(resource_path('openapi.yaml'));
     }
 
-    public function test_a_raiz_responde_a_documentacao_sem_autenticacao(): void
+    public function test_the_root_serves_the_documentation_without_authentication(): void
     {
         $resposta = $this->get('/');
 
@@ -34,12 +34,12 @@ class ApiDocumentationTest extends TestCase
     }
 
     /** A welcome do Laravel não pode ter sobrado. */
-    public function test_a_raiz_nao_e_mais_a_pagina_do_laravel(): void
+    public function test_the_root_is_no_longer_the_laravel_page(): void
     {
         $this->get('/')->assertDontSee('Laravel has an incredibly rich ecosystem', false);
     }
 
-    public function test_lista_a_rota_e_o_metodo_de_todos_os_endpoints(): void
+    public function test_lists_the_route_and_method_of_every_endpoint(): void
     {
         $html = $this->get('/')->getContent();
 
@@ -75,7 +75,7 @@ class ApiDocumentationTest extends TestCase
      * do path, e por $ref para components. A página tem que resolver os três,
      * senão o filtro de período simplesmente não aparece.
      */
-    public function test_mostra_os_parametros_inclusive_os_que_vem_por_referencia(): void
+    public function test_shows_the_parameters_including_the_ones_that_come_by_reference(): void
     {
         $html = $this->get('/')->getContent();
 
@@ -89,7 +89,7 @@ class ApiDocumentationTest extends TestCase
         $this->assertStringContainsString('customer_id', $html);
     }
 
-    public function test_mostra_exemplo_de_resposta(): void
+    public function test_shows_a_response_example(): void
     {
         $html = $this->get('/')->getContent();
 
@@ -99,7 +99,7 @@ class ApiDocumentationTest extends TestCase
         $this->assertStringContainsString('paid_interest_amount', $html);
     }
 
-    public function test_mostra_o_corpo_esperado_na_requisicao(): void
+    public function test_shows_the_expected_request_body(): void
     {
         $html = $this->get('/')->getContent();
 
@@ -108,7 +108,7 @@ class ApiDocumentationTest extends TestCase
     }
 
     /** O 422 do teto do PDF é decisão de projeto e precisa estar visível. */
-    public function test_mostra_os_codigos_de_erro_com_o_teto_do_pdf(): void
+    public function test_shows_the_error_codes_including_the_pdf_cap(): void
     {
         $html = $this->get('/')->getContent();
 
@@ -121,7 +121,7 @@ class ApiDocumentationTest extends TestCase
      * O arquivo cru serve para importar em Postman, Insomnia ou num gerador de
      * cliente. A página é para ler; o YAML é para usar.
      */
-    public function test_serve_a_spec_crua_para_download(): void
+    public function test_serves_the_raw_spec_for_download(): void
     {
         $resposta = $this->get('/openapi.yaml');
 

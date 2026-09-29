@@ -125,7 +125,7 @@ class OpenApiSpecTest extends TestCase
         return $operacoes;
     }
 
-    public function test_toda_rota_registrada_esta_na_spec(): void
+    public function test_every_registered_route_is_in_the_spec(): void
     {
         $documentadas = $this->operacoesDaSpec();
 
@@ -142,7 +142,7 @@ class OpenApiSpecTest extends TestCase
         ));
     }
 
-    public function test_toda_operacao_da_spec_existe_como_rota(): void
+    public function test_every_operation_in_the_spec_exists_as_a_route(): void
     {
         $sobrando = array_diff($this->operacoesDaSpec(), $this->rotasRegistradas());
 
@@ -152,7 +152,7 @@ class OpenApiSpecTest extends TestCase
         ));
     }
 
-    public function test_a_spec_declara_openapi_3_1(): void
+    public function test_the_spec_declares_openapi_3_1(): void
     {
         $spec = $this->spec();
 
@@ -164,7 +164,7 @@ class OpenApiSpecTest extends TestCase
     /**
      * Endpoint sem resposta declarada é entrada de índice, não documentação.
      */
-    public function test_toda_operacao_declara_respostas(): void
+    public function test_every_operation_declares_responses(): void
     {
         foreach ($this->operacoes() as [$onde, $operacao]) {
             $this->assertNotEmpty($operacao['summary'] ?? null, "{$onde} sem summary.");
@@ -180,7 +180,7 @@ class OpenApiSpecTest extends TestCase
      * O 401 é a resposta mais provável de quem experimenta a API pela primeira
      * vez, e a que mais confunde se não estiver documentada.
      */
-    public function test_operacao_autenticada_documenta_o_401(): void
+    public function test_an_authenticated_operation_documents_the_401(): void
     {
         foreach ($this->operacoes() as [$onde, $operacao]) {
             // `security: []` declara operação pública, como o login.
@@ -201,7 +201,7 @@ class OpenApiSpecTest extends TestCase
      * acima do limite a API recusa e orienta o CSV. Documentá-lo é o que
      * impede alguém de tratar como bug.
      */
-    public function test_o_teto_do_pdf_esta_documentado(): void
+    public function test_the_pdf_cap_is_documented(): void
     {
         $operacao = $this->spec()['paths']['/api/reports/billings/pdf']['get'];
 
@@ -222,7 +222,7 @@ class OpenApiSpecTest extends TestCase
      * Exemplo é o que transforma a spec em documentação utilizável: sem ele,
      * quem lê fica com o formato e sem a forma do dado.
      */
-    public function test_as_respostas_de_sucesso_trazem_exemplo(): void
+    public function test_the_success_responses_carry_an_example(): void
     {
         foreach ($this->operacoes() as [$onde, $operacao]) {
             foreach ($operacao['responses'] as $status => $resposta) {

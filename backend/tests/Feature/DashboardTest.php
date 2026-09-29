@@ -29,12 +29,12 @@ class DashboardTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    public function test_dashboard_exige_autenticacao(): void
+    public function test_the_dashboard_requires_authentication(): void
     {
         $this->getJson('/api/dashboard')->assertUnauthorized();
     }
 
-    public function test_indicadores_cobrem_o_mes_corrente_por_vencimento(): void
+    public function test_the_indicators_cover_the_current_month_by_due_date(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -75,7 +75,7 @@ class DashboardTest extends TestCase
      * A cobrança vencida do mês acumula juros; a que ainda vai vencer, não.
      * 1000 a 2% com 2 dias de atraso, e 500 com vencimento daqui a 8 dias.
      */
-    public function test_juros_do_periodo_somam_apenas_as_vencidas(): void
+    public function test_interest_for_the_period_sums_only_the_overdue_ones(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -105,7 +105,7 @@ class DashboardTest extends TestCase
      * Recebido vem das colunas congeladas, nunca de recálculo — é a mesma
      * regra do relatório, e o dashboard não pode discordar dele.
      */
-    public function test_recebido_vem_das_colunas_congeladas(): void
+    public function test_received_comes_from_the_frozen_columns(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -132,7 +132,7 @@ class DashboardTest extends TestCase
      * Cobrança paga não muda de valor com o tempo. Sem avançar o relógio, o
      * teste passaria mesmo se o dashboard recalculasse.
      */
-    public function test_recebido_nao_muda_com_o_tempo(): void
+    public function test_received_does_not_change_over_time(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -153,7 +153,7 @@ class DashboardTest extends TestCase
         $this->assertSame($antes, $this->getJson('/api/dashboard')->json('period.received_amount'));
     }
 
-    public function test_serie_traz_doze_meses_terminando_no_mes_corrente(): void
+    public function test_the_series_brings_twelve_months_ending_in_the_current_one(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -165,7 +165,7 @@ class DashboardTest extends TestCase
         $this->assertSame('2026-09', $serie[11]['month']);
     }
 
-    public function test_serie_separa_recebido_do_que_falta_receber(): void
+    public function test_the_series_separates_received_from_still_outstanding(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -200,7 +200,7 @@ class DashboardTest extends TestCase
      * mantém. Este teste é o que impede alguém de quebrá-la sem perceber e
      * fazer o dashboard passar a contar cobrança pendente como recebida.
      */
-    public function test_valor_pago_existe_se_e_somente_se_a_cobranca_esta_paga(): void
+    public function test_paid_amount_exists_if_and_only_if_the_billing_is_paid(): void
     {
         $this->travelTo(self::HOJE);
 

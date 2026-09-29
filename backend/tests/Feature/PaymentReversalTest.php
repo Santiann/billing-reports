@@ -83,7 +83,7 @@ class PaymentReversalTest extends TestCase
 
     // --- a cobrança volta a pendente ----------------------------------
 
-    public function test_o_estorno_devolve_a_cobranca_para_pendente(): void
+    public function test_a_reversal_returns_the_billing_to_pending(): void
     {
         $cobranca = $this->cobrancaPaga();
         $this->comoAdmin();
@@ -99,7 +99,7 @@ class PaymentReversalTest extends TestCase
         $this->assertNull($cobranca->fresh()->paid_amount);
     }
 
-    public function test_so_cobranca_paga_pode_ser_estornada(): void
+    public function test_only_a_paid_billing_can_be_reversed(): void
     {
         $this->travelTo(self::HOJE);
         $this->comoAdmin();
@@ -116,7 +116,7 @@ class PaymentReversalTest extends TestCase
      * na trilha: é o `from` da entrada de estorno. A entrada do pagamento
      * original também fica, intacta.
      */
-    public function test_os_valores_do_pagamento_estornado_ficam_na_trilha(): void
+    public function test_the_reversed_payment_amounts_stay_in_the_trail(): void
     {
         $cobranca = $this->cobrancaPaga();
         $this->comoAdmin();
@@ -154,7 +154,7 @@ class PaymentReversalTest extends TestCase
      * O pagamento que não se sustentou não aconteceu para o devedor: ele
      * continua devendo desde o vencimento, e o estorno não pode virar desconto.
      */
-    public function test_a_cobranca_estornada_volta_a_acumular_juros_desde_o_vencimento_original(): void
+    public function test_a_reversed_billing_accrues_interest_again_from_the_original_due_date(): void
     {
         $cobranca = $this->cobrancaPaga();
         $this->comoAdmin();
@@ -169,7 +169,7 @@ class PaymentReversalTest extends TestCase
     }
 
     /** A face SQL tem que concordar: a listagem e o relatório calculam no SELECT. */
-    public function test_depois_do_estorno_as_tres_telas_concordam(): void
+    public function test_after_a_reversal_the_three_screens_agree(): void
     {
         $cobranca = $this->cobrancaPaga();
         $this->comoAdmin();
@@ -185,7 +185,7 @@ class PaymentReversalTest extends TestCase
         $this->assertSame($isolada, $relatorio);
     }
 
-    public function test_a_cobranca_estornada_pode_ser_paga_de_novo_com_os_juros_da_nova_data(): void
+    public function test_a_reversed_billing_can_be_paid_again_with_the_interest_of_the_new_date(): void
     {
         $cobranca = $this->cobrancaPaga();
         $this->comoAdmin();
@@ -219,7 +219,7 @@ class PaymentReversalTest extends TestCase
      * Tudo acontece no mesmo dia: a chave vale 24 horas, e viajar de maio a
      * junho a venceria — o teste passaria pelo motivo errado.
      */
-    public function test_repetir_a_chave_do_pagamento_depois_do_estorno_nao_paga_de_novo(): void
+    public function test_replaying_the_payment_key_after_a_reversal_does_not_pay_again(): void
     {
         $this->travelTo(self::HOJE);
         $this->comoAdmin();
@@ -246,7 +246,7 @@ class PaymentReversalTest extends TestCase
      * Sem a chave, ele estornaria o SEGUNDO pagamento, que ninguém pediu para
      * estornar.
      */
-    public function test_o_retry_atrasado_do_estorno_nao_estorna_o_pagamento_seguinte(): void
+    public function test_a_late_reversal_retry_does_not_reverse_the_next_payment(): void
     {
         $this->travelTo(self::HOJE);
         $this->comoAdmin();
@@ -267,7 +267,7 @@ class PaymentReversalTest extends TestCase
 
     // --- atomicidade --------------------------------------------------
 
-    public function test_sem_trilha_o_estorno_nao_acontece(): void
+    public function test_without_the_trail_the_reversal_does_not_happen(): void
     {
         $cobranca = $this->cobrancaPaga();
         $this->comoAdmin();

@@ -25,12 +25,12 @@ class BillingReportCsvExportTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    public function test_exportacao_exige_autenticacao(): void
+    public function test_the_export_requires_authentication(): void
     {
         $this->getJson('/api/reports/billings/csv')->assertUnauthorized();
     }
 
-    public function test_responde_como_arquivo_csv_para_download(): void
+    public function test_responds_as_a_csv_file_for_download(): void
     {
         $this->actingAsUser();
 
@@ -45,7 +45,7 @@ class BillingReportCsvExportTest extends TestCase
         $this->assertStringContainsString('.csv', (string) $response->headers->get('Content-Disposition'));
     }
 
-    public function test_arquivo_traz_periodo_e_filtros_no_topo(): void
+    public function test_the_file_carries_the_period_and_filters_at_the_top(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -68,7 +68,7 @@ class BillingReportCsvExportTest extends TestCase
         $this->assertStringContainsString('Paga', $conteudo);
     }
 
-    public function test_cabecalho_reflete_cada_base_de_periodo_e_status(): void
+    public function test_the_header_reflects_each_period_basis_and_status(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -96,7 +96,7 @@ class BillingReportCsvExportTest extends TestCase
         );
     }
 
-    public function test_arquivo_traz_o_cabecalho_das_colunas(): void
+    public function test_the_file_carries_the_column_header(): void
     {
         $this->actingAsUser();
 
@@ -110,7 +110,7 @@ class BillingReportCsvExportTest extends TestCase
         }
     }
 
-    public function test_arquivo_traz_os_totalizadores_no_rodape(): void
+    public function test_the_file_carries_the_totals_in_the_footer(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -130,7 +130,7 @@ class BillingReportCsvExportTest extends TestCase
         $this->assertStringContainsString('3.060,00', $rodape);
     }
 
-    public function test_exportacao_respeita_o_filtro(): void
+    public function test_the_export_respects_the_filter(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -150,7 +150,7 @@ class BillingReportCsvExportTest extends TestCase
         $this->assertStringNotContainsString('Cliente Excluido', $conteudo);
     }
 
-    public function test_numero_de_linhas_corresponde_ao_conjunto_filtrado(): void
+    public function test_the_row_count_matches_the_filtered_set(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -216,7 +216,7 @@ class BillingReportCsvExportTest extends TestCase
         return [];
     }
 
-    public function test_exportacao_nao_pagina(): void
+    public function test_the_export_does_not_paginate(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();

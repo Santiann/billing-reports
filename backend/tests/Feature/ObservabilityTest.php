@@ -24,7 +24,7 @@ class ObservabilityTest extends TestCase
 
     // --- identificador de requisição ----------------------------------
 
-    public function test_a_resposta_traz_um_identificador_de_requisicao(): void
+    public function test_the_response_carries_a_request_identifier(): void
     {
         $identificador = $this->getJson('/api/health')
             ->assertOk()
@@ -39,7 +39,7 @@ class ObservabilityTest extends TestCase
      * Quem correlaciona é quem está na borda: o nginx já põe o seu no log de
      * acesso, e gerar outro aqui quebraria a ligação entre as duas pontas.
      */
-    public function test_o_identificador_de_fora_e_preservado(): void
+    public function test_an_identifier_from_outside_is_preserved(): void
     {
         $this->withHeader('X-Request-Id', 'id-da-borda-123')
             ->getJson('/api/health')
@@ -56,7 +56,7 @@ class ObservabilityTest extends TestCase
      * Afirmar sobre o formato exige olhar o formato — um mock do logger
      * provaria que alguém chamou `Log::warning`, não que a linha é parseável.
      */
-    public function test_a_linha_de_log_e_json_com_o_identificador_e_o_usuario(): void
+    public function test_the_log_line_is_json_with_the_identifier_and_the_user(): void
     {
         $arquivo = tempnam(sys_get_temp_dir(), 'log-json-');
 
@@ -89,7 +89,7 @@ class ObservabilityTest extends TestCase
     }
 
     /** Tentativa de login falha entra no log: é o rastro de força bruta. */
-    public function test_a_tentativa_de_login_falha_e_registrada(): void
+    public function test_a_failed_login_attempt_is_logged(): void
     {
         $arquivo = tempnam(sys_get_temp_dir(), 'log-json-');
 
@@ -114,7 +114,7 @@ class ObservabilityTest extends TestCase
 
     // --- health -------------------------------------------------------
 
-    public function test_health_responde_as_checagens(): void
+    public function test_health_responds_with_the_checks(): void
     {
         $this->getJson('/api/health')
             ->assertOk()
@@ -124,7 +124,7 @@ class ObservabilityTest extends TestCase
     }
 
     /** Sem token: o monitoramento não faz login. */
-    public function test_health_e_publico(): void
+    public function test_health_is_public(): void
     {
         $this->getJson('/api/health')->assertOk();
     }
@@ -135,7 +135,7 @@ class ObservabilityTest extends TestCase
      * Um health que responde 200 sempre é pior que nenhum: o monitoramento
      * confia nele e para de avisar.
      */
-    public function test_health_responde_503_quando_o_banco_nao_responde(): void
+    public function test_health_responds_503_when_the_database_does_not_answer(): void
     {
         DB::shouldReceive('connection')->andThrow(new RuntimeException('sem banco'));
 

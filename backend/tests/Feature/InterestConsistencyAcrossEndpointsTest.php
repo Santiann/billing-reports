@@ -34,17 +34,17 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
     {
         //        [ valor,       taxa,     dias de atraso ]
         return [
-            'em dia' => ['1000.00', '0.0200', -10],
-            'vencida há 1 dia' => ['1000.00', '0.0200', 1],
-            'vencida há 45 dias' => ['1234.57', '0.0333', 45],
-            'vencida há 400 dias' => ['987654.31', '0.0250', 400],
-            'taxa zero' => ['500.00', '0.0000', 90],
-            'centavo mínimo' => ['0.01', '0.1500', 365],
+            'within term' => ['1000.00', '0.0200', -10],
+            'overdue by 1 day' => ['1000.00', '0.0200', 1],
+            'overdue by 45 days' => ['1234.57', '0.0333', 45],
+            'overdue by 400 days' => ['987654.31', '0.0250', 400],
+            'zero rate' => ['500.00', '0.0000', 90],
+            'minimum cent' => ['0.01', '0.1500', 365],
         ];
     }
 
     #[DataProvider('cenarios')]
-    public function test_os_tres_endpoints_devolvem_o_mesmo_valor(
+    public function test_the_three_endpoints_return_the_same_amount(
         string $amount,
         string $rate,
         int $daysLate,
@@ -86,7 +86,7 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
         }
     }
 
-    public function test_totalizador_do_relatorio_bate_com_a_soma_das_linhas(): void
+    public function test_the_report_total_matches_the_sum_of_the_rows(): void
     {
         $this->travelTo(self::HOJE);
         Sanctum::actingAs(User::factory()->create());
@@ -112,7 +112,7 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
         );
     }
 
-    public function test_pagamento_na_data_exata_do_vencimento_nao_gera_juros(): void
+    public function test_a_payment_on_the_exact_due_date_generates_no_interest(): void
     {
         $this->travelTo(self::HOJE);
         Sanctum::actingAs(User::factory()->create());

@@ -81,7 +81,7 @@ class ReportTotalsCacheTest extends TestCase
 
     // --- o cache serve ------------------------------------------------
 
-    public function test_a_segunda_consulta_com_os_mesmos_filtros_nao_recalcula(): void
+    public function test_a_second_query_with_the_same_filters_does_not_recompute(): void
     {
         $this->cobranca();
 
@@ -98,7 +98,7 @@ class ReportTotalsCacheTest extends TestCase
      * mesmos, e recalculá-los a cada clique de ordenação desperdiçaria o cache
      * justamente no uso mais comum da tela.
      */
-    public function test_ordenar_e_paginar_reaproveitam_os_totais(): void
+    public function test_sorting_and_paginating_reuse_the_totals(): void
     {
         $this->cobranca();
         $this->totais();
@@ -108,7 +108,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame(0, $calculos);
     }
 
-    public function test_filtros_diferentes_nao_compartilham_totais(): void
+    public function test_different_filters_do_not_share_totals(): void
     {
         $a = $this->cliente('11111111000111');
         $b = $this->cliente('22222222000122');
@@ -125,7 +125,7 @@ class ReportTotalsCacheTest extends TestCase
     }
 
     /** O que sai do cache é exatamente o que a consulta calcularia. */
-    public function test_os_totais_do_cache_sao_os_mesmos_da_consulta(): void
+    public function test_the_cached_totals_match_the_queried_ones(): void
     {
         $this->cobranca();
         Billing::factory()->paidLate(45)->create();
@@ -143,7 +143,7 @@ class ReportTotalsCacheTest extends TestCase
 
     // --- o cache erra na hora certa -----------------------------------
 
-    public function test_o_pagamento_invalida_os_totais(): void
+    public function test_a_payment_invalidates_the_totals(): void
     {
         $cobranca = $this->cobranca();
         [$antes] = $this->totais();
@@ -157,7 +157,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame('1020.00', $depois['paid_amount']);
     }
 
-    public function test_o_estorno_invalida_os_totais(): void
+    public function test_a_reversal_invalidates_the_totals(): void
     {
         $cobranca = $this->cobranca();
         $this->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
@@ -172,7 +172,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame('0.00', $depois['paid_amount']);
     }
 
-    public function test_a_edicao_invalida_os_totais(): void
+    public function test_an_edit_invalidates_the_totals(): void
     {
         $cobranca = $this->cobranca();
         $this->totais();
@@ -193,7 +193,7 @@ class ReportTotalsCacheTest extends TestCase
     }
 
     /** Alteração fora de requisição também invalida: ela passa pela trilha. */
-    public function test_a_alteracao_pelo_console_invalida_os_totais(): void
+    public function test_a_change_from_the_console_invalidates_the_totals(): void
     {
         $cobranca = $this->cobranca();
         $this->totais();
@@ -206,7 +206,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame('3000.00', $depois['original_amount']);
     }
 
-    public function test_o_cadastro_invalida_os_totais(): void
+    public function test_creating_invalidates_the_totals(): void
     {
         $cobranca = $this->cobranca();
         $this->totais();
@@ -227,7 +227,7 @@ class ReportTotalsCacheTest extends TestCase
     }
 
     /** A importação grava por insert em lote, sem passar pelo Eloquent. */
-    public function test_a_importacao_invalida_os_totais(): void
+    public function test_an_import_invalidates_the_totals(): void
     {
         $cliente = $this->cliente('33333333000133');
         $this->cobranca($cliente);
@@ -255,7 +255,7 @@ class ReportTotalsCacheTest extends TestCase
      * Nenhuma invalidação por evento pega isto — não houve evento. É a data de
      * referência dentro da chave que faz o total de amanhã ser outro.
      */
-    public function test_a_virada_do_dia_recalcula_os_juros(): void
+    public function test_the_day_rolling_over_recomputes_the_interest(): void
     {
         $this->cobranca();
         [$hoje] = $this->totais();
@@ -272,7 +272,7 @@ class ReportTotalsCacheTest extends TestCase
     // --- os outros consumidores ---------------------------------------
 
     /** O CSV imprime os totais no rodapé, e aproveita os que a tela já calculou. */
-    public function test_a_exportacao_csv_reaproveita_os_totais_da_tela(): void
+    public function test_the_csv_export_reuses_the_totals_from_the_screen(): void
     {
         $this->cobranca();
         $this->totais();

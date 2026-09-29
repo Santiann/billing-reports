@@ -37,12 +37,12 @@ class BillingsTest extends TestCase
 
     // --- proteção -----------------------------------------------------
 
-    public function test_listagem_exige_autenticacao(): void
+    public function test_the_listing_requires_authentication(): void
     {
         $this->getJson('/api/billings')->assertUnauthorized();
     }
 
-    public function test_listagem_responde_para_usuario_autenticado(): void
+    public function test_the_listing_responds_to_an_authenticated_user(): void
     {
         $this->actingAsUser();
 
@@ -51,7 +51,7 @@ class BillingsTest extends TestCase
 
     // --- listagem -----------------------------------------------------
 
-    public function test_listagem_pagina_no_banco(): void
+    public function test_the_listing_paginates_in_the_database(): void
     {
         $this->actingAsUser();
         Billing::factory()->count(25)->create();
@@ -62,7 +62,7 @@ class BillingsTest extends TestCase
         $this->assertSame(25, $response->json('meta.total'));
     }
 
-    public function test_listagem_nao_faz_consulta_n_mais_um(): void
+    public function test_the_listing_does_not_issue_n_plus_one_queries(): void
     {
         $this->actingAsUser();
 
@@ -83,7 +83,7 @@ class BillingsTest extends TestCase
         );
     }
 
-    public function test_filtra_por_cliente(): void
+    public function test_filters_by_customer(): void
     {
         $this->actingAsUser();
         $customer = Customer::factory()->create();
@@ -95,7 +95,7 @@ class BillingsTest extends TestCase
         $this->assertSame(3, $response->json('meta.total'));
     }
 
-    public function test_filtra_por_status(): void
+    public function test_filters_by_status(): void
     {
         $this->actingAsUser();
         Billing::factory()->count(3)->create();
@@ -106,7 +106,7 @@ class BillingsTest extends TestCase
         $this->assertSame(2, $response->json('meta.total'));
     }
 
-    public function test_busca_por_descricao(): void
+    public function test_searches_by_description(): void
     {
         $this->actingAsUser();
         Billing::factory()->create(['description' => 'Consultoria tributária']);
@@ -117,7 +117,7 @@ class BillingsTest extends TestCase
         $this->assertSame(1, $response->json('meta.total'));
     }
 
-    public function test_ordenacao_por_coluna_arbitraria_e_rejeitada(): void
+    public function test_sorting_by_an_arbitrary_column_is_rejected(): void
     {
         $this->actingAsUser();
 
@@ -128,7 +128,7 @@ class BillingsTest extends TestCase
 
     // --- cadastro -----------------------------------------------------
 
-    public function test_cadastra_cobranca(): void
+    public function test_creates_a_billing(): void
     {
         $this->actingAsUser();
 
@@ -137,7 +137,7 @@ class BillingsTest extends TestCase
             ->assertJsonPath('data.description', 'Mensalidade de junho');
     }
 
-    public function test_cobranca_nasce_pendente_e_sem_pagamento(): void
+    public function test_a_billing_is_born_pending_and_unpaid(): void
     {
         $this->actingAsUser();
 
@@ -157,7 +157,7 @@ class BillingsTest extends TestCase
         $this->assertNull($billing->paid_interest_amount);
     }
 
-    public function test_vencimento_nao_pode_ser_anterior_a_emissao(): void
+    public function test_the_due_date_cannot_precede_the_issue_date(): void
     {
         $this->actingAsUser();
 
@@ -167,7 +167,7 @@ class BillingsTest extends TestCase
         ]))->assertUnprocessable()->assertJsonValidationErrors('due_date');
     }
 
-    public function test_cliente_inexistente_e_rejeitado(): void
+    public function test_a_missing_customer_is_rejected(): void
     {
         $this->actingAsUser();
 
@@ -176,7 +176,7 @@ class BillingsTest extends TestCase
             ->assertJsonValidationErrors('customer_id');
     }
 
-    public function test_cadastro_valida_campos_obrigatorios(): void
+    public function test_creating_validates_the_required_fields(): void
     {
         $this->actingAsUser();
 
@@ -190,7 +190,7 @@ class BillingsTest extends TestCase
 
     // --- visualização e edição ---------------------------------------
 
-    public function test_visualiza_uma_cobranca_com_o_cliente(): void
+    public function test_shows_a_billing_with_its_customer(): void
     {
         $this->actingAsUser();
         $customer = Customer::factory()->create(['name' => 'Acme Ltda']);
@@ -201,14 +201,14 @@ class BillingsTest extends TestCase
             ->assertJsonPath('data.customer.name', 'Acme Ltda');
     }
 
-    public function test_cobranca_inexistente_responde_404(): void
+    public function test_a_missing_billing_responds_404(): void
     {
         $this->actingAsUser();
 
         $this->getJson('/api/billings/999999')->assertNotFound();
     }
 
-    public function test_edita_cobranca_pendente(): void
+    public function test_edits_a_pending_billing(): void
     {
         $this->actingAsUser();
         $billing = Billing::factory()->create();
@@ -219,7 +219,7 @@ class BillingsTest extends TestCase
         ]))->assertOk()->assertJsonPath('data.description', 'Descrição corrigida');
     }
 
-    public function test_cobranca_paga_nao_pode_ser_editada(): void
+    public function test_a_paid_billing_cannot_be_edited(): void
     {
         $this->actingAsUser();
         $billing = Billing::factory()->paid()->create();

@@ -37,37 +37,37 @@ class InterestCalculatorTest extends TestCase
     {
         //        [ valor,      taxa,     vencimento,   pagamento ]
         return [
-            'em dia, vence amanhã' => ['1000.00', '0.0200', '2026-06-16', null],
-            'vence hoje' => ['1000.00', '0.0200', '2026-06-15', null],
-            'vencida há 1 dia' => ['1000.00', '0.0200', '2026-06-14', null],
-            'vencida há 30 dias' => ['1000.00', '0.0200', '2026-05-16', null],
-            'vencida há 400 dias' => ['1000.00', '0.0200', '2025-05-11', null],
-            'taxa zero, vencida há 90 dias' => ['1000.00', '0.0000', '2026-03-17', null],
-            'taxa alta, vencida há 45 dias' => ['1000.00', '0.1500', '2026-05-01', null],
-            'centavos quebrados' => ['1234.57', '0.0333', '2026-04-02', null],
-            'valor alto e centavo ímpar' => ['987654.31', '0.0250', '2026-01-07', null],
+            'within term, due tomorrow' => ['1000.00', '0.0200', '2026-06-16', null],
+            'due today' => ['1000.00', '0.0200', '2026-06-15', null],
+            'overdue by 1 day' => ['1000.00', '0.0200', '2026-06-14', null],
+            'overdue by 30 days' => ['1000.00', '0.0200', '2026-05-16', null],
+            'overdue by 400 days' => ['1000.00', '0.0200', '2025-05-11', null],
+            'zero rate, overdue by 90 days' => ['1000.00', '0.0000', '2026-03-17', null],
+            'high rate, overdue by 45 days' => ['1000.00', '0.1500', '2026-05-01', null],
+            'broken cents' => ['1234.57', '0.0333', '2026-04-02', null],
+            'high amount and odd cent' => ['987654.31', '0.0250', '2026-01-07', null],
             // Caso escolhido por medição, não por intuição: um varrimento de
             // 900 dias x 6 taxas x 3 valores achou 78 combinações em que a
             // divisão DECIMAL do MySQL (400/30 = 13.3333, truncado em quatro
             // casas) muda o centavo contra a divisão double. Esta é uma
             // delas, e é o caso que guarda o `/ 30e0` do compoundSql:
             // sem ele, DECIMAL da 1363158.13 e PHP da 1363158.14.
-            'divergencia decimal vs double' => ['987654.31', '0.0350', '2025-09-07', null],
+            'decimal vs double divergence' => ['987654.31', '0.0350', '2025-09-07', null],
             // Outro caso achado por varredura, e de natureza diferente do
             // anterior: aqui a conta cai EXATAMENTE no meio centavo. 4224,10
             // a 5% por 30 dias dá 4435,305. PHP arredonda meio para longe do
             // zero e dá 4435,31; o ROUND do MySQL sobre DOUBLE arredonda meio
             // para par e dá 4435,30. Varredura de 200.000 combinações achou
             // uma divergência dessas, e a base de dois milhões achou outra.
-            'empate no meio centavo' => ['4224.10', '0.0500', '2026-05-16', null],
-            'empate no meio centavo, valor alto' => ['435254.90', '0.0500', '2026-05-16', null],
-            'paga em dia' => ['1500.00', '0.0200', '2026-05-20', '2026-05-18'],
-            'paga em atraso' => ['1500.00', '0.0200', '2026-04-10', '2026-05-20'],
+            'half cent tie' => ['4224.10', '0.0500', '2026-05-16', null],
+            'half cent tie, high amount' => ['435254.90', '0.0500', '2026-05-16', null],
+            'paid within term' => ['1500.00', '0.0200', '2026-05-20', '2026-05-18'],
+            'paid late' => ['1500.00', '0.0200', '2026-04-10', '2026-05-20'],
         ];
     }
 
     #[DataProvider('casos')]
-    public function test_as_duas_faces_devolvem_o_mesmo_valor(
+    public function test_the_two_faces_return_the_same_amount(
         string $amount,
         string $rate,
         string $dueDate,
@@ -102,7 +102,7 @@ class InterestCalculatorTest extends TestCase
      *
      * 4224,10 a 5% por 30 dias = 4435,305, e meio centavo arredonda para cima.
      */
-    public function test_empate_no_meio_centavo_arredonda_para_cima(): void
+    public function test_a_half_cent_tie_rounds_up(): void
     {
         $this->travelTo(self::HOJE);
 
@@ -112,7 +112,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame('4435.31', $this->viaSql($billing->id)['updated_amount']);
     }
 
-    public function test_cobranca_em_dia_nao_acumula_juros(): void
+    public function test_a_billing_within_term_accrues_no_interest(): void
     {
         $this->travelTo(self::HOJE);
 
@@ -125,7 +125,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame(0, $calculation->daysLate);
     }
 
-    public function test_juros_compostos_conferem_com_a_formula_da_especificacao(): void
+    public function test_compound_interest_matches_the_specified_formula(): void
     {
         $this->travelTo(self::HOJE);
 
@@ -139,7 +139,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame('20.00', $calculation->interestAmount);
     }
 
-    public function test_sessenta_dias_compoem_sobre_o_primeiro_mes(): void
+    public function test_sixty_days_compound_on_top_of_the_first_month(): void
     {
         $this->travelTo(self::HOJE);
 
@@ -151,7 +151,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame('1040.40', $calculation->updatedAmount);
     }
 
-    public function test_cobranca_paga_usa_os_valores_congelados(): void
+    public function test_a_paid_billing_uses_the_frozen_amounts(): void
     {
         $this->travelTo(self::HOJE);
 
@@ -168,7 +168,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame($congelado->interestAmount, $depois->interestAmount);
     }
 
-    public function test_cobranca_paga_tambem_congela_na_face_sql(): void
+    public function test_a_paid_billing_freezes_on_the_sql_face_too(): void
     {
         $this->travelTo(self::HOJE);
 
@@ -180,7 +180,7 @@ class InterestCalculatorTest extends TestCase
         $this->assertSame($congelado, $this->viaSql($billing->id));
     }
 
-    public function test_cobranca_paga_sem_data_de_pagamento_nao_quebra(): void
+    public function test_a_paid_billing_with_no_payment_date_does_not_break(): void
     {
         $this->travelTo(self::HOJE);
 

@@ -27,12 +27,12 @@ class BillingReportPdfExportTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    public function test_exportacao_pdf_exige_autenticacao(): void
+    public function test_the_pdf_export_requires_authentication(): void
     {
         $this->getJson('/api/reports/billings/pdf')->assertUnauthorized();
     }
 
-    public function test_responde_como_arquivo_pdf_para_download(): void
+    public function test_responds_as_a_pdf_file_for_download(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -49,7 +49,7 @@ class BillingReportPdfExportTest extends TestCase
         $this->assertStringContainsString('.pdf', (string) $response->headers->get('Content-Disposition'));
     }
 
-    public function test_o_arquivo_gerado_e_mesmo_um_pdf(): void
+    public function test_the_generated_file_really_is_a_pdf(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -64,7 +64,7 @@ class BillingReportPdfExportTest extends TestCase
 
     // --- o teto ------------------------------------------------------
 
-    public function test_abaixo_do_teto_a_exportacao_funciona(): void
+    public function test_below_the_cap_the_export_works(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -75,7 +75,7 @@ class BillingReportPdfExportTest extends TestCase
         $this->get('/api/reports/billings/pdf')->assertOk();
     }
 
-    public function test_acima_do_teto_responde_422_orientando_o_csv(): void
+    public function test_above_the_cap_it_responds_422_pointing_at_the_csv(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -91,7 +91,7 @@ class BillingReportPdfExportTest extends TestCase
         $this->assertSame(5, $response->json('limit'));
     }
 
-    public function test_o_teto_considera_o_conjunto_filtrado_e_nao_a_tabela(): void
+    public function test_the_cap_considers_the_filtered_set_and_not_the_table(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -108,7 +108,7 @@ class BillingReportPdfExportTest extends TestCase
         $this->get("/api/reports/billings/pdf?customer_id={$customer->id}")->assertOk();
     }
 
-    public function test_o_teto_nao_dispara_com_o_valor_exato(): void
+    public function test_the_cap_does_not_trip_at_the_exact_value(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
@@ -120,7 +120,7 @@ class BillingReportPdfExportTest extends TestCase
         $this->get('/api/reports/billings/pdf')->assertOk();
     }
 
-    public function test_conjunto_vazio_gera_pdf_em_vez_de_erro(): void
+    public function test_an_empty_set_yields_a_pdf_instead_of_an_error(): void
     {
         $this->actingAsUser();
 
@@ -129,7 +129,7 @@ class BillingReportPdfExportTest extends TestCase
             ->assertOk();
     }
 
-    public function test_filtros_invalidos_sao_rejeitados_como_no_relatorio(): void
+    public function test_invalid_filters_are_rejected_as_in_the_report(): void
     {
         $this->actingAsUser();
 

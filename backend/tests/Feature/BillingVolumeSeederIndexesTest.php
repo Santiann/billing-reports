@@ -64,7 +64,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
      * derrubaria sete e recriaria sete — e o oitavo sumiria na primeira carga,
      * sem erro nenhum.
      */
-    public function test_a_lista_do_seeder_e_exatamente_o_que_as_migrations_criam(): void
+    public function test_the_seeder_list_is_exactly_what_the_migrations_create(): void
     {
         $this->assertEqualsCanonicalizing(
             ReportIndexes::DEFINITIONS,
@@ -72,7 +72,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
         );
     }
 
-    public function test_durante_a_carga_os_indices_nao_existem_e_a_chave_estrangeira_tem_apoio(): void
+    public function test_during_the_load_the_indexes_are_gone_and_the_foreign_key_still_has_support(): void
     {
         $durante = null;
 
@@ -89,7 +89,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
         $this->assertSame(['customer_id'], $durante[ReportIndexes::FOREIGN_KEY_SUPPORT] ?? null);
     }
 
-    public function test_depois_da_carga_a_estrutura_volta_a_ser_a_de_antes(): void
+    public function test_after_the_load_the_structure_is_back_to_what_it_was(): void
     {
         $antes = $this->indicesDeBillings();
 
@@ -104,7 +104,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
      * voltam do mesmo jeito. Sem isso, quem subisse a aplicação depois teria
      * um relatório varrendo a tabela inteira, sem erro que apontasse a causa.
      */
-    public function test_os_indices_voltam_mesmo_se_a_carga_falhar(): void
+    public function test_the_indexes_come_back_even_if_the_load_fails(): void
     {
         $antes = $this->indicesDeBillings();
 
