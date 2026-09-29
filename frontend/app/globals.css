@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 /*
- * Fundação visual — tokens.
+ * Visual foundation — tokens.
  *
- * A direção é a de um livro-razão: papel e tinta, régua em fio de cabelo no
- * lugar de sombra, e número tabular em toda coluna de dinheiro. Não é decoração
- * escolhida por gosto — é a forma que o domínio já tem. Quem confere cobrança
- * lê coluna de valor, e coluna de valor só se lê alinhada.
+ * The direction is a ledger's: paper and ink, a hairline rule instead of a
+ * shadow, and tabular figures in every money column. It is not decoration chosen
+ * by taste — it is the shape the domain already has. Whoever checks a billing
+ * reads a column of amounts, and a column of amounts can only be read aligned.
  *
- * Os tokens são SEMÂNTICOS: `--color-ink`, não `--color-slate-900`. É o que
- * permite o tema escuro existir sem uma segunda classe em cada elemento — o
- * valor muda, a interface inteira acompanha. Nenhum componente deste projeto
- * precisa de `dark:`.
+ * The tokens are SEMANTIC: `--color-ink`, not `--color-slate-900`. That is what
+ * lets the dark theme exist without a second class on every element — the value
+ * changes and the whole interface follows. No component in this project needs
+ * `dark:`.
  *
- * Cada token declara os dois temas de uma vez com `light-dark()`. A primeira
- * versão deste arquivo repetia o bloco inteiro num `@media` e de novo num
- * `[data-theme]`, e um valor saiu digitado errado na cópia — que é exatamente
- * o defeito que duplicar tabela de cor produz.
+ * Each token declares both themes at once with `light-dark()`. The first version
+ * of this file repeated the whole block in a `@media` and again in a
+ * `[data-theme]`, and one value ended up mistyped in the copy — which is exactly
+ * the defect duplicating a colour table produces.
  */
 
 @theme {
-  /* --- papel e tinta ------------------------------------------------- */
+  /* --- paper and ink ------------------------------------------------- */
 
   --color-paper: light-dark(#faf8f4, #121214);
   --color-surface: light-dark(#ffffff, #1a1a1d);
@@ -33,9 +33,10 @@
   --color-rule: light-dark(#e5e0d6, #2a2a2e);
   --color-rule-strong: light-dark(#cec6b7, #3d3d43);
 
-  /* --- estados do domínio -------------------------------------------
-     Vencida, paga e pendente são os três estados que o usuário procura na
-     tela. Cada um tem tinta e fundo próprios, para o olho achar sem ler. */
+  /* --- domain states -------------------------------------------------
+     Overdue, paid and pending are the three states the user looks for on the
+     screen. Each has its own ink and background, so the eye finds it without
+     reading. */
 
   --color-overdue: light-dark(#9d2b1e, #e58a7c);
   --color-overdue-soft: light-dark(#fbeeec, #2a1a18);
@@ -47,54 +48,54 @@
   --color-accent: light-dark(#2f5a8f, #86b0e2);
   --color-accent-soft: light-dark(#eaf0f7, #16202c);
 
-  /* --- séries de gráfico ---------------------------------------------
-     Separadas dos tons de estado acima, e não por capricho. Os tons de
-     estado vestem etiqueta, que vem com texto ao lado; preenchimento de
-     gráfico não tem texto e precisa se distinguir sozinho.
+  /* --- chart series --------------------------------------------------
+     Kept apart from the state tones above, and not on a whim. The state tones
+     dress a badge, which comes with text beside it; a chart's fill has no text
+     and has to distinguish itself on its own.
 
-     O par de estado foi reprovado no validador da skill dataviz como paleta
-     categórica: ΔE 14,6 entre verde e âmbar, abaixo do piso de 15 — difíceis
-     de separar mesmo com visão normal, e 6,7 sob protanopia. Estes passaram
-     nos seis testes, nos dois modos:
+     The state pair was rejected by the dataviz skill's validator as a
+     categorical palette: ΔE 14.6 between green and amber, below the floor of
+     15 — hard to tell apart even with normal vision, and 6.7 under protanopia.
+     These passed all six tests, in both modes:
 
-       claro   #147a58 / #c47d0c   ΔE 22,4 normal · 10,5 protan
-       escuro  #2d9d76 / #b07d20   ΔE 16,4 normal ·  9,9 deutan
+       light  #147a58 / #c47d0c   ΔE 22.4 normal · 10.5 protan
+       dark   #2d9d76 / #b07d20   ΔE 16.4 normal ·  9.9 deutan
 
-     A banda de luminosidade do modo escuro é mais estreita (L 0,48–0,67), e
-     é por isso que os passos escuros não são o clareamento dos claros. */
+     The dark mode's luminosity band is narrower (L 0.48–0.67), and that is why
+     the dark steps are not the light ones lightened. */
   --color-chart-received: light-dark(#147a58, #2d9d76);
   --color-chart-pending: light-dark(#c47d0c, #b07d20);
 
-  /* --- tipografia ----------------------------------------------------
-     Serifa no título, porque dá cara ao produto; sans humanista na
-     interface; monoespaçada no dado — id, documento e dinheiro. */
+  /* --- typography ----------------------------------------------------
+     A serif for titles, because it gives the product a face; a humanist sans
+     for the interface; monospace for data — ids, documents and money. */
 
-  --font-display: var(--fonte-display), Georgia, serif;
-  --font-sans: var(--fonte-sans), system-ui, sans-serif;
-  --font-mono: var(--fonte-mono), ui-monospace, monospace;
+  --font-display: var(--font-display-family), Georgia, serif;
+  --font-sans: var(--font-sans-family), system-ui, sans-serif;
+  --font-mono: var(--font-mono-family), ui-monospace, monospace;
 
-  /* --- forma ---------------------------------------------------------
-     Raio curto: papel pautado não tem canto redondo generoso. */
+  /* --- shape ---------------------------------------------------------
+     A short radius: ruled paper has no generous rounded corner. */
 
   --radius-sm: 3px;
   --radius-md: 5px;
   --radius-lg: 8px;
 
-  /* Sombra quase inexistente: a hierarquia vem da régua, não da elevação. */
+  /* Almost no shadow: the hierarchy comes from the rule, not from elevation. */
   --shadow-card: 0 1px 2px light-dark(rgb(27 25 23 / 0.04), rgb(0 0 0 / 0.3));
   --shadow-raised: 0 2px 10px light-dark(rgb(27 25 23 / 0.08), rgb(0 0 0 / 0.45));
 }
 
 /*
- * Qual tema vale.
+ * Which theme applies.
  *
- * `color-scheme` é o que o `light-dark()` acima consulta, e também o que faz o
- * navegador desenhar os controles nativos — barra de rolagem e seletor de data
- * — na cor certa. Sem ele, o campo de data fica branco no tema escuro.
+ * `color-scheme` is what the `light-dark()` above consults, and also what makes
+ * the browser draw the native controls — the scrollbar and the date picker — in
+ * the right colour. Without it, the date field stays white in the dark theme.
  *
- * O default segue o sistema. Os dois atributos existem desde já para que um
- * seletor de tema, quando entrar, seja só um atributo no <html> — e não uma
- * reescrita desta tabela.
+ * The default follows the system. Both attributes exist from the start so that a
+ * theme switcher, when it arrives, is just an attribute on the <html> — and not a
+ * rewrite of this table.
  */
 :root {
   color-scheme: light dark;
@@ -122,10 +123,10 @@ body {
 }
 
 /*
- * Foco visível, e só no teclado.
+ * Visible focus, and only from the keyboard.
  *
- * `:focus-visible` em vez de `:focus`: o anel aparece para quem navega por Tab
- * e some para quem clica, que é o que as duas plateias esperam.
+ * `:focus-visible` rather than `:focus`: the ring appears for whoever navigates
+ * by Tab and disappears for whoever clicks, which is what both audiences expect.
  */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent);

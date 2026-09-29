@@ -1,13 +1,13 @@
 name: billing-reports
 
-# Nomeação dos serviços — decisão deliberada, ver README:
+# Service naming — a deliberate decision, see the README:
 #
-#   backend  = nginx  (é quem responde HTTP)
-#   php      = php-fpm (fala FastCGI na 9000, não HTTP)
+#   backend  = nginx  (it is what answers HTTP)
+#   php      = php-fpm (speaks FastCGI on 9000, not HTTP)
 #
-# O CLAUDE.md fixa API_URL_INTERNAL=http://backend para Server Components. Se
-# "backend" fosse o php-fpm, esse fetch falharia — php-fpm não serve HTTP.
-# Chamar o nginx de "backend" mantém aquele contrato literalmente verdadeiro.
+# CLAUDE.md pins API_URL_INTERNAL=http://backend for Server Components. If
+# "backend" were php-fpm, that fetch would fail — php-fpm does not serve HTTP.
+# Calling nginx "backend" keeps that contract literally true.
 
 services:
   mysql:
@@ -15,11 +15,11 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-      # 1 GB cabe a tabela de cobranças inteira com os 2 milhões de linhas —
-      # 177 MB de dados e 400 MB de índices —, e não só o pedaço que o
-      # relatório toca. No default de 128 MB, a agregação de um ano relia 114
-      # mil páginas do disco por execução; de 512 MB para cima, nenhuma. A
-      # medição completa está em docs/performance.md.
+      # 1 GB holds the whole billings table with its 2 million rows — 177 MB of
+      # data and 400 MB of indexes — and not only the part the report touches. At
+      # the 128 MB default, a one-year aggregation re-read 114 thousand pages from
+      # disk per run; from 512 MB upwards, none. The full measurement is in
+      # docs/performance.md.
       - --innodb-buffer-pool-size=1G
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -28,22 +28,23 @@ services:
       MYSQL_PASSWORD: secret
     volumes:
       - mysql_data:/var/lib/mysql
-      # Cria o banco da suíte de testes no first-init. Só roda com o datadir
-      # vazio — num volume já existente, aplicar o .sql à mão.
+      # Creates the test suite's database on first init. It only runs with an
+      # empty datadir — on an existing volume, apply the .sql by hand.
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
-    # O first-init do MySQL 8 cria o datadir do zero e, em disco lento
-    # (WSL2/virtiofs), é demorado e varia: de 3min52s a 10min20s medidos nesta
-    # máquina, do "Initializing database files" ao "ready for connections" na 3306.
-    # Daí a janela de 900s — 600s chegaram a falhar por 20 segundos aqui.
+    # MySQL 8's first init creates the datadir from scratch and, on a slow disk
+    # (WSL2/virtiofs), it is lengthy and varies: from 3min52s to 10min20s measured
+    # on this machine, from "Initializing database files" to "ready for
+    # connections" on 3306. Hence the 900s window — 600s once failed by 20 seconds
+    # here.
     #
-    # Falhas dentro do start_period não consomem retries, então a janela larga
-    # não custa nada nos boots seguintes: com o volume já populado o
-    # healthcheck passa na primeira sonda.
+    # Failures inside the start_period do not consume retries, so the wide window
+    # costs nothing on subsequent boots: with the volume already populated the
+    # healthcheck passes on the first probe.
     #
-    # A sonda é por TCP de propósito. Durante o init o MySQL sobe um servidor
-    # temporário com `port: 0`, sem rede — uma sonda por socket daria "pronto"
-    # cedo demais e o backend tentaria migrar contra um banco ainda sem o
-    # usuário da aplicação.
+    # The probe goes over TCP on purpose. During the init MySQL brings up a
+    # temporary server with `port: 0`, with no networking — a socket probe would
+    # say "ready" too early and the backend would try to migrate against a
+    # database that still lacks the application's user.
     healthcheck:
       test:
         - CMD-SHELL
@@ -83,41 +84,41 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Dentro da rede do Compose o Next fala com o nginx pelo nome do serviço.
+      # Inside the Compose network Next talks to nginx by service name.
       API_URL_INTERNAL: http://backend
-      # No browser, pela porta publicada no host.
+      # In the browser, through the port published on the host.
       NEXT_PUBLIC_API_URL: http://localhost:8000
     volumes:
       - ./frontend:/app
-      # node_modules e .next ficam em volume anônimo: o bind mount acima
-      # esconderia os do container, e os binários nativos (@next/swc,
-      # lightningcss) do host não são os do Alpine.
+      # node_modules and .next live in anonymous volumes: the bind mount above
+      # would hide the container's copies, and the host's native binaries
+      # (@next/swc, lightningcss) are not Alpine's.
       - /app/node_modules
       - /app/.next
     depends_on:
       - backend
 
-  # Testes de ponta a ponta. Perfil próprio de propósito: `docker compose up -d`
-  # não sobe este serviço, que roda até terminar em vez de ficar de pé.
+  # End-to-end tests. A profile of its own on purpose: `docker compose up -d`
+  # does not start this service, which runs to completion rather than staying up.
   #
-  # A imagem é a oficial do Playwright, com os navegadores já instalados. Não
-  # dá para rodar Playwright na imagem do frontend: ela é Alpine, e os
-  # navegadores distribuídos pelo projeto são compilados contra glibc.
+  # The image is Playwright's official one, with the browsers already installed.
+  # Playwright cannot run on the frontend's image: that one is Alpine, and the
+  # browsers the project ships are compiled against glibc.
   e2e:
     profiles: ["e2e"]
     image: mcr.microsoft.com/playwright:v1.63.0-noble
     working_dir: /app
     environment:
-      # Dentro da rede do Compose a aplicação responde pelo nome do serviço.
-      # De fora, seria http://localhost:3000.
+      # Inside the Compose network the application answers by service name.
+      # From outside, it would be http://localhost:3000.
       E2E_BASE_URL: http://frontend:3000
     volumes:
       - ./frontend:/app
-      # node_modules em volume nomeado, pelo mesmo motivo do serviço frontend:
-      # o bind mount acima esconderia os do container, e binário nativo
-      # compilado para Alpine não serve aqui.
+      # node_modules in a named volume, for the same reason as the frontend
+      # service: the bind mount above would hide the container's copies, and a
+      # native binary compiled for Alpine is no use here.
       - e2e_node_modules:/app/node_modules
-    # Instala na primeira execução e reaproveita nas seguintes.
+    # Installs on the first run and reuses it on subsequent ones.
     command: >-
       sh -lc "[ -x node_modules/.bin/playwright ] || npm ci --no-audit --no-fund;
               npx playwright test"

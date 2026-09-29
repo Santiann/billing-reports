@@ -46,7 +46,7 @@ the migrations.
 
 To generate measurement volume: `make seed-volume`. How long a clean install
 takes, phase by phase, is in
-[docs/operacao.md](docs/operacao.md#quanto-demora-a-subida-do-zero), along with
+[docs/operacao.md](docs/operacao.md#how-long-a-clean-start-takes), along with
 the eleven Makefile targets and what each one does.
 
 ## Testing it
@@ -109,19 +109,19 @@ automated suite.
 | | |
 |---|---|
 | [Dashboard](docs/performance.md#dashboard) | The month's indicators and a twelve-month series, in two aggregations |
-| [CSV import](docs/modulos.md#importação-por-csv) | Customers and billings, with a preview before writing and errors row by row |
-| [Access roles](docs/modulos.md#perfis-de-acesso) | Administrator and read-only, with the barrier in the backend |
-| [Payment idempotency](docs/modulos.md#idempotência-no-pagamento) | Eight simultaneous requests produce one payment |
-| [Audit trail](docs/modulos.md#trilha-de-auditoria) | Who changed what and when, in the change's own transaction |
-| [Payment reversal](docs/modulos.md#estorno-de-pagamento) | Back to pending with interest running from the original due date |
-| [Totals cache](docs/performance.md#cache-dos-totalizadores) | A one-year scope from 12.9s to ~3s, without ever serving a stale number |
-| [`report:explain`](docs/performance.md#o-plano-de-execução-como-ferramenta) | A command that prints the plan of the report's queries |
-| [Rate limiting and structured logging](docs/operacao.md#rate-limit-no-login) | Two counts on the login; JSON logs with an id that crosses nginx |
+| [CSV import](docs/modulos.md#csv-import) | Customers and billings, with a preview before writing and errors row by row |
+| [Access roles](docs/modulos.md#access-roles) | Administrator and read-only, with the barrier in the backend |
+| [Payment idempotency](docs/modulos.md#payment-idempotency) | Eight simultaneous requests produce one payment |
+| [Audit trail](docs/modulos.md#audit-trail) | Who changed what and when, in the change's own transaction |
+| [Payment reversal](docs/modulos.md#payment-reversal) | Back to pending with interest running from the original due date |
+| [Totals cache](docs/performance.md#totals-cache) | A one-year scope from 12.9s to ~3s, without ever serving a stale number |
+| [`report:explain`](docs/performance.md#the-execution-plan-as-a-tool) | A command that prints the plan of the report's queries |
+| [Rate limiting and structured logging](docs/operacao.md#login-rate-limiting) | Two counts on the login; JSON logs with an id that crosses nginx |
 | [Health check](docs/operacao.md#health-check) | An honest 503 when a dependency goes down |
-| [Continuous integration](docs/operacao.md#integração-contínua) | Two parallel jobs: the suite and the lint |
-| [End-to-end tests](docs/testes.md#testes-de-ponta-a-ponta) | Playwright covering login, creation, payment, export and 360px |
-| [Security review](docs/operacao.md#revisão-de-segurança) | Seven fixes, and a record of what was discarded |
-| [Visual foundation](docs/frontend.md#fundação-visual) and [public page](docs/frontend.md#página-pública) | Semantic tokens, light and dark themes, and no invented numbers |
+| [Continuous integration](docs/operacao.md#continuous-integration) | Two parallel jobs: the suite and the lint |
+| [End-to-end tests](docs/testes.md#end-to-end-tests) | Playwright covering login, creation, payment, export and 360px |
+| [Security review](docs/operacao.md#security-review) | Seven fixes, and a record of what was discarded |
+| [Visual foundation](docs/frontend.md#visual-foundation) and [public page](docs/frontend.md#public-page) | Semantic tokens, light and dark themes, and no invented numbers |
 
 ---
 

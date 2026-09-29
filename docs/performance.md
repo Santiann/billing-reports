@@ -1,133 +1,134 @@
-# Performance: medições e índices
+# Performance: measurements and indexes
 
 [← README](../README.md)
 
 - [Dashboard](#dashboard)
-- [Índices](#índices)
-- [Cache dos totalizadores](#cache-dos-totalizadores)
-- [O plano de execução como ferramenta](#o-plano-de-execução-como-ferramenta)
-- [Exportação em CSV](#exportação-em-csv)
-- [Exportação em PDF](#exportação-em-pdf)
-- [Gerando volume para teste](#gerando-volume-para-teste)
+- [Indexes](#indexes)
+- [InnoDB's buffer pool](#innodbs-buffer-pool)
+- [Totals cache](#totals-cache)
+- [The execution plan as a tool](#the-execution-plan-as-a-tool)
+- [CSV export](#csv-export)
+- [PDF export](#pdf-export)
+- [Generating volume for testing](#generating-volume-for-testing)
 
 ## Dashboard
 
-A tela inicial mostra os indicadores do mês corrente e a série dos últimos doze
-meses. Uma chamada, duas consultas de agregação, **nenhuma linha carregada para
-o PHP somar** — sobre dois milhões de cobranças isso não seria lento, seria
-impossível.
+The home screen shows the current month's indicators and the last twelve months'
+series. One call, two aggregation queries, **not a single row loaded for PHP to
+sum** — over two million billings that would not be slow, it would be impossible.
 
-Medido contra a base cheia:
+Measured against the full base:
 
 | | |
 |---|---|
-| `GET /api/dashboard` | 0,66s – 0,93s |
-| **Página completa, com o SSR do Next** | **0,84s – 1,42s** |
+| `GET /api/dashboard` | 0.66s – 0.93s |
+| **The full page, with Next's SSR** | **0.84s – 1.42s** |
 
-O critério era 3 segundos. A primeira versão gastava 2,1s a 3,1s na página, e
-três medições mudaram o desenho até chegar aqui.
+The criterion was 3 seconds. The first version spent 2.1s to 3.1s on the page, and
+three measurements changed the design on the way here.
 
-### 1. O `GROUP BY` de um ano custa 5x mais que doze faixas de um mês
+### 1. A `GROUP BY` over a year costs 5x more than twelve one-month ranges
 
-A forma óbvia da série é agrupar o ano inteiro por mês:
+The obvious form of the series is to group the whole year by month:
 
 ```sql
 SELECT DATE_FORMAT(due_date, '%Y-%m'), SUM(original_amount) ...
-WHERE due_date BETWEEN ? AND ? GROUP BY 1          -- 1,75s
+WHERE due_date BETWEEN ? AND ? GROUP BY 1          -- 1.75s
 ```
 
-O `EXPLAIN` explica: a função sobre a coluna impede o MySQL de agrupar na ordem
-do índice, e ele monta tabela temporária com as 666.000 linhas do ano
-(`Using temporary`). Sem o índice de cobertura ele nem tenta — escolhe varredura
-completa dos 2.000.000, porque um terço da tabela em busca de linha sai mais
-caro que ler tudo.
+The `EXPLAIN` explains it: the function over the column stops MySQL from grouping
+in index order, and it builds a temporary table with the year's 666,000 rows
+(`Using temporary`). Without the covering index it does not even try — it picks a
+full scan of the 2,000,000, because seeking a third of the table costs more than
+reading all of it.
 
-Doze faixas estreitas unidas por `UNION ALL` — uma por mês — são doze ranges
-simples que o índice responde sem temporária:
+Twelve narrow ranges joined by `UNION ALL` — one per month — are twelve simple
+ranges the index answers without a temporary table:
 
 ```sql
 SELECT ... WHERE due_date >= '2026-09-01' AND due_date < '2026-10-01'
-UNION ALL ...                                      -- 0,33s
+UNION ALL ...                                      -- 0.33s
 ```
 
-### 2. O índice de cobertura vale 25x, e as cinco colunas são todas usadas
+### 2. The covering index is worth 25x, and all five columns are used
 
-`billings_dashboard_index` é `(due_date, status, monthly_interest_rate,
-original_amount, paid_amount)`. Os sete índices do relatório apontam para a
-linha; este **carrega os valores dentro de si**, e o `EXPLAIN` sai com
+`billings_dashboard_index` is `(due_date, status, monthly_interest_rate,
+original_amount, paid_amount)`. The report's seven indexes point at the row; this
+one **carries the values inside itself**, and the `EXPLAIN` comes out with
 `Using index`.
 
-| Consulta | Sem cobertura | Com este índice |
+| Query | Without covering | With this index |
 |---|---|---|
-| Série de 12 meses | 8,25s | **0,31s** |
-| Indicadores do mês | 0,72s | **0,07s** |
+| The 12-month series | 8.25s | **0.31s** |
+| The month's indicators | 0.72s | **0.07s** |
 
-Uma versão estreita sem `status` e sem `monthly_interest_rate` foi medida e
-descartada: economiza 21 MB e faz os indicadores voltarem de 0,07s para 0,72s,
-porque o cálculo de juros passa a buscar a taxa linha por linha.
+A narrow version without `status` and without `monthly_interest_rate` was measured
+and discarded: it saves 21 MB and takes the indicators from 0.07s back to 0.72s,
+because the interest calculation starts fetching the rate row by row.
 
-O custo está aceito e registrado: 79 MB e uma oitava árvore para manter a cada
-insert, somando à penalidade de 4,8x que os sete índices do relatório já cobram
-da carga.
+The cost is accepted and recorded: 79 MB and an eighth tree to maintain on every
+insert, adding to the 4.8x penalty the report's seven indexes already charge the
+load.
 
-### 3. O mesmo `POW` estava sendo calculado duas vezes por linha
+### 3. The same `POW` was being computed twice per row
 
-`updatedAmountSql()` e `interestAmountSql()` carregam ambos o cálculo de juros
-composto. Somados lado a lado, o MySQL executava o `POW` duas vezes em cada uma
-das 55.000 linhas do mês.
+`updatedAmountSql()` and `interestAmountSql()` both carry the compound interest
+calculation. Summed side by side, MySQL ran the `POW` twice on each of the month's
+55,000 rows.
 
-O valor atualizado passou a ser calculado uma vez numa subconsulta, e os juros
-saem dele por subtração — o que só vale porque a soma é sobre **pendente**, e em
-cobrança pendente juros é exatamente valor atualizado menos original. Em
-cobrança paga não valeria, e por isso ela entra com zero.
+The updated value is now computed once in a subquery, and the interest comes out of
+it by subtraction — which only holds because the sum is over **pending**, and on a
+pending billing interest is exactly updated value minus original. It would not hold
+on a paid billing, which is why a paid one enters as zero.
 
-**0,87s → 0,25s**, com os seis números idênticos aos de antes.
+**0.87s → 0.25s**, with all six numbers identical to before.
 
-### Os gráficos
+### The charts
 
-Dois, dos mesmos doze números — o segundo não custa consulta nenhuma:
+Two of them, from the same twelve numbers — the second costs no query at all:
 
-- **Faturado e recebido por mês**, coluna empilhada. A pergunta é parte-todo ao
-  longo do tempo: a altura inteira é o faturado do mês e o corte mostra quanto
-  virou dinheiro. Duas barras lado a lado responderiam "qual é maior", que não é
-  a pergunta.
-- **Taxa de recebimento**, linha. Mesmos números, outra leitura: eficiência de
-  cobrança é o que não se enxerga quando faturamento e recebido crescem juntos.
-  Eixo fixo de 0 a 100%, porque esticá-lo para o intervalo dos dados
-  transformaria variação de dois pontos numa montanha.
+- **Billed and received per month**, a stacked column. The question is part-to-whole
+  over time: the full height is the month's billed amount and the cut shows how much
+  of it turned into money. Two bars side by side would answer "which is bigger",
+  which is not the question.
+- **Collection rate**, a line. The same numbers, a different reading: collection
+  efficiency is what you cannot see when billing and received grow together. A fixed
+  0 to 100% axis, because stretching it to the data's range would turn a two-point
+  swing into a mountain.
 
-São SVG montados no servidor, **sem JavaScript e sem biblioteca de gráfico**. Um
-gráfico de doze números é uma figura, não uma aplicação: o destaque da coluna
-sob o cursor é CSS, e o valor exato mora no `<title>` e na tabela que fica logo
-abaixo, fechada num `<details>`.
+They are SVGs assembled on the server, **with no JavaScript and no charting
+library**. A chart of twelve numbers is a figure, not an application: highlighting
+the column under the cursor is CSS, and the exact value lives in the `<title>` and
+in the table right below, folded into a `<details>`.
 
-**A paleta das séries foi validada por script, não no olho.** O verde e o âmbar
-que as etiquetas usam foram reprovados como paleta de gráfico:
+**The series' palette was validated by script, not by eye.** The green and the amber
+the badges use were rejected as a chart palette:
 
 ```
-#1c6448 / #8a5d12   ΔE 14,6 normal · 6,7 protan   → REPROVADO
-#147a58 / #c47d0c   ΔE 22,4 normal · 10,5 protan  → aprovado (claro)
-#2d9d76 / #b07d20   ΔE 16,4 normal ·  9,9 deutan  → aprovado (escuro)
+#1c6448 / #8a5d12   ΔE 14.6 normal · 6.7 protan   → REJECTED
+#147a58 / #c47d0c   ΔE 22.4 normal · 10.5 protan  → approved (light)
+#2d9d76 / #b07d20   ΔE 16.4 normal ·  9.9 deutan  → approved (dark)
 ```
 
-Etiqueta vem com texto ao lado e sobrevive a cores próximas; preenchimento de
-gráfico não tem texto e precisa se distinguir sozinho. Os passos do tema escuro
-não são o clareamento dos claros — a banda de luminosidade aceitável é outra
-(L 0,48–0,67 contra 0,43–0,77).
+A badge comes with text beside it and survives nearby colours; a chart's fill has no
+text and has to distinguish itself on its own. The dark theme's steps are not the
+light ones lightened — the acceptable luminosity band is a different one (L 0.48–0.67
+against 0.43–0.77).
 
-Em tela estreita os gráficos **rolam na horizontal** em vez de encolher: o SVG
-escalaria o rótulo junto, e um texto de 11px viraria 5px em 360px.
+On a narrow screen the charts **scroll horizontally** rather than shrink: the SVG
+would scale the labels along with everything else, and 11px text would become 5px at
+360px.
 
 ---
 
-## Índices
+## Indexes
 
-Sete índices, cada um com a consulta que serve. O princípio é um só: **coluna
-de igualdade antes da coluna de range**. O MySQL percorre um índice composto da
-esquerda para a direita e para de usá-lo na primeira coluna de range — tudo
-depois dela vira filtro pós-leitura, não busca.
+Seven indexes, each with the query it serves. There is one principle: **the equality
+column before the range column**. MySQL walks a composite index left to right and
+stops using it at the first range column — everything after it becomes a post-read
+filter, not a seek.
 
-| Índice | Consulta que serve |
+| Index | The query it serves |
 |---|---|
 | `(issue_date)` | `WHERE issue_date BETWEEN ? AND ?` |
 | `(due_date)` | `WHERE due_date BETWEEN ? AND ?` |
@@ -135,470 +136,490 @@ depois dela vira filtro pós-leitura, não busca.
 | `(customer_id, issue_date)` | `WHERE customer_id = ? AND issue_date BETWEEN ? AND ?` |
 | `(customer_id, due_date)` | `WHERE customer_id = ? AND due_date BETWEEN ? AND ?` |
 | `(customer_id, payment_date)` | `WHERE customer_id = ? AND payment_date BETWEEN ? AND ?` |
-| `(status, due_date)` | `WHERE status = ? AND due_date BETWEEN ? AND ?` e o filtro "vencida" |
+| `(status, due_date)` | `WHERE status = ? AND due_date BETWEEN ? AND ?` and the "overdue" filter |
 
-As três datas precisam de índices separados porque o usuário escolhe qual
-delas define o período, e o MySQL não usa um índice de `due_date` para filtrar
-`issue_date`. As variantes com `customer_id` à frente existem porque a chave
-estrangeira sozinha encontra as linhas do cliente e depois testa a data linha a
-linha; com o par, a data também vira busca.
+The three dates need separate indexes because the user chooses which one defines the
+period, and MySQL will not use a `due_date` index to filter `issue_date`. The
+variants with `customer_id` in front exist because the foreign key on its own finds
+the customer's rows and then tests the date row by row; with the pair, the date
+becomes a seek too.
 
-`ReportIndexTest` afirma que os sete existem **com as colunas na ordem certa** e
-que são aplicáveis às consultas. Sem esse teste, remover um índice degradaria o
-relatório em silêncio.
+`ReportIndexTest` asserts all seven exist **with the columns in the right order** and
+that they are applicable to the queries. Without that test, removing an index would
+degrade the report in silence.
 
-### Planos de execução, antes e depois
+### Execution plans, before and after
 
-Os planos abaixo foram colhidos à mão, colando consultas no cliente do MySQL.
-A partir da etapa 2 dá para reproduzi-los com um comando —
-[`report:explain`](#o-plano-de-execução-como-ferramenta) —, que pega as
-consultas do mesmo caminho que a API usa.
+The plans below were collected by hand, pasting queries into the MySQL client. They
+can now be reproduced with a command —
+[`report:explain`](#the-execution-plan-as-a-tool) — which takes the queries from the
+same path the API uses.
 
-| Consulta | Antes | Depois |
+| Query | Before | After |
 |---|---|---|
-| período por vencimento | `ALL` · sem chave · **1.989.965 linhas** | `range` · `due_date_index` · **107.694** |
-| cliente + período | `ref` · FK · 418 | `range` · `customer_due_date_index` · **15** |
-| vencidas | `ALL` | `range` · `status_due_date_index` · 994.525 |
+| period by due date | `ALL` · no key · **1,989,965 rows** | `range` · `due_date_index` · **107,694** |
+| customer + period | `ref` · FK · 418 | `range` · `customer_due_date_index` · **15** |
+| overdue | `ALL` | `range` · `status_due_date_index` · 994,525 |
 
-### Tempo de resposta do relatório
+### The report's response time
 
-| Recorte | Antes | Depois | |
+| Scope | Before | After | |
 |---|---|---|---|
-| 1 mês + cliente | — | **0,24s** | |
-| 1 mês + vencidas | 4,21s | **1,09s** | −74% |
-| 1 mês, ordenado por valor atualizado | 3,46s | **1,84s** | −47% |
-| 1 mês | 3,80s | **2,2s** | −42% |
-| **1 ano** | **4,34s** | **6,2s** | **+43%** |
+| 1 month + customer | — | **0.24s** | |
+| 1 month + overdue | 4.21s | **1.09s** | −74% |
+| 1 month, sorted by updated value | 3.46s | **1.84s** | −47% |
+| 1 month | 3.80s | **2.2s** | −42% |
+| **1 year** | **4.34s** | **6.2s** | **+43%** |
 
-### O recorte de um ano piorou, e isso é esperado
+### The one-year scope got worse, and that is expected
 
-Não é regressão a esconder: é o limiar de seletividade.
+It is not a regression to hide: it is the selectivity threshold.
 
-Um índice de range é lido em ordem e, para cada entrada, faz um acesso
-aleatório à chave primária para buscar o resto da linha. Isso compensa enquanto
-o recorte é pequeno. O período de um ano tem **518.170 linhas, 26% da tabela** —
-acima do limiar, e meio milhão de acessos aleatórios custam mais do que uma
-leitura sequencial da tabela inteira.
+A range index is read in order and, for each entry, makes a random access to the
+primary key to fetch the rest of the row. That pays off while the scope is small. The
+one-year period has **518,170 rows, 26% of the table** — above the threshold, and half
+a million random accesses cost more than a sequential read of the whole table.
 
-Medido isoladamente, sem o ruído da API:
+Measured in isolation, without the API's noise:
 
-| Agregação | Com índice | Sem índice (`IGNORE INDEX`) |
+| Aggregation | With the index | Without it (`IGNORE INDEX`) |
 |---|---|---|
-| 1 mês (5% da tabela) | **0,96s** | 1,47s |
-| 1 ano (26% da tabela) | 2,43s | **2,32s** |
+| 1 month (5% of the table) | **0.96s** | 1.47s |
+| 1 year (26% of the table) | 2.43s | **2.32s** |
 
-O outro fator é que os totalizadores são inerentemente O(n): somar juros exige
-calcular `POW` para cada linha do conjunto filtrado. Nenhum índice evita isso —
-índice acha as linhas, não dispensa a conta.
+The other factor is that the totals are inherently O(n): summing interest requires
+computing `POW` for every row in the filtered set. No index avoids that — an index
+finds the rows, it does not remove the arithmetic.
 
-Das mitigações de produção listadas na etapa 1, o cache dos totalizadores por
-combinação de filtros foi feito na etapa 2, [com medição e estratégia de
-invalidação](#cache-dos-totalizadores). Tabela de agregados atualizada por
-evento e particionamento por data continuam sendo as alternativas para quando o
-cache não bastar — e ele não basta para a primeira consulta de cada recorte.
+Of the production mitigations listed earlier, the per-filter-combination totals cache
+was built, [with measurements and an invalidation strategy](#totals-cache). An
+aggregates table updated by events and partitioning by date remain the alternatives
+for when the cache is not enough — and it is not enough for the first query of each
+scope.
 
-### Custo em disco
+### Cost on disk
 
-| | Antes | Depois |
+| | Before | After |
 |---|---|---|
-| Dados | 107 MB | 177 MB |
-| Índices | 43 MB | **322 MB** |
+| Data | 107 MB | 177 MB |
+| Indexes | 43 MB | **322 MB** |
 
-Os índices passaram a pesar quase o dobro dos dados. Com `innodb_buffer_pool_size`
-no default de 128 MB, nada disso cabia em memória. O pool foi dimensionado na
-etapa 2, com medição — ver [Buffer pool do InnoDB](#buffer-pool-do-innodb).
+The indexes came to weigh almost twice the data. With `innodb_buffer_pool_size` at
+its default of 128 MB, none of that fitted in memory. The pool was sized later, with
+measurements — see [InnoDB's buffer pool](#innodbs-buffer-pool).
 
-A migration levou **9min38s** para construir os sete índices sobre dois milhões
-de linhas. Num ambiente limpo ela roda sobre tabela vazia e é instantânea; o
-custo aparece depois, no seeder, que passa a manter sete índices a cada insert.
+The migration took **9min38s** to build the seven indexes over two million rows. In a
+clean environment it runs over an empty table and is instant; the cost shows up
+afterwards, in the seeder, which then maintains seven indexes on every insert.
 
-### O rollback tinha um defeito
+### The rollback had a defect
 
-O índice que a chave estrangeira usava era criado automaticamente pelo InnoDB.
-Quando os compostos com `customer_id` à esquerda apareceram, **o InnoDB o
-descartou por redundância** e passou a apoiar a constraint num deles.
+The index the foreign key used was created automatically by InnoDB. When the
+composites with `customer_id` on the left appeared, **InnoDB discarded it as
+redundant** and started supporting the constraint with one of them.
 
-Consequência: derrubar os compostos no `down()` falhava com
+The consequence: dropping the composites in `down()` failed with
 
 ```
 SQLSTATE[HY000] 1553 Cannot drop index
 'billings_customer_payment_date_index': needed in a foreign key constraint
 ```
 
-O `down()` recria o índice de `customer_id` **antes** de remover os compostos.
-Verificado rodando o ciclo completo num banco descartável: depois do rollback
-restam exatamente `PRIMARY` e `billings_customer_id_foreign`, o estado
-pré-migration.
+`down()` recreates the `customer_id` index **before** removing the composites.
+Verified by running the full cycle on a throwaway database: after the rollback
+exactly `PRIMARY` and `billings_customer_id_foreign` remain, the pre-migration
+state.
 
 ---
 
-## Cache dos totalizadores
+## InnoDB's buffer pool
 
-Os totalizadores são a parte cara do relatório: somar juros exige calcular
-`POW` para cada linha do conjunto filtrado, e nenhum índice dispensa a conta. A
-partir daqui eles ficam em cache por recorte — e a maior parte do trabalho não
-foi fazer o cache acertar, foi garantir que ele **nunca sirva um número velho**.
+```yaml
+--innodb-buffer-pool-size=1G          # docker-compose.yml, mysql service
+```
 
-### Antes: 12 segundos, e não 6
+The default of 128 MB does not hold the billings table: **177 MB of data plus around
+400 MB of indexes**. At that size a one-year aggregation re-read **114,000 pages from
+disk on every run**; from 512 MB upwards, none.
 
-A medição da etapa 1 registrou 6,2 s para o recorte de um ano. Medido de novo
-antes deste commit, no mesmo recorte (vencimento em 2026, 519.986 cobranças), com
-a máquina parada: **12,1 a 14,0 s**. Consulta a consulta, pelo query log:
+The read gain costs writes, and both sides are on record:
 
-| Consulta | Tempo |
+| | Effect of the 1 GB pool on this machine |
 |---|---|
-| agregação dos totalizadores | **8,2 – 8,5 s** |
-| página de 25 linhas | 2,3 – 2,7 s |
-| `COUNT` da paginação | 0,35 s |
-| clientes da página | 1 – 2 ms |
+| The report's queries | 1.5 to 2 times faster |
+| Loading the 2,000,000 | **34% slower** |
 
-Parte do crescimento tem autor e número: os [dígitos de
-guarda](arquitetura.md#três-armadilhas-que-o-desenho-precisou-resolver) que fizeram as duas
-faces concordarem no meio centavo. Um A/B da agregação direto no MySQL, mesma
-consulta com e sem o `CAST(... AS DECIMAL(20, 6))`:
+That second number is the one worth keeping. A tweak made to speed reads up slowed
+the bulk load down, and the difference was only attributed to the pool after a
+control run on the old configuration — the strange number came first, and blaming the
+machine or the tweak before measuring would have been the easy mistake.
 
-| Expressão | Tempo | Soma atualizada |
+The load measurements in
+[indexes deferred during the load](#indexes-deferred-during-the-load) were taken
+**before** this change, on the 128 MB pool, and are labelled as such there.
+
+---
+## Totals cache
+
+The totals are the report's expensive part: summing interest requires computing
+`POW` for every row in the filtered set, and no index removes the arithmetic. From
+here on they are cached per scope — and most of the work was not making the cache
+right, it was guaranteeing it **never serves a stale number**.
+
+### Before: 12 seconds, not 6
+
+The earlier measurement recorded 6.2 s for the one-year scope. Measured again before
+this change, on the same scope (due in 2026, 519,986 billings), with the machine
+idle: **12.1 to 14.0 s**. Query by query, from the query log:
+
+| Query | Time |
+|---|---|
+| the totals aggregation | **8.2 – 8.5 s** |
+| the page of 25 rows | 2.3 – 2.7 s |
+| the pagination `COUNT` | 0.35 s |
+| the page's customers | 1 – 2 ms |
+
+Part of the growth has an author and a number: the
+[guard digits](arquitetura.md#three-traps-the-design-had-to-solve) that made the two
+faces agree on the half cent. An A/B of the aggregation straight in MySQL, the same
+query with and without the `CAST(... AS DECIMAL(20, 6))`:
+
+| Expression | Time | Updated sum |
 |---|---|---|
-| com o `CAST` (a atual) | 4,33 – 4,54 s | 2.832.396.064,22 |
-| sem o `CAST` | 2,84 – 3,17 s | 2.832.396.063,9201 |
+| with the `CAST` (the current one) | 4.33 – 4.54 s | 2,832,396,064.22 |
+| without the `CAST` | 2.84 – 3.17 s | 2,832,396,063.9201 |
 
-O `CAST` custa uns 40% da agregação, e fica: as somas diferem exatamente nos
-centavos que ele existe para acertar. O resto da distância — 4,4 s no SQL direto
-contra 8,3 s pela classe do relatório — não está explicado aqui. A diferença
-visível é que a classe manda as datas como parâmetro vinculado, e o SQL direto
-as mandou literais, o que pode mudar o plano. É exatamente o que o comando de
-`EXPLAIN` do commit seguinte existe para mostrar.
+The `CAST` costs some 40% of the aggregation, and it stays: the sums differ in
+exactly the cents it exists to get right. The rest of the distance — 4.4 s in raw SQL
+against 8.3 s through the report's class — is not explained here. The visible
+difference is that the class sends the dates as bound parameters and the raw SQL sent
+them as literals, which can change the plan. That is exactly what the `EXPLAIN`
+command exists to show.
 
-### Depois
+### After
 
-| Chamada, recorte de um ano | Tempo |
+| Call, one-year scope | Time |
 |---|---|
-| primeira, sem cache | 12,9 s |
-| seguintes, com cache | **2,9 – 3,3 s** |
-| ordenada por valor atualizado, com cache | 3,9 s |
-| primeira depois de uma escrita | 12,0 s |
+| the first, uncached | 12.9 s |
+| subsequent ones, cached | **2.9 – 3.3 s** |
+| sorted by updated value, cached | 3.9 s |
+| the first after a write | 12.0 s |
 
-Com cache, a agregação some do query log: no lugar dela entram a leitura da
-versão dos dados (1,1 ms) e a do cache (1,7 ms). O que sobra são os 2,2 s da
-página e os 0,35 s do `COUNT` — o cache não toca as linhas, e o próximo gargalo
-do recorte de um ano é a consulta da página.
+With the cache, the aggregation disappears from the query log: in its place come
+reading the data version (1.1 ms) and reading the cache (1.7 ms). What is left are
+the page's 2.2 s and the `COUNT`'s 0.35 s — the cache does not touch the rows, and
+the one-year scope's next bottleneck is the page query.
 
-### O que invalida
+### What invalidates it
 
-Os totais guardados valem para três coisas ao mesmo tempo, e qualquer uma que
-mude faz a próxima consulta recalcular:
+The stored totals hold for three things at once, and any of them changing makes the
+next query recompute:
 
-- **A versão dos dados.** Um contador numa tabela de uma linha só, que sobe a
-  cada escrita em `billings`, dentro da transação da escrita. Cadastro, edição,
-  pagamento, estorno e alteração pelo console sobem pelo observer do Eloquent;
-  a importação, que grava em lote sem passar por ele, sobe na mesma transação de
-  cada lote; o seeder de volume sobe ao terminar.
-- **A data de referência.** Os juros mudam de um dia para o outro sem escrita
-  nenhuma, e nenhuma invalidação por evento pegaria isso. A data guardada é a
-  mesma que o SQL usa — o `InterestCalculator` passou a expô-la —, e não um
-  `now()` paralelo que poderia virar o dia entre um e outro.
-- **O recorte.** Período, base da data, cliente e status. Ordenação, direção e
-  página ficam de fora: mudam quais linhas aparecem e em que ordem, não o
-  conjunto. Reordenar a tela reaproveita os totais, que é o uso mais comum.
+- **The data version.** A counter in a single-row table, which goes up on every write
+  to `billings`, inside the write's own transaction. Creating, editing, paying,
+  reversing and changing from the console all bump it through the Eloquent observer;
+  the import, which writes in batches without going through it, bumps it in each
+  batch's own transaction; the volume seeder bumps it when it finishes.
+- **The reference date.** Interest changes from one day to the next with no write at
+  all, and no event-based invalidation would catch that. The stored date is the same
+  one the SQL uses — `InterestCalculator` now exposes it — and not a parallel `now()`
+  that could roll over the day between one and the other.
+- **The scope.** Period, date basis, customer and status. Sorting, direction and page
+  are left out: they change which rows appear and in what order, not the set.
+  Reordering the screen reuses the totals, which is the most common use.
 
-Cada uma dessas invalidações tem teste, e o CSV aproveita os totais que a tela
-já calculou — o PDF também, pelo mesmo método.
+Each of those invalidations has a test, and the CSV reuses the totals the screen has
+already computed — the PDF does too, by the same route.
 
-### A primeira ideia tinha uma corrida
+### The first idea had a race
 
-A versão começou derivada dos dados, sem escrita nenhuma: `MAX(id)` de
-`billings`, que muda a cada cobrança criada, e `MAX(id)` de `billing_audits`,
-que muda a cada alteração — e a entrada da trilha é gravada na mesma transação
-da alteração desde o commit da auditoria. Custava 1 ms cada, sem trava e sem
-tabela nova.
+The version started out derived from the data, with no write at all: `MAX(id)` of
+`billings`, which changes with every billing created, and `MAX(id)` of
+`billing_audits`, which changes with every change — and the trail's entry is written
+in the change's own transaction. Each cost 1 ms, with no lock and no new table.
 
-Ela foi descartada antes de virar código, porque o autoincremento entrega ids na
-ordem de **alocação**, não na de **commit**. Duas alterações simultâneas: T1
-recebe o id 100, T2 recebe o 101, e T2 faz commit primeiro. Um leitor vê
-`MAX(id) = 101`, calcula sem a alteração de T1 e guarda. T1 faz commit — e o
-`MAX(id)` continua 101. O total sem T1 seria servido até a próxima escrita. Com
-commit custando 0,3 s neste ambiente, dois pagamentos ao mesmo tempo bastam.
+It was discarded before it became code, because auto-increment hands out ids in
+**allocation** order, not **commit** order. Two simultaneous changes: T1 gets id 100,
+T2 gets 101, and T2 commits first. A reader sees `MAX(id) = 101`, computes without
+T1's change and stores it. T1 commits — and `MAX(id)` is still 101. The total without
+T1 would be served until the next write. With a commit costing 0.3 s in this
+environment, two simultaneous payments are enough.
 
-### Uma linha travada, e o preço dela
+### One locked row, and its price
 
-O contador sobe **dentro** da transação da escrita. A linha fica travada até o
-commit, duas escritas simultâneas sobem o número em fila, e a versão cresce na
-ordem de commit — a corrida acima não tem como acontecer. Os dados novos e a
-versão nova ficam visíveis no mesmo instante.
+The counter goes up **inside** the write's transaction. The row stays locked until the
+commit, two simultaneous writes raise the number in a queue, and the version grows in
+commit order — the race above cannot happen. The new data and the new version become
+visible at the same instant.
 
-Subir o contador fora da transação, depois do commit, tiraria a fila e abriria
-duas janelas: o intervalo entre o commit dos dados e o da versão, em que o cache
-serve o total de antes, e o processo que morre entre um e outro, que deixa o
-total velho valendo até o dia virar.
+Bumping the counter outside the transaction, after the commit, would remove the queue
+and open two windows: the interval between committing the data and committing the
+version, in which the cache serves the earlier total, and the process dying between
+the two, which leaves the stale total valid until the day rolls over.
 
-O preço é a fila: **toda escrita em cobrança passa por esta linha.** Para
-pagamentos feitos por pessoas é imperceptível. Para escrita concorrente pesada —
-várias importações grandes em paralelo — vira gargalo, e aí a resposta é outra:
-tabela de agregados atualizada por evento. O `increment` do driver de cache em
-banco foi considerado e ficou de fora: ele devolve `false` quando a chave não
-existe, em vez de criá-la, e faz o próprio `SELECT ... FOR UPDATE` — a mesma
-trava, com mais passos e escondida.
+The price is the queue: **every write to a billing goes through this row.** For
+payments made by people it is imperceptible. For heavy concurrent writing — several
+large imports in parallel — it becomes a bottleneck, and then the answer is a
+different one: an aggregates table updated by events. The database cache driver's
+`increment` was considered and left out: it returns `false` when the key does not
+exist, instead of creating it, and does its own `SELECT ... FOR UPDATE` — the same
+lock, with more steps and hidden.
 
-A outra garantia é de ordem, e está no código: a versão é lida **antes** de
-calcular. Os totais guardados foram calculados sobre dados no mínimo tão novos
-quanto a versão que os acompanha. Se uma escrita entrar no meio, a versão
-corrente sobe e a entrada não é servida; o inverso — dado velho sob versão nova
-— não tem por onde acontecer.
+The other guarantee is one of order, and it is in the code: the version is read
+**before** computing. The stored totals were computed over data at least as new as the
+version accompanying them. If a write lands in between, the current version goes up
+and the entry is not served; the reverse — stale data under a new version — has no way
+to happen.
 
-### Uma entrada por recorte, e não uma por versão
+### One entry per scope, and not one per version
 
-O driver de cache em banco só apaga uma entrada vencida quando alguém a lê. Com a
-versão dentro da chave, cada escrita abandonaria uma linha na tabela de cache
-para sempre. Por isso a chave é só o recorte, e o **valor** guarda
-`{versão, data, totais}`: quando a versão ou a data não batem, a entrada é
-recalculada e sobrescrita. A tabela cresce com o número de recortes
-consultados, não com o número de escritas — 306 bytes por recorte, medido. A
-validade de um dia só existe para o recorte que ninguém mais consulta.
+The database cache driver only deletes an expired entry when someone reads it. With
+the version inside the key, every write would abandon a row in the cache table
+forever. That is why the key is the scope alone, and the **value** holds
+`{version, date, totals}`: when the version or the date do not match, the entry is
+recomputed and overwritten. The table grows with the number of scopes queried, not
+with the number of writes — 306 bytes per scope, measured. The one-day expiry only
+exists for the scope nobody queries again.
 
-O driver é o de banco, o default do projeto. Um Redis leria mais rápido, mas é
-um quinto serviço fora da stack fixa do teste — e trocar o driver depois não
-mexe na correção, que vem da tabela de versão, não do cache. Uma consulta sem
-cache paga, além da agregação, a gravação da entrada: um commit a mais.
+The driver is the database one, the project's default. Redis would read faster, but it
+is a fifth service outside the brief's fixed stack — and swapping the driver later does
+not touch correctness, which comes from the version table, not from the cache. An
+uncached query pays, on top of the aggregation, for writing the entry: one more commit.
 
 ---
 
-## O plano de execução como ferramenta
+## The execution plan as a tool
 
 ```bash
 docker compose exec php php artisan report:explain --start=2026-01-01 --end=2026-12-31
 make explain ARGS="--start=2026-01-01 --end=2026-12-31 --analyze"
 ```
 
-As medições de índice da etapa 1 foram feitas colando consultas no cliente do
-MySQL. O trabalho não era o problema: o problema é que **consulta colada à mão
-envelhece sem avisar**. Ela continua explicando bem um SQL que o código já não
-gera — e o `EXPLAIN` de uma consulta que não existe mais é pior do que nenhum,
-porque parece informação.
+The earlier index measurements were made by pasting queries into the MySQL client. The
+effort was not the problem: the problem is that **a hand-pasted query ages without
+warning**. It goes on explaining, perfectly well, SQL the code no longer generates —
+and the `EXPLAIN` of a query that no longer exists is worse than none, because it looks
+like information.
 
-O comando **não tem SQL escrito dentro dele.** Ele roda o mesmo caminho que a
-API usa, escuta o que o Eloquent mandou para o banco e explica cada consulta
-capturada. Se o relatório mudar, o comando muda junto. Foi assim que a
-`Contagem da paginação` entrou na lista: ninguém a escreveu, ela sai do
-`paginate()`, e é a única das quatro que não estava documentada.
+The command has **no SQL written inside it.** It runs the same path the API uses,
+listens to what Eloquent sent to the database and explains every captured query. If the
+report changes, the command changes with it. That is how the `pagination count` got
+onto the list: nobody wrote it, it comes out of `paginate()`, and it is the only one of
+the four that was not documented.
 
-Duas escolhas que o comando faz de propósito:
+Two choices the command makes on purpose:
 
-- **Não passa pelo cache dos totalizadores.** Chama a agregação direto, porque
-  o cache é justamente o que a ferramenta não pode enxergar — senão a consulta
-  mais cara do relatório desapareceria da ferramenta feita para olhá-la.
-- **Recusa opção inválida em voz alta.** O objeto de filtros descarta valor fora
-  da allowlist e cai no default, o que é a proteção certa para a API porque
-  esses valores viram nome de coluna em SQL. Num diagnóstico, cair no default em
-  silêncio faria alguém medir um recorte que não é o que pediu e concluir a
-  coisa errada.
+- **It does not go through the totals cache.** It calls the aggregation directly,
+  because the cache is precisely what the tool must not see — otherwise the report's
+  most expensive query would vanish from the tool built to look at it.
+- **It refuses an invalid option loudly.** The filters object discards a value outside
+  the allowlist and falls back to the default, which is the right protection for the
+  API because those values become column names in SQL. In a diagnostic, silently
+  falling back would have someone measure a scope that is not the one they asked for
+  and conclude the wrong thing.
 
-`--analyze` troca o `EXPLAIN` por `EXPLAIN ANALYZE`: o MySQL executa e devolve o
-tempo real de cada operação. `--literals` explica o mesmo SQL duas vezes, com
-parâmetro vinculado e com os valores embutidos.
+`--analyze` swaps `EXPLAIN` for `EXPLAIN ANALYZE`: MySQL executes and returns the
+actual time of each operation. `--literals` explains the same SQL twice, with bound
+parameters and with the values inlined.
 
-### O que a primeira rodada encontrou
+### What the first run found
 
-No recorte de um ano da base de 2.000.000, as quatro consultas do relatório:
+On the one-year scope of the 2,000,000 base, the report's four queries:
 
-| Consulta | `type` | Chave | Linhas estimadas | Extra |
+| Query | `type` | Key | Estimated rows | Extra |
 |---|---|---|---|---|
-| Contagem da paginação | `range` | `billings_status_due_date_index` | 221.013 | `Using index for skip scan` |
-| Página do relatório | **`ALL`** | **nenhuma** | **1.989.515** | **`Using where; Using filesort`** |
-| Clientes da página | — | (PK, 25 ids) | 25 | — |
-| Totalizadores | `range` | `billings_due_date_index` | 994.757 | `Using index condition; Using MRR` |
+| Pagination count | `range` | `billings_status_due_date_index` | 221,013 | `Using index for skip scan` |
+| The report's page | **`ALL`** | **none** | **1,989,515** | **`Using where; Using filesort`** |
+| The page's customers | — | (PK, 25 ids) | 25 | — |
+| Totals | `range` | `billings_due_date_index` | 994,757 | `Using index condition; Using MRR` |
 
-**A hipótese do commit anterior caiu.** A medição do cache deixou aberta uma
-pergunta: a aplicação manda as datas como parâmetro vinculado e a medição à mão
-as mandou literais, o que poderia mudar o plano. Com `--literals`, os planos são
-**idênticos** nas três consultas sobre `billings` — mesma chave, mesmas linhas
-estimadas, mesmo `Extra`. A diferença de tempo entre as duas medições não vem
-daí; vem do estado do buffer pool e da contenção da máquina, que neste ambiente
-move o tempo da agregação de 4 s para 27 s com a suíte rodando ao lado.
+**The previous hypothesis fell.** The cache measurement left a question open: the
+application sends the dates as bound parameters and the hand measurement sent them as
+literals, which could change the plan. With `--literals`, the plans are **identical**
+across all three queries over `billings` — same key, same estimated rows, same `Extra`.
+The time difference between the two measurements does not come from there; it comes
+from the buffer pool's state and from contention on the machine, which in this
+environment moves the aggregation's time from 4 s to 27 s with the suite running
+alongside.
 
-**E apareceu outra coisa, que não estava sendo procurada:** a consulta da página
-faz **varredura completa com filesort**, mesmo com `billings_due_date_index`
-entre as candidatas. É o que explica os 2,2 a 3,2 s que sobraram depois do cache
-dos totalizadores — o recorte de um ano é 26% da tabela, o `SELECT` pede a linha
-inteira, e o otimizador conclui que varrer sai mais barato que 520 mil acessos
-aleatórios à chave primária; aí ordena meio milhão de linhas em filesort para
-devolver 25. Achado registrado, não corrigido neste commit: a correção é índice,
-e índice tem medição própria.
+**And something else showed up, which was not being looked for:** the page query does a
+**full scan with a filesort**, even with `billings_due_date_index` among the candidates.
+That is what explains the 2.2 to 3.2 s left over after the totals cache — the one-year
+scope is 26% of the table, the `SELECT` asks for the whole row, and the optimiser
+concludes scanning is cheaper than 520 thousand random accesses to the primary key; then
+it sorts half a million rows in a filesort to return 25. A finding recorded, not fixed
+here: the fix is an index, and an index has a measurement of its own.
 
-### `--analyze`: onde o tempo vai, operação por operação
+### `--analyze`: where the time goes, operation by operation
 
-Com a máquina parada, no mesmo recorte de um ano. A leitura é de dentro para
-fora — a operação mais interna acontece primeiro:
+With the machine idle, on the same one-year scope. It reads from the inside out — the
+innermost operation happens first:
 
 ```
-── Página do relatório · executada em 2.416 ms
+── The report's page · executed in 2,416 ms
 -> Limit: 25 row(s)                                    (actual time=2811..2811 rows=25)
     -> Sort: due_date DESC, id, limit input to 25       (actual time=2811..2811 rows=25)
-        -> Filter: due_date entre 01/01 e 31/12         (actual time=0.174..2576 rows=519986)
+        -> Filter: due_date between 01/01 and 31/12     (actual time=0.174..2576 rows=519986)
             -> Table scan on billings                   (actual time=0.169..2273 rows=2e+6)
 ```
 
-Dois milhões de linhas lidas para entregar 25: a varredura sozinha custa
-2.273 ms, o filtro deixa 519.986 e a ordenação é sobre esse meio milhão.
+Two million rows read to deliver 25: the scan alone costs 2,273 ms, the filter leaves
+519,986 and the sort is over that half million.
 
 ```
-── Totalizadores · executada em 8.583 ms
+── Totals · executed in 8,583 ms
 -> Aggregate: sum(...), count(0)                       (actual time=9262..9262 rows=1)
     -> Index range scan using billings_due_date_index   (actual time=28..5776 rows=519986)
 ```
 
-Aqui o índice é usado: 5.776 ms para percorrer as 519.986 linhas do recorte, e o
-resto até 9.262 ms é a conta — `POW` e `CAST` por linha, que nenhum índice
-dispensa.
+Here the index is used: 5,776 ms to walk the scope's 519,986 rows, and the rest up to
+9,262 ms is the arithmetic — `POW` and `CAST` per row, which no index removes.
 
 ```
-── Contagem da paginação · executada em 362 ms
+── Pagination count · executed in 362 ms
 -> Aggregate: count(0)                                 (actual time=478..478 rows=1)
     -> Covering index skip scan on billings            (actual time=0.121..334 rows=519986)
 ```
 
-Duas leituras a fazer neste último. A primeira é que 519.986 linhas em 334 ms
-mostram o que um índice de cobertura faz: nenhuma volta à tabela. A segunda é que
-a estimativa do otimizador para esse caminho era **221.013 linhas contra 519.986
-reais** — errada por 2,4x, e ainda assim o caminho escolhido foi o mais barato
-dos três.
+Two readings on that last one. The first is that 519,986 rows in 334 ms show what a
+covering index does: no trips back to the table. The second is that the optimiser's
+estimate for that path was **221,013 rows against 519,986 real ones** — wrong by 2.4x,
+and still the chosen path was the cheapest of the three.
 
-Um aviso sobre os números do `--analyze`: a instrumentação cobra. As mesmas
-consultas medidas sem ela deram 362, 2.416 e 8.583 ms, contra 478, 2.811 e
-9.262 ms com ela. Serve para ver a forma e a proporção, não para cravar o tempo
-absoluto.
+A warning about `--analyze`'s numbers: the instrumentation charges. The same queries
+measured without it gave 362, 2,416 and 8,583 ms, against 478, 2,811 and 9,262 ms with
+it. It is there to show the shape and the proportion, not to pin down absolute time.
 
-### A contagem da paginação usa um índice que ninguém pediu
+### The pagination count uses an index nobody asked for
 
-`billings_status_due_date_index` existe para o filtro de vencidas. A contagem
-não filtra status nenhum, e o MySQL o usa mesmo assim, em **skip scan**: ele
-percorre o índice uma vez por valor distinto da primeira coluna — `pending` e
-`paid` — e dentro de cada um aproveita o range de `due_date`. Duas passadas por
-um índice estreito custam menos que uma pelo índice de `due_date` largo, e a
-estimativa de linhas cai de 994 mil para 221 mil.
+`billings_status_due_date_index` exists for the overdue filter. The count filters no
+status at all, and MySQL uses it anyway, in a **skip scan**: it walks the index once per
+distinct value of the first column — `pending` and `paid` — and inside each one takes
+advantage of `due_date`'s range. Two passes over a narrow index cost less than one over
+the wide `due_date` index, and the row estimate drops from 994 thousand to 221 thousand.
 
 ---
+## CSV export
 
-## Exportação em CSV
+`GET /api/reports/billings/csv`, and on the frontend the **Exportar CSV** button on the
+report screen.
 
-`GET /api/reports/billings/csv`, e no frontend o botão **Exportar CSV** da tela
-do relatório.
+The file carries, in this order: the selected period and the applied filters at the top,
+the column header, the rows, and the totals in the footer.
 
-O arquivo traz, nesta ordem: período selecionado e filtros aplicados no topo,
-o cabeçalho das colunas, as linhas, e os totalizadores no rodapé.
+### Streaming, and the proof that it is streaming
 
-### Streaming, e a prova de que é streaming
+`lazy()` walking the result in blocks of a thousand, writing row by row into
+`php://output` inside a `StreamedResponse`. The set never exists whole in memory.
 
-`lazy()` percorrendo o resultado em blocos de mil, escrevendo linha a linha em
-`php://output` dentro de um `StreamedResponse`. O conjunto nunca existe inteiro
-em memória.
-
-Alegar isso é fácil; a medição contra a base de dois milhões:
+Claiming that is easy; the measurement against the two-million base:
 
 | | |
 |---|---|
-| Recorte | 1 mês — 56.680 cobranças |
-| **Tempo até o primeiro byte** | **0,88s** |
-| Tempo total | 55,6s |
-| Arquivo | 4,96 MB, 56.692 linhas |
+| Scope | 1 month — 56,680 billings |
+| **Time to first byte** | **0.88s** |
+| Total time | 55.6s |
+| File | 4.96 MB, 56,692 rows |
 
-O primeiro byte sai em menos de um segundo enquanto o arquivo inteiro leva
-quase um minuto. Numa implementação que montasse o conjunto antes de responder,
-os dois números seriam iguais — é essa distância que prova o streaming.
+The first byte leaves in under a second while the whole file takes nearly a minute. In
+an implementation that assembled the set before responding, the two numbers would be
+equal — that distance is what proves the streaming.
 
-A memória confirma. Amostrada a cada 12 segundos durante uma exportação de três
-meses (~170 mil linhas):
+Memory confirms it. Sampled every 12 seconds during a three-month export (~170 thousand
+rows):
 
 ```
-antes    70,9 MB
-t+12s    80,3 MB      t+48s    80,3 MB
-t+24s    80,7 MB      t+60s    80,1 MB
-t+36s    80,3 MB      t+72s    80,6 MB
+before   70.9 MB
+t+12s    80.3 MB      t+48s    80.3 MB
+t+24s    80.7 MB      t+60s    80.1 MB
+t+36s    80.3 MB      t+72s    80.6 MB
 ```
 
-Plana. Acumular em array mostraria a curva subindo até o fim.
+Flat. Accumulating into an array would show the curve climbing to the end.
 
-### Onde o tempo é gasto
+### Where the time goes
 
-Não é o `OFFSET` da paginação interna — medido, ele custa o mesmo em qualquer
-profundidade, porque o índice de período já restringe o conjunto:
+It is not the internal pagination's `OFFSET` — measured, it costs the same at any depth,
+because the period index already narrows the set:
 
 | | |
 |---|---|
-| `LIMIT 1000 OFFSET 0` | 0,34s |
-| `LIMIT 1000 OFFSET 55000` | 0,31s |
+| `LIMIT 1000 OFFSET 0` | 0.34s |
+| `LIMIT 1000 OFFSET 55000` | 0.31s |
 
-Os 57 blocos somam cerca de 18s de banco. O restante é PHP: hidratar 56 mil
-models Eloquent e instanciar Carbon para cada data. Dá cerca de mil linhas por
-segundo.
+The 57 blocks add up to about 18s of database time. The rest is PHP: hydrating 56
+thousand Eloquent models and instantiating Carbon for each date. That comes to about a
+thousand rows a second.
 
-A otimização de produção seria ler linhas cruas com `DB::table()` e um join, em
-vez de models — troca-se a conveniência do domínio (o enum de status, o
-`isOverdue()`) por velocidade. Não foi feita aqui porque o requisito é não
-estourar memória, e isso está cumprido e medido.
+The production optimisation would be reading raw rows with `DB::table()` and a join
+instead of models — trading the domain's convenience (the status enum, `isOverdue()`)
+for speed. It was not done here because the requirement is not to blow the memory, and
+that is met and measured.
 
-### Formato do arquivo
+### The file's format
 
-Delimitador **ponto e vírgula** e decimais com vírgula, mais BOM UTF-8. Quem
-abre um relatório de faturamento abre no Excel em português, onde a vírgula é
-separador decimal e o ponto e vírgula é o delimitador esperado. Sem o BOM, o
-Excel lê UTF-8 como Latin-1 e os acentos viram lixo.
+A **semicolon** delimiter and decimals with a comma, plus a UTF-8 BOM. Whoever opens a
+billing report opens it in Excel in Portuguese, where the comma is the decimal separator
+and the semicolon is the expected delimiter. Without the BOM, Excel reads UTF-8 as
+Latin-1 and the accents turn to garbage.
 
-É uma escolha pelo destinatário, não pelo parser: para consumo programático, o
-CSV padrão com vírgula seria melhor.
+It is a choice made for the recipient, not for the parser: for programmatic consumption,
+standard comma-separated CSV would be better.
 
-### O download passa por Route Handler
+### The download goes through a Route Handler
 
-O browser não tem o token — ele vive num cookie `httpOnly` — então não consegue
-chamar o endpoint de exportação por conta própria. O Route Handler do Next
-anexa o `Bearer` e repassa o corpo.
+The browser does not have the token — it lives in an `httpOnly` cookie — so it cannot
+call the export endpoint on its own. Next's Route Handler attaches the `Bearer` and
+passes the body through.
 
-O corpo é repassado **sem ser lido**: `upstream.body` é um `ReadableStream`, e
-consumi-lo para reenviar depois guardaria o arquivo inteiro na memória do Next,
-anulando o streaming do backend. Verificado: o download pelo Next mantém o
-primeiro byte em 0,69s contra 2,38s de total.
+The body is passed through **unread**: `upstream.body` is a `ReadableStream`, and
+consuming it to resend afterwards would hold the whole file in Next's memory, undoing the
+backend's streaming. Verified: downloading through Next keeps the first byte at 0.69s
+against a total of 2.38s.
 
 ---
 
-## Exportação em PDF
+## PDF export
 
-`GET /api/reports/billings/pdf`, e o botão **Exportar PDF** na tela do
-relatório. Mesmo conteúdo do CSV: período e filtros no cabeçalho, as linhas, e
-os totalizadores.
+`GET /api/reports/billings/pdf`, and the **Exportar PDF** button on the report screen.
+The same content as the CSV: the period and filters in the header, the rows, and the
+totals.
 
-Biblioteca: **`barryvdh/laravel-dompdf`**. PHP puro, sem binário externo — o
-que evita embarcar um Chrome no container, como exigiria a alternativa baseada
-em Browsershot.
+The library: **`barryvdh/laravel-dompdf`**. Pure PHP, no external binary — which avoids
+shipping a Chrome inside the container, as the Browsershot-based alternative would
+require.
 
-### O PDF tem teto, e o teto saiu de medição
+### The PDF has a cap, and the cap came from measurement
 
-Diferente do CSV, aqui **não existe streaming**, e isso é da natureza do
-formato: um PDF precisa ser paginado e montado inteiro antes de existir, porque
-não há como emitir a página 1 sem saber quantas páginas haverá.
+Unlike the CSV, there is **no streaming** here, and that is the nature of the format: a
+PDF has to be paginated and assembled whole before it exists, because there is no way to
+emit page 1 without knowing how many pages there will be.
 
-O plano inicial deste projeto previa teto de 5.000 linhas. **Ele não sobreviveu
-à medição.** Consumo real do dompdf neste relatório, com nove colunas:
+This project's initial plan called for a cap of 5,000 rows. **It did not survive
+measurement.** dompdf's real consumption on this report, with nine columns:
 
-| Linhas | Pico de memória | Tempo | PDF gerado |
+| Rows | Peak memory | Time | PDF produced |
 |---|---|---|---|
-| 500 | 184 MB | 9,6s | 926 KB |
-| 1.000 | 420 MB | 17,9s | 994 KB |
-| 2.000 | 1.164 MB | 56,5s | 1.131 KB |
-| 3.500 | 2.965 MB | 210,0s | 1.337 KB |
-| 5.000 | **estourou 3 GB** | — | — |
+| 500 | 184 MB | 9.6s | 926 KB |
+| 1,000 | 420 MB | 17.9s | 994 KB |
+| 2,000 | 1,164 MB | 56.5s | 1,131 KB |
+| 3,500 | 2,965 MB | 210.0s | 1,337 KB |
+| 5,000 | **blew past 3 GB** | — | — |
 
-O crescimento é **superlinear**: dobrar as linhas quase triplica a memória. A
-causa é estrutural — o dompdf constrói uma árvore de frames e um *cellmap* da
-tabela inteira antes de paginar, então uma tabela de 5.000 linhas por 9 colunas
-vira 45.000 células como objetos vivos simultaneamente.
+The growth is **superlinear**: doubling the rows almost triples the memory. The cause is
+structural — dompdf builds a frame tree and a *cellmap* of the whole table before
+paginating, so a table of 5,000 rows by 9 columns becomes 45,000 cells as live objects
+simultaneously.
 
-Decisões que saíram daí:
+The decisions that came out of it:
 
-- **`pdf_max_rows` é 1.000**, não 5.000. É o maior valor que cabe com folga.
-- **`memory_limit` é 512M** e `max_execution_time` é 120s, em
-  `backend/docker/php/app.ini`. O default de 128M derrubava a geração com 1.810
-  linhas, e o de 30s a derrubava antes mesmo da memória acabar.
+- **`pdf_max_rows` is 1,000**, not 5,000. It is the largest value that fits
+  comfortably.
+- **`memory_limit` is 512M** and `max_execution_time` is 120s, in
+  `backend/docker/php/app.ini`. The default of 128M brought the generation down at 1,810
+  rows, and the 30s default brought it down before the memory even ran out.
 
-Acima do teto a resposta é **422**, com uma mensagem que diz o que fazer:
+Above the cap the response is **422**, with a message that says what to do:
 
 ```json
 {
@@ -608,217 +629,210 @@ Acima do teto a resposta é **422**, com uma mensagem que diz o que fazer:
 }
 ```
 
-A contagem vem da consulta de agregação, então **nenhuma linha é carregada para
-descobrir que são linhas demais** — e os mesmos totais são reaproveitados no
-rodapé do documento, sem consulta extra.
+The count comes from the aggregation query, so **not a single row is loaded to discover
+there are too many rows** — and the same totals are reused in the document's footer, with
+no extra query.
 
-A tela não deixa o usuário descobrir isso batendo num erro: o relatório informa
-`export.pdf_available`, e o botão vira um aviso apontando o CSV quando o
-recorte não cabe.
+The screen does not let the user discover this by hitting an error: the report reports
+`export.pdf_available`, and the button becomes a notice pointing at the CSV when the
+scope does not fit.
 
-Se o PDF em volume fosse requisito real, o caminho seria trocar o renderizador
-por um que escreva página a página — `FPDF` ou `TCPDF` emitem linhas
-incrementalmente e não montam a árvore inteira. Ficaria mais feio e mais
-trabalhoso de estilizar, o que é a troca certa quando o volume manda.
+If PDF at volume were a real requirement, the route would be to swap the renderer for one
+that writes page by page — `FPDF` or `TCPDF` emit rows incrementally and do not assemble
+the whole tree. It would be uglier and more laborious to style, which is the right trade
+when volume demands it.
 
-### Testes
+### Tests
 
-Nenhuma asserção sobre o binário: o conteúdo de um PDF gerado não é estável
-nem legível, e testar bytes seria teste que quebra sozinho. O que se afirma é o
-status, o `Content-Type`, a assinatura `%PDF-`, e sobretudo o comportamento do
-teto — inclusive que ele considera o **conjunto filtrado** e não o tamanho da
-tabela, senão a exportação seria inútil em qualquer base real.
+No assertion about the binary: a generated PDF's content is neither stable nor readable,
+and testing bytes would be a test that breaks on its own. What gets asserted is the
+status, the `Content-Type`, the `%PDF-` signature, and above all the cap's behaviour —
+including that it considers the **filtered set** and not the table's size, otherwise the
+export would be useless on any real base.
 
 ---
 
-## Gerando volume para teste
+## Generating volume for testing
 
 ```bash
 make seed-volume                            # docker compose exec php php artisan db:seed --class=BillingVolumeSeeder
 ```
 
-Gera 5.000 clientes e **2.000.000 de cobranças**, com emissão espalhada por
-três anos para o filtro de período ter o que recortar. Para uma amostra menor:
+It generates 5,000 customers and **2,000,000 billings**, with issue dates spread over
+three years so the period filter has something to narrow. For a smaller sample:
 
 ```bash
 docker compose exec -e BILLING_SEED_COUNT=100000 php     php artisan db:seed --class=BillingVolumeSeeder
 ```
 
-Ele não roda no `DatabaseSeeder` de propósito — são minutos de execução, e não
-é o que se quer a cada `db:seed`.
+It deliberately does not run from `DatabaseSeeder` — it is minutes of execution, and not
+what you want on every `db:seed`.
 
-**Insert em lote, não factory registro a registro.** A factory instancia um
-model, dispara eventos e faz um INSERT por linha; em dois milhões de cobranças
-a diferença não é percentual, é de ordem de grandeza. O seeder monta arrays
-crus e insere em blocos de 2.000, com o query log desligado — sem isso o
-Laravel acumula cada INSERT em memória e o processo morre antes do fim.
+**Batch inserts, not a factory record by record.** The factory instantiates a model,
+fires events and issues one INSERT per row; over two million billings the difference is
+not a percentage, it is an order of magnitude. The seeder builds raw arrays and inserts
+in blocks of 2,000, with the query log turned off — without that Laravel accumulates
+every INSERT in memory and the process dies before the end.
 
-O seeder **trunca as tabelas antes de começar**. Os documentos dos clientes são
-sequenciais para garantir unicidade sem consultar o banco, o que tornaria uma
-segunda execução impossível sobre os dados da primeira; e medir consulta sobre
-volume acumulado de execuções anteriores não diria nada.
+The seeder **truncates the tables before starting**. The customers' documents are
+sequential to guarantee uniqueness without querying the database, which would make a
+second run impossible over the first one's data; and measuring queries over volume
+accumulated from previous runs would say nothing.
 
-Uma exceção: ele **não trunca tabela já vazia**. `TRUNCATE` é DDL e custa ~7s
-por tabela nesta base mesmo sem ter o que apagar, e há um efeito colateral pior
-do que o tempo — descrito em [Testes](testes.md#o-teste-do-seeder-não-emite-ddl).
+One exception: it **does not truncate an already empty table**. `TRUNCATE` is DDL and
+costs ~7s per table on this base even with nothing to delete, and there is a side effect
+worse than the time — described in
+[Tests](testes.md#the-seeders-test-emits-no-ddl).
 
-### Índices adiados na carga
+### Indexes deferred during the load
 
-Índice não acelera insert, desacelera: cada linha inserida mantém as **oito**
-árvores de índice secundário da tabela. Derrubar antes e recriar depois
-compensa? Foram medidas as duas estratégias de ponta a ponta, sobre os mesmos
-2.000.000 de linhas, com a máquina parada e a mesma configuração do MySQL —
-buffer pool de 128 MB, redo log de 100 MB, commit durável. O pool foi
-dimensionado depois, e nesta máquina o pool maior deixou a carga mais lenta: a
-remedição está em [Buffer pool do InnoDB](#buffer-pool-do-innodb).
+An index does not speed an insert up, it slows it down: every row inserted maintains the
+table's **eight** secondary index trees. Does dropping them first and recreating them
+afterwards pay off? Both strategies were measured end to end, over the same 2,000,000
+rows, with the machine idle and the same MySQL configuration — a 128 MB buffer pool, a
+100 MB redo log, durable commits. The pool was sized afterwards, and on this machine the
+larger pool made the load slower: that re-measurement is in
+[InnoDB's buffer pool](#innodbs-buffer-pool).
 
-| Estratégia | Total |
+| Strategy | Total |
 |---|---|
-| A — carregar com os 8 índices presentes | **310min07s** |
-| B — derrubar, carregar e recriar | **45min55s** |
+| A — load with all 8 indexes present | **310min07s** |
+| B — drop, load and recreate | **45min55s** |
 
-**B é 6,8× mais rápida, e é a que o seeder usa.** O número de A fica registrado
-porque é ele que justifica a escolha. A primeira medição de B, ainda recriando
-os índices num ALTER único, deu 51min06s — a diferença está logo abaixo.
+**B is 6.8× faster, and it is what the seeder uses.** A's number is recorded because it is
+what justifies the choice. B's first measurement, still recreating the indexes in a single
+ALTER, gave 51min06s — the difference is just below.
 
-Uma segunda execução de B, dentro da [instalação do
-zero](operacao.md#quanto-demora-a-subida-do-zero), deu **49min16s**: 2,9 s para
-derrubar, 32min46s de clientes e carga, 16min27s para recriar. É 7% acima da
-primeira, e essa não teve a máquina parada do começo ao fim — rodou junto de
-consultas leves de acompanhamento e de um download de 107 MB. A faixa que vale
-citar é de 46 a 49 minutos.
+A second run of B, inside the
+[clean install](operacao.md#how-long-a-clean-start-takes), gave **49min16s**: 2.9 s to
+drop, 32min46s of customers and loading, 16min27s to recreate. That is 7% above the first,
+and this one did not have the machine idle from start to finish — it ran alongside light
+monitoring queries and a 107 MB download. The range worth quoting is 46 to 49 minutes.
 
-Onde o tempo de B vai:
+Where B's time goes:
 
-| Fase | Tempo |
+| Phase | Time |
 |---|---|
-| Truncate e 5.000 clientes | 38 s |
-| Derrubar os 8 índices | 7,3 s |
-| Carregar 2.000.000 de linhas | 29min32s |
-| Recriar os 8 índices, um ALTER por índice | 15min38s |
+| Truncate and 5,000 customers | 38 s |
+| Dropping the 8 indexes | 7.3 s |
+| Loading 2,000,000 rows | 29min32s |
+| Recreating the 8 indexes, one ALTER per index | 15min38s |
 
-**Por que A perde tanto está na curva.** A vazão de A por bloco de 100 mil
-linhas:
+**Why A loses so badly is in the curve.** A's throughput per block of 100 thousand rows:
 
-| Até | Vazão no bloco |
+| Up to | Throughput in the block |
 |---|---|
-| 500.000 | 421 linhas/s |
-| 700.000 | 146 linhas/s |
-| 1.000.000 | 92 linhas/s |
-| 1.500.000 | 75 linhas/s |
-| 2.000.000 | **62 linhas/s** |
+| 500,000 | 421 rows/s |
+| 700,000 | 146 rows/s |
+| 1,000,000 | 92 rows/s |
+| 1,500,000 | 75 rows/s |
+| 2,000,000 | **62 rows/s** |
 
-Até cerca de meio milhão de linhas, os índices cabem no buffer pool de 128 MB.
-Dali em diante, cada insert precisa de páginas de índice que já não estão na
-memória, e a vazão cai **7×**. B não mantém índice secundário nenhum durante a
-carga, e a vazão fica **plana**, entre 893 e 1.408 linhas/s do primeiro ao
-último bloco. Recriar os oito índices em B leva 15min38s — menos que um único
-bloco de 100 mil linhas no fim de A, que levou 26min50s.
+Up to around half a million rows, the indexes fit in the 128 MB buffer pool. From there
+on, every insert needs index pages that are no longer in memory, and throughput drops
+**7×**. B maintains no secondary index during the load, and its throughput stays **flat**,
+between 893 and 1,408 rows/s from the first block to the last. Recreating the eight
+indexes in B takes 15min38s — less than a single block of 100 thousand rows at the end of
+A, which took 26min50s.
 
-Quatro cuidados que a estratégia exigiu:
+Four concerns the strategy required:
 
-- **A chave estrangeira de `customer_id` não tem índice próprio.** Ela se apoia
-  nos três índices que começam por `customer_id`, e derrubar os três faz o MySQL
-  recusar o `DROP INDEX`. Durante a carga existe um índice provisório só em
-  `customer_id` — o mesmo recurso do `down()` da migration de índices —, e ele
-  sai no fim, **só** se os índices de `customer_id` tiverem voltado.
-- **Os índices voltam mesmo se a carga falhar.** A recriação está num `finally`,
-  e um teste a exercita com uma carga que lança exceção. O `finally` não cobre o
-  processo morto à força; para esse caso, cada execução do seeder começa
-  recriando o que estiver faltando, logo depois do truncate, quando recriar
-  sobre a tabela vazia é instantâneo.
-- **A lista dos índices é uma cópia das migrations, e a cópia é vigiada.** Um
-  teste compara a lista do seeder com o que as migrations criam. Sem ele, um
-  índice novo esquecido na lista seria derrubado na primeira carga e nunca mais
-  recriado, sem erro nenhum.
-- **Só acima de 100.000 linhas.** Numa carga pequena a troca não compensa, e há
-  um motivo mais forte: o teste do seeder semeia uma amostra, e DDL dentro de
-  teste encerra a transação do `RefreshDatabase` — [a armadilha que custava 50
-  segundos por teste](testes.md#o-teste-do-seeder-não-emite-ddl). Um teste
-  afirma que a carga pequena não emite DDL nenhum. Os testes que precisam de DDL
-  de verdade ficam numa classe própria, fora do `RefreshDatabase`, e só mexem na
-  estrutura de uma tabela vazia.
+- **`customer_id`'s foreign key has no index of its own.** It leans on the three indexes
+  starting with `customer_id`, and dropping all three makes MySQL refuse the `DROP INDEX`.
+  During the load there is a temporary index on `customer_id` alone — the same device as
+  the index migration's `down()` — and it goes away at the end, **only** if the
+  `customer_id` indexes have come back.
+- **The indexes come back even if the load fails.** The recreation sits in a `finally`,
+  and a test exercises it with a load that throws. The `finally` does not cover a process
+  that gets killed; for that case, every run of the seeder starts by recreating whatever is
+  missing, right after the truncate, when recreating over an empty table is instant.
+- **The index list is a copy of the migrations, and the copy is watched.** A test compares
+  the seeder's list against what the migrations create. Without it, a new index forgotten
+  in the list would be dropped on the first load and never recreated, with no error at all.
+- **Only above 100,000 rows.** On a small load the trade does not pay off, and there is a
+  stronger reason: the seeder's test seeds a sample, and DDL inside a test ends
+  `RefreshDatabase`'s transaction —
+  [the trap that cost 50 seconds per test](testes.md#the-seeders-test-emits-no-ddl). A test
+  asserts that a small load emits no DDL at all. The tests that genuinely need DDL live in a
+  class of their own, outside `RefreshDatabase`, and only touch the structure of an empty
+  table.
 
-**Um ALTER por índice, e não um só.** A primeira implementação recriava os oito
-índices numa instrução única, com um comentário no código afirmando que isso
-saía mais barato. A afirmação não tinha medição, e a medição a desmentiu:
+**One ALTER per index, and not a single one.** The first implementation recreated the eight
+indexes in a single statement, with a comment in the code claiming that came out cheaper.
+The claim had no measurement, and the measurement disproved it:
 
-| Recriação dos 8 índices, 2.000.000 de linhas | Tempo |
+| Recreating the 8 indexes, 2,000,000 rows | Time |
 |---|---|
-| **um ALTER por índice**, tabela em repouso | **10min44s** |
-| um ALTER único, tabela em repouso | 19min12s |
-| um ALTER por índice, logo depois da carga | 15min38s |
-| um ALTER único, logo depois da carga | 22min03s |
+| **one ALTER per index**, table at rest | **10min44s** |
+| a single ALTER, table at rest | 19min12s |
+| one ALTER per index, right after the load | 15min38s |
+| a single ALTER, right after the load | 22min03s |
 
-Um por um é **1,8× mais rápido** em repouso, e o seeder passou a fazer assim.
-As quatro linhas separam as duas causas possíveis. O momento pesa: logo depois
-da carga, com o MySQL ainda descarregando páginas recém-escritas, as duas
-estratégias custam mais do que em repouso. Mas a estratégia pesa mais — nos dois
-momentos, um por um vence com folga.
+One by one is **1.8× faster** at rest, and the seeder now does it that way. The four rows
+separate the two possible causes. The moment matters: right after the load, with MySQL
+still flushing freshly written pages, both strategies cost more than at rest. But the
+strategy matters more — at both moments, one by one wins comfortably.
 
-Um por um, o índice de cobertura do dashboard é o mais caro: 1min59s, contra
-cerca de 1 minuto para cada índice de coluna única.
+One by one, the dashboard's covering index is the most expensive: 1min59s, against around a
+minute for each single-column index.
 
-Sobre o porquê, só vai aqui o que está verificado. O
-[manual do MySQL](https://dev.mysql.com/doc/refman/8.0/en/online-ddl-memory-management.html)
-documenta que o buffer de DDL — 1 MB por padrão — é dividido entre as threads de
-DDL, que são 4 por padrão: 256 KB para cada. Como essa memória se reparte entre
-vários índices construídos na mesma instrução, ele não documenta. A explicação
-óbvia — oito ordenações disputando o mesmo buffer — fica registrada como
-hipótese, e a implementação segue o número.
+On the why, only what is verified goes here. The
+[MySQL manual](https://dev.mysql.com/doc/refman/8.0/en/online-ddl-memory-management.html)
+documents that the DDL buffer — 1 MB by default — is split between the DDL threads, which
+are 4 by default: 256 KB each. How that memory divides between several indexes built in the
+same statement, it does not document. The obvious explanation — eight sorts contending for
+the same buffer — is recorded as a hypothesis, and the implementation follows the number.
 
-### Pagas em atraso, com juros congelados de verdade
+### Paid late, with genuinely frozen interest
 
-Quarenta por cento das cobranças nascem pagas, e **35% dessas foram pagas com
-atraso** — com `paid_amount` e `paid_interest_amount` calculados, não zerados.
+Forty per cent of the billings are born paid, and **35% of those were paid late** — with
+`paid_amount` and `paid_interest_amount` computed, not zeroed.
 
-Sem isso a base de medição não exercita a regra que mais importa no domínio: o
-relatório mostraria R$ 0,00 de juros recebidos, e a tela de detalhe de uma
-cobrança paga nunca teria juros congelados para exibir. Uma base de dois
-milhões de linhas em que a regra central nunca aparece não é base de medição, é
-volume.
+Without that the measurement base does not exercise the rule that matters most in the
+domain: the report would show R$ 0.00 of interest received, and a paid billing's detail
+screen would never have frozen interest to display. A base of two million rows in which the
+central rule never appears is not a measurement base, it is volume.
 
-**O valor congelado vem do `RegisterPayment`**, o mesmo serviço que a API usa
-quando alguém registra um pagamento pela tela. O seeder decide *quando* a
-cobrança foi paga e mais nada. Para isso o serviço ganhou `freeze()`, que
-devolve as colunas do pagamento sem gravá-las:
+**The frozen value comes from `RegisterPayment`**, the same service the API uses when
+someone records a payment through the screen. The seeder decides *when* the billing was
+paid and nothing else. For that the service gained `freeze()`, which returns the payment's
+columns without writing them:
 
-| | quem chama | o que faz com o retorno |
+| | who calls it | what it does with the return |
 |---|---|---|
-| `__invoke()` | API, factory | `update()` no model |
-| `freeze()` | seeder de volume | vira campo da linha do insert em lote |
+| `__invoke()` | the API, the factory | `update()` on the model |
+| `freeze()` | the volume seeder | becomes a field on the batch insert's row |
 
-A alternativa era escrever `valor * POW(1 + taxa, dias/30)` dentro do seeder.
-Seria mais rápido e estaria errado: a base de medição passaria a validar uma
-cópia da regra, e uma divergência entre as duas só apareceria quando alguém
-comparasse a tela com o relatório. `BillingVolumeSeederTest` fecha essa porta —
-ele reconstrói a cobrança semeada como pendente, paga pelo serviço de produção
-na mesma data e exige igualdade até o centavo.
+The alternative was writing `amount * POW(1 + rate, days/30)` inside the seeder. It would
+be faster and it would be wrong: the measurement base would start validating a copy of the
+rule, and a divergence between the two would only surface when someone compared the screen
+against the report. `BillingVolumeSeederTest` closes that door — it rebuilds the seeded
+billing as pending, pays it through the production service on the same date and demands
+equality down to the cent.
 
-Dois limites, ambos com motivo:
+Two limits, both with reasons:
 
-- **Atraso de no máximo 120 dias.** Sem teto, uma cobrança vencida há três anos
-  paga a 5% ao mês acumularia `1,05^36` — quase seis vezes o valor original.
-  Acontece, mas não é o que uma base de faturamento parece.
-- **Pagamento nunca cai no futuro.** A versão anterior pagava sempre de 1 a 25
-  dias antes do vencimento, e para cobrança que ainda vai vencer isso produzia
-  data de pagamento depois de hoje. Cobrança cujo vencimento está a mais de 25
-  dias de distância simplesmente nasce pendente.
+- **At most 120 days late.** Without a cap, a billing three years overdue paid at 5% a
+  month would accrue `1.05^36` — nearly six times the original amount. It happens, but it is
+  not what a billing base looks like.
+- **A payment never falls in the future.** The previous version always paid 1 to 25 days
+  before the due date, and for a billing still to fall due that produced a payment date after
+  today. A billing whose due date is more than 25 days away is simply born pending.
 
-### Quanto custa congelar
+### What freezing costs
 
-Medição A/B na mesma máquina e na mesma sessão, 200.000 cobranças inseridas na
-tabela com os sete índices do relatório:
+An A/B measurement on the same machine and in the same session, 200,000 billings inserted
+into the table with the report's seven indexes:
 
-| | total | PHP | INSERT | linhas/s |
+| | total | PHP | INSERT | rows/s |
 |---|---|---|---|---|
-| Sem congelamento | 330,1s | 6,5s | 323,5s | 606 |
-| Com congelamento | 364,1s | 32,8s | 331,3s | 549 |
+| Without freezing | 330.1s | 6.5s | 323.5s | 606 |
+| With freezing | 364.1s | 32.8s | 331.3s | 549 |
 
-O congelamento custa **0,29 ms por cobrança paga** — 26s a mais por 200.000
-linhas, ou +10% no total. O que domina é o INSERT, com 90% do tempo: o seeder é
-limitado pelo banco, não pelo PHP, e é por isso que trocar o `RegisterPayment`
-por uma fórmula inline compraria pouco e custaria a fonte única da regra.
+Freezing costs **0.29 ms per paid billing** — 26s more per 200,000 rows, or +10% on the
+total. What dominates is the INSERT, at 90% of the time: the seeder is limited by the
+database, not by PHP, and that is why swapping `RegisterPayment` for an inline formula would
+buy little and would cost the rule's single source.
 
-O detalhe do custo, medido em 20.000 iterações isoladas: `new Billing()` 0,052
-ms, `InterestCalculator::for()` 0,150 ms, o resto é a escolha da data.
+The cost's detail, measured over 20,000 isolated iterations: `new Billing()` 0.052 ms,
+`InterestCalculator::for()` 0.150 ms, and the rest is choosing the date.

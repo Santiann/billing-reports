@@ -125,7 +125,7 @@ so the response does not reveal which emails exist. A malformed payload (a missi
 field) is what answers 422, with the errors per field.
 
 Too many attempts answer **429**, with `Retry-After` — see
-[login rate limiting](operacao.md#rate-limit-no-login).
+[login rate limiting](operacao.md#login-rate-limiting).
 
 ---
 
@@ -347,7 +347,7 @@ controller needs three operations, not one: ask, count, and CLEAR on a successfu
 login. Clearing requires the same key, and the one the middleware derives
 internally is a framework implementation detail. The whole thing, including why
 the per-credential limit includes the IP, is in
-[login rate limiting](operacao.md#rate-limit-no-login).
+[login rate limiting](operacao.md#login-rate-limiting).
 
 **`UserResource` rather than returning the model.** It fixes the response's shape
 from the start and stops a new column on the table from leaking into the API

@@ -17,21 +17,21 @@ import "./globals.css";
  * request to a third-party server at runtime and no layout shift on load.
  */
 const display = Instrument_Serif({
-  variable: "--fonte-display",
+  variable: "--font-display-family",
   subsets: ["latin"],
   weight: "400",
   display: "swap",
 });
 
 const sans = IBM_Plex_Sans({
-  variable: "--fonte-sans",
+  variable: "--font-sans-family",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   display: "swap",
 });
 
 const mono = IBM_Plex_Mono({
-  variable: "--fonte-mono",
+  variable: "--font-mono-family",
   subsets: ["latin"],
   weight: ["400", "500"],
   display: "swap",

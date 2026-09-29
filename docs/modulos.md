@@ -1,340 +1,331 @@
-# Módulos e regras de negócio
+# Modules and business rules
 
 [← README](../README.md)
 
-- [Módulo de clientes](#módulo-de-clientes)
-- [Módulo de cobranças](#módulo-de-cobranças)
-- [Importação por CSV](#importação-por-csv)
-- [Relatório de faturamento](#relatório-de-faturamento)
-- [Perfis de acesso](#perfis-de-acesso)
-- [Idempotência no pagamento](#idempotência-no-pagamento)
-- [Trilha de auditoria](#trilha-de-auditoria)
-- [Estorno de pagamento](#estorno-de-pagamento)
+- [Customers module](#customers-module)
+- [Billings module](#billings-module)
+- [CSV import](#csv-import)
+- [Billing report](#billing-report)
+- [Access roles](#access-roles)
+- [Payment idempotency](#payment-idempotency)
+- [Audit trail](#audit-trail)
+- [Payment reversal](#payment-reversal)
 
-## Módulo de clientes
+## Customers module
 
-| Método | Rota | |
+| Method | Route | |
 |---|---|---|
-| `GET` | `/api/customers` | lista paginada, com busca, filtro e ordenação |
-| `POST` | `/api/customers` | cadastro |
-| `GET` | `/api/customers/{id}` | visualização |
-| `PUT` | `/api/customers/{id}` | edição |
+| `GET` | `/api/customers` | a paginated list, with search, filtering and sorting |
+| `POST` | `/api/customers` | creating |
+| `GET` | `/api/customers/{id}` | viewing |
+| `PUT` | `/api/customers/{id}` | editing |
 
-Telas correspondentes em `/clientes`, `/clientes/novo`, `/clientes/{id}` e
+The corresponding screens are at `/clientes`, `/clientes/novo`, `/clientes/{id}` and
 `/clientes/{id}/editar`.
 
-**Filtro, ordenação e paginação acontecem no banco.** Em nenhum ponto o
-conjunto é carregado para ser recortado em memória — o Next repassa os
-parâmetros e recebe já a página.
+**Filtering, sorting and pagination happen in the database.** At no point is the set
+loaded to be narrowed in memory — Next passes the parameters through and receives the
+page already made.
 
-### Duas guardas que a API precisa ter
+### Two guards the API has to have
 
-`sort` é validado contra allowlist (`name`, `document`, `email`,
-`created_at`). Ele entra no `ORDER BY`, e aceitar o valor cru seria injeção.
-Valor fora da lista responde 422.
+`sort` is validated against an allowlist (`name`, `document`, `email`,
+`created_at`). It goes into the `ORDER BY`, and accepting the raw value would be
+injection. A value outside the list answers 422.
 
-`per_page` tem teto de 100. Sem isso, `?per_page=999999` derruba a API com uma
-única requisição.
+`per_page` is capped at 100. Without that, `?per_page=999999` takes the API down with a
+single request.
 
-Há teste para as duas.
+There is a test for both.
 
-### Busca
+### Search
 
-Um campo só, que casa contra nome, e-mail e documento. O documento só entra na
-cláusula se o termo tiver dígitos: sem essa guarda, buscar por "Aurora" viraria
-`document LIKE '%'` e traria a tabela inteira. O casamento do documento é por
-prefixo, que usa o índice unique; nome e e-mail usam `LIKE %termo%`, aceitável
-porque a tabela de clientes é pequena — a de cobranças, que não é, tem
-tratamento próprio na etapa do relatório.
+A single field, matched against name, email and document. The document only joins the
+clause if the term has digits: without that guard, searching for "Aurora" would become
+`document LIKE '%'` and bring back the whole table. The document is matched by prefix,
+which uses the unique index; name and email use `LIKE %term%`, acceptable because the
+customers table is small — the billings table, which is not, gets its own treatment in
+the report.
 
-### Documento sem máscara
+### An unformatted document
 
-Chega da tela como `123.456.789-01` e é gravado como `12345678901`. Guardar o
-que foi digitado faria a busca depender do formato escolhido por quem cadastrou.
-A normalização é no `prepareForValidation()` do FormRequest, antes da regra de
-unicidade rodar — senão o mesmo CPF com e sem pontuação passaria como dois
-clientes distintos.
+It arrives from the screen as `123.456.789-01` and is stored as `12345678901`. Keeping
+what was typed would make the search depend on the format whoever created the record
+chose. The normalisation happens in the FormRequest's `prepareForValidation()`, before
+the uniqueness rule runs — otherwise the same CPF with and without punctuation would
+pass as two distinct customers.
 
-### Server Actions para as mutações
+### Server Actions for the mutations
 
-Cadastro e edição usam **Server Actions**, não Route Handlers. O motivo é o
-mesmo do login: o browser não tem o token, então quem fala com o Laravel é o
-servidor. A Action lê o cookie httpOnly, anexa o `Bearer`, e devolve os erros
-de validação campo a campo para o formulário exibir — em vez de virarem uma
-mensagem genérica.
+Creating and editing use **Server Actions**, not Route Handlers. The reason is the
+login's: the browser does not have the token, so the server is what talks to Laravel.
+The Action reads the httpOnly cookie, attaches the `Bearer`, and returns the validation
+errors field by field for the form to display — rather than collapsing them into a
+generic message.
 
-Route Handler continua sendo a escolha onde o browser precisa de uma URL para
-navegar ou baixar: login, logout e, nas etapas de relatório, as exportações.
+A Route Handler remains the choice where the browser needs a URL to navigate to or
+download from: login, logout and the exports.
 
-Os filtros vivem na **URL**, não em estado de componente: a página fica
-compartilhável, sobrevive ao refresh, e o Server Component monta a consulta já
-filtrada. A confirmação de sucesso também vem por parâmetro de URL, porque
-precisa sobreviver ao redirect que a Action faz depois de salvar.
+The filters live in the **URL**, not in component state: the page stays shareable,
+survives a refresh, and the Server Component builds the already filtered query. The
+success confirmation also arrives as a URL parameter, because it has to survive the
+redirect the Action performs after saving.
 
-### Mensagens de validação em português
+### Validation messages in Portuguese
 
-`lang/pt_BR/validation.php` cobre as regras efetivamente usadas, com
-`attributes` traduzindo os nomes de campo. Sem isso a tela misturaria
-"The name field is required." com as mensagens customizadas em português.
-`APP_LOCALE=pt_BR`.
+`lang/pt_BR/validation.php` covers the rules actually used, with `attributes`
+translating the field names. Without it the screen would mix "The name field is
+required." in with the custom Portuguese messages. `APP_LOCALE=pt_BR`.
 
 ---
 
-## Módulo de cobranças
+## Billings module
 
-| Método | Rota | |
+| Method | Route | |
 |---|---|---|
-| `GET` | `/api/billings` | lista paginada, com filtro por cliente, status e descrição |
-| `POST` | `/api/billings` | cadastro |
-| `GET` | `/api/billings/{id}` | visualização |
-| `PUT` | `/api/billings/{id}` | edição |
+| `GET` | `/api/billings` | a paginated list, filtering by customer, status and description |
+| `POST` | `/api/billings` | creating |
+| `GET` | `/api/billings/{id}` | viewing |
+| `PUT` | `/api/billings/{id}` | editing |
 
-Telas em `/cobrancas`, `/cobrancas/nova`, `/cobrancas/{id}` e
+Screens at `/cobrancas`, `/cobrancas/nova`, `/cobrancas/{id}` and
 `/cobrancas/{id}/editar`.
 
-### Status e pagamento não são campos de formulário
+### Status and payment are not form fields
 
-`status`, `payment_date`, `paid_amount` e `paid_interest_amount` **não estão**
-nas regras do FormRequest. Só o que passa por `rules()` chega em `validated()`,
-então enviá-los não tem efeito — há teste postando `status: paid` e afirmando
-que a cobrança nasce pendente.
+`status`, `payment_date`, `paid_amount` and `paid_interest_amount` are **not** in the
+FormRequest's rules. Only what passes through `rules()` reaches `validated()`, so
+sending them has no effect — there is a test posting `status: paid` and asserting the
+billing is born pending.
 
-O motivo é integridade: aceitar `status = paid` no cadastro criaria uma
-cobrança paga **sem os valores congelados**, e esses valores não são
-recuperáveis depois, porque o cálculo é função da data em que o pagamento
-ocorreu. A transição para paga pertence ao registro de pagamento.
+The reason is integrity: accepting `status = paid` on creation would produce a paid
+billing **without the frozen values**, and those values are not recoverable afterwards,
+because the calculation is a function of the date the payment happened. The transition
+to paid belongs to recording a payment.
 
-Pela mesma razão, **cobrança paga não pode ser editada**: alterar valor ou taxa
-invalidaria `paid_amount` e `paid_interest_amount`. A API responde 422, e a
-tela de edição redireciona antes de servir um formulário que só falharia no
-envio.
+For the same reason, **a paid billing cannot be edited**: changing the amount or the
+rate would invalidate `paid_amount` and `paid_interest_amount`. The API answers 422, and
+the edit screen redirects before serving a form that would only fail on submit.
 
 ### N+1
 
-A listagem exibe o nome do cliente, e sem eager loading isso seria um `SELECT`
-por linha na serialização. O controller usa `with('customer')`, e o
-`BillingResource` usa `whenLoaded` — assim a chave some quando a relação não
-foi carregada, em vez de disparar consulta durante a serialização.
+The listing shows the customer's name, and without eager loading that would be one
+`SELECT` per row while serialising. The controller uses `with('customer')`, and
+`BillingResource` uses `whenLoaded` — so the key disappears when the relation was not
+loaded, rather than firing a query during serialisation.
 
-Há teste que **conta as consultas**: cria dez cobranças de dez clientes
-distintos e afirma no máximo três queries (count da paginação, select das
-cobranças, select dos clientes). Sem eager loading seriam treze.
+There is a test that **counts the queries**: it creates ten billings from ten distinct
+customers and asserts at most three queries (the pagination count, the billings select,
+the customers select). Without eager loading it would be thirteen.
 
-### Seletor de cliente
+### The customer picker
 
-A base de teste tem cinco mil clientes, então um `<select>` com todos está
-fora. O formulário usa um combobox que busca conforme se digita, com debounce
-de 300 ms, através de um Route Handler — o browser não tem o token, então quem
-consulta a API é o servidor. O id selecionado viaja num input escondido, de
-modo que o formulário continua sendo um form comum e a Server Action não
-precisa saber que existe um combobox.
+The test base has five thousand customers, so a `<select>` with all of them is out. The
+form uses a combobox that searches as you type, with a 300 ms debounce, through a Route
+Handler — the browser does not have the token, so the server is what queries the API.
+The selected id travels in a hidden input, so the form stays an ordinary form and the
+Server Action does not need to know a combobox exists.
 
-### Ordenação default por `id desc`
+### Sorting defaults to `id desc`
 
-É a chave primária: ordenar por ela não custa filesort. As demais colunas de
-ordenação (`due_date`, `issue_date`, `original_amount`) ainda não têm índice
-nesta etapa — eles entram em `feat: add report indexes`, cada um documentado
-junto da consulta que serve.
+It is the primary key: sorting by it costs no filesort. The other sortable columns
+(`due_date`, `issue_date`, `original_amount`) did not have indexes at this point —
+they arrive in `feat: add report indexes`, each one documented alongside the query it
+serves.
 
-A busca por descrição usa `LIKE '%termo%'`, que não é indexável por ter
-curinga à esquerda. Aceitável para a tela de CRUD; a alternativa de produção é
-índice FULLTEXT, registrado na lista de melhorias.
+Searching by description uses `LIKE '%term%'`, which is not indexable because of the
+leading wildcard. Acceptable for a CRUD screen; the production alternative is a FULLTEXT
+index, recorded on the improvements list.
 
-### Observações de performance, ainda sem índices
+### Performance observations, still without indexes
 
-Medições preliminares contra a base de milhões, **antes** da etapa de índices.
-Ficam registradas porque são elas que justificam o que vem lá:
+Preliminary measurements against the millions base, **before** the indexes. They are
+recorded because they are what justifies what comes next:
 
-Base de **2.000.000 de cobranças**, banco sem escrita concorrente:
+A base of **2,000,000 billings**, with no concurrent writing:
 
-| Consulta | Tempo |
+| Query | Time |
 |---|---|
-| `SELECT COUNT(*) FROM billings` | **26,8s** |
-| `ORDER BY due_date DESC LIMIT 15` (sem índice) | **3,5s** |
-| `COUNT(*) WHERE status = 'paid'` | 1,2s |
-| `ORDER BY id DESC LIMIT 15` (chave primária) | 0,4s |
+| `SELECT COUNT(*) FROM billings` | **26.8s** |
+| `ORDER BY due_date DESC LIMIT 15` (no index) | **3.5s** |
+| `COUNT(*) WHERE status = 'paid'` | 1.2s |
+| `ORDER BY id DESC LIMIT 15` (primary key) | 0.4s |
 
-| Ambiente | |
+| Environment | |
 |---|---|
-| Tabela `billings` | 149 MB |
+| The `billings` table | 149 MB |
 | `innodb_buffer_pool_size` | 128 MB (default) |
 
-Sob carga de escrita concorrente os números pioram muito: a listagem chegou a
-5,3 minutos e recebeu 504 do nginx, e o `COUNT(*)` passou de 120s.
+Under concurrent write load the numbers get much worse: the listing reached 5.3 minutes
+and received a 504 from nginx, and the `COUNT(*)` went past 120s.
 
-Dois problemas distintos aparecem aqui.
+Two distinct problems show up here.
 
-O primeiro é o `COUNT(*)` que o `paginate()` do Laravel dispara **a cada
-requisição** para calcular `last_page`. Ele não depende do `LIMIT`: percorre o
-conjunto filtrado inteiro, toda vez.
+The first is the `COUNT(*)` Laravel's `paginate()` fires on **every request** to compute
+`last_page`. It does not depend on the `LIMIT`: it walks the whole filtered set, every
+time.
 
-O segundo é que a tabela não cabe no buffer pool. Com 149 MB de dados e 128 MB
-de pool, cada varredura completa vai ao disco — e foi isso que derrubou a taxa
-de inserção do seeder de ~1.900 para ~150 linhas por segundo na segunda metade
-da carga. (Medido com a máquina ocupada. A remedição da etapa 2, com a máquina
-parada e os oito índices de hoje, está em [índices adiados na
-carga](performance.md#índices-adiados-na-carga).)
+The second is that the table does not fit in the buffer pool. With 149 MB of data and a
+128 MB pool, every full scan goes to disk — and that is what dropped the seeder's
+insertion rate from ~1,900 to ~150 rows per second in the load's second half. (Measured
+with the machine busy. The later re-measurement, with the machine idle and today's eight
+indexes, is in
+[indexes deferred during the load](performance.md#indexes-deferred-during-the-load).)
 
-Ambos são endereçados em `feat: add report indexes`, com medição antes e
-depois.
+Both are addressed in `feat: add report indexes`, with measurements before and after.
 
 ---
+## CSV import
 
-## Importação por CSV
+`/clientes/importar` takes a file, shows what is going to happen and only writes once
+confirmed.
 
-`/clientes/importar` recebe um arquivo, mostra o que vai acontecer e só grava
-depois de confirmado.
+**A partial import is the expected behaviour, not a failure.** A row with an error does
+not stop the others from going in: the valid ones are imported, and the refused ones come
+back named with the line number **from the file** — counting the header, which is how the
+user finds it when they open the spreadsheet — and the reason. Aborting everything because
+of a wrong email on line 47 would force them to fix and resend the whole file.
 
-**Importação parcial é o comportamento esperado, não uma falha.** Linha com erro
-não impede as outras de entrar: as válidas são importadas, e as recusadas voltam
-nomeadas com o número da linha **do arquivo** — contando o cabeçalho, que é como
-o usuário a encontra ao abrir a planilha — e o motivo. Abortar tudo por causa de
-um e-mail errado na linha 47 obrigaria a corrigir e reenviar o arquivo inteiro.
+### The file is not kept between the preview and the confirmation
 
-### O arquivo não fica guardado entre a prévia e a confirmação
+The common route would be to write the upload into a temporary directory, return an
+identifier and use it on confirmation. That brings expiry, cleaning up abandoned files
+and one more piece of state to get wrong.
 
-O caminho comum seria gravar o upload num diretório temporário, devolver um
-identificador e usá-lo no confirmar. Isso traz junto expiração, faxina de
-arquivo abandonado e um estado a mais para errar.
+Here the confirmation **resends the same file**, which is still in the browser's input.
+The cost is one extra upload — trivial for a customer CSV — and the confirmation's report
+comes out of the same code as the preview, so what the user saw is what happened.
 
-Aqui a confirmação **reenvia o mesmo arquivo**, que ainda está no input do
-browser. O custo é um upload a mais — trivial para um CSV de clientes — e o
-relatório da confirmação sai do mesmo código da prévia, então o que o usuário
-viu é o que aconteceu.
+That cost one defect that only appeared on screen: a `<form action={fn}>` is **reset by
+React** once the action finishes, and the file field went back to "no file selected" — the
+preview was wiping exactly what the next step needed, and the import button wrote nothing.
+The action is now called from `onSubmit` inside a transition, which does not touch the
+form.
 
-Isso custou um defeito que só apareceu na tela: um `<form action={fn}>` é
-**resetado pelo React** depois que a action termina, e o campo de arquivo voltava
-a "nenhum arquivo selecionado" — a prévia apagava justamente o que o passo
-seguinte precisava, e o botão de importar não gravava nada. A action passou a ser
-chamada por `onSubmit` dentro de uma transição, que não toca no formulário.
+### Streaming, and why
 
-### Streaming, e por quê
+The file is read row by row with `fgetcsv` over a generator. Never `file_get_contents`
+nor `file()`: a CSV with a hundred thousand customers cannot exist all at once in the
+process's memory. There is a test asserting that importing 5,000 rows does not grow the
+memory peak by more than 32 MB.
 
-O arquivo é lido linha a linha com `fgetcsv` sobre um gerador. Nunca
-`file_get_contents` nem `file()`: um CSV de cem mil clientes não pode existir de
-uma vez na memória do processo. Há teste afirmando que importar 5.000 linhas não
-faz o pico de memória crescer mais que 32 MB.
+Writing goes in **batches of 500**, and each batch checks its documents against the
+database in a single query. One query per row would turn ten thousand customers into ten
+thousand queries; a batch insert without checking would hit the database's unique index
+and bring down the 499 good rows along with the repeated one.
 
-A gravação vai em **lotes de 500**, e cada lote confere os documentos contra o
-banco numa consulta só. Uma consulta por linha transformaria dez mil clientes em
-dez mil consultas; um insert em lote sem conferir estouraria a unique do banco e
-derrubaria as 499 linhas boas junto com a repetida.
-
-### Conveniências que vêm de quem exporta planilha
+### Conveniences that come from whoever exports the spreadsheet
 
 | | |
 |---|---|
-| Separador | detectado — `;` do Excel em português ou `,` |
-| Cabeçalho | aceita apelidos: `nome`/`name`, `documento`/`cpf`/`cnpj` |
-| Documento | pode vir com máscara; é gravado só com dígitos |
-| Status | `ativo`/`active`, e vazio assume ativo |
-| BOM do Excel | removido antes de comparar o cabeçalho |
+| Separator | detected — `;` from Excel in Portuguese or `,` |
+| Header | accepts aliases: `nome`/`name`, `documento`/`cpf`/`cnpj` |
+| Document | may arrive formatted; it is stored as digits only |
+| Status | `ativo`/`active`, and empty assumes active |
+| Excel's BOM | stripped before comparing the header |
 
-Exigir um formato exato transformaria "o arquivo não funciona" num problema de
-suporte.
+Demanding an exact format would turn "the file does not work" into a support problem.
 
-**Arquivo sem as colunas obrigatórias é recusado inteiro**, com 422 no campo do
-upload — e a mensagem diz o nome que o usuário precisa digitar (`documento`),
-não o nome interno do campo (`document`). Não há o que importar parcialmente
-quando nem dá para saber o que é cada coluna.
+**A file missing the required columns is refused whole**, with a 422 on the upload field
+— and the message gives the name the user has to type (`documento`), not the field's
+internal name (`document`). There is nothing to import partially when you cannot even tell
+what each column is.
 
-### Cobranças: duas regras a mais
+### Billings: two extra rules
 
-`/cobrancas/importar` usa o mesmo leitor e o mesmo formulário, com duas regras
-próprias.
+`/cobrancas/importar` uses the same reader and the same form, with two rules of its own.
 
-**O cliente é resolvido pelo documento**, não por id. O arquivo vem de fora e
-não conhece o id interno; documento é a identidade de negócio que as duas pontas
-têm. A resolução acontece **por lote**: uma consulta traz os clientes dos 500
-documentos de uma vez, e há teste afirmando que mil cobranças espalhadas por cem
-clientes não passam de 20 consultas — sem o lote seriam mil.
+**The customer is resolved by document**, not by id. The file comes from outside and does
+not know the internal id; the document is the business identity both ends have. Resolution
+happens **per batch**: one query brings back the customers for all 500 documents at once,
+and there is a test asserting that a thousand billings spread across a hundred customers
+does not exceed 20 queries — without batching it would be a thousand.
 
-**A cobrança nasce pendente**, como a cadastrada pela tela. Coluna de status ou
-de valor pago no arquivo é **ignorada**, não aceita: aceitar `paid` criaria
-cobrança paga sem os valores congelados, que é o mesmo motivo pelo qual o
-formulário de cadastro não tem esses campos. Existe teste enviando
-`status;valor_pago` no arquivo e afirmando que a cobrança entra pendente.
+**The billing is born pending**, like one created through the screen. A status or
+paid-amount column in the file is **ignored**, not accepted: accepting `paid` would create
+a paid billing without the frozen values, which is the same reason the create form does
+not have those fields. There is a test sending `status;valor_pago` in the file and
+asserting the billing goes in pending.
 
-Formatos que vêm de planilha, todos aceitos:
+Formats that come out of spreadsheets, all accepted:
 
-| No arquivo | No banco |
+| In the file | In the database |
 |---|---|
-| `1.234,56` ou `1234.56` | `1234.56` |
-| `09/08/2026` ou `2026-08-09` | `2026-08-09` |
+| `1.234,56` or `1234.56` | `1234.56` |
+| `09/08/2026` or `2026-08-09` | `2026-08-09` |
 | `0,035` | `0.0350` |
-| taxa ausente | `0` — cobrança sem juros é legítima |
+| a missing rate | `0` — a billing with no interest is legitimate |
 
-A conversão de data usa `DateTimeImmutable` e não `CarbonImmutable`, e isso é
-deliberado: o Carbon **lança exceção** quando o valor não casa com o formato, em
-vez de devolver `false` como o nativo. Aqui a tentativa que falha é o caso
-normal — são quatro formatos testados em sequência — e usar exceção para fluxo
-esperado custa caro e lê pior. As duas convertem `32/13/2026` rolando para o mês
-seguinte, então a data é formatada de volta e comparada com a original; sem isso,
-data inválida viraria cobrança com vencimento errado em vez de erro na linha.
+The date conversion uses `DateTimeImmutable` and not `CarbonImmutable`, and that is
+deliberate: Carbon **throws** when the value does not match the format, instead of
+returning `false` like the native one. Here the failing attempt is the normal case — four
+formats are tried in sequence — and using an exception for expected flow is expensive and
+reads worse. Both convert `32/13/2026` by rolling into the following month, so the date is
+formatted back and compared against the original; without that, an invalid date would
+become a billing with the wrong due date instead of an error on the row.
 
-Ao contrário de cliente, **linhas idênticas geram duas cobranças**: cobrança não
-tem chave natural, e duas mensalidades do mesmo cliente com o mesmo vencimento
-são duas cobranças de verdade.
+Unlike customers, **identical rows create two billings**: a billing has no natural key, and
+two monthly charges for the same customer with the same due date are two real billings.
 
 ---
 
-## Relatório de faturamento
+## Billing report
 
-`GET /api/reports/billings`, tela em `/relatorio`.
+`GET /api/reports/billings`, with the screen at `/relatorio`.
 
-| Filtro | Valores |
+| Filter | Values |
 |---|---|
 | `date_field` | `issue_date` · `due_date` · `payment_date` |
-| `start_date` / `end_date` | o período, sobre a data escolhida acima |
+| `start_date` / `end_date` | the period, over the date chosen above |
 | `customer_id` | |
 | `status` | `pending` · `paid` · **`overdue`** |
-| `sort` | as cinco colunas, incluindo `updated_amount` |
+| `sort` | the five columns, including `updated_amount` |
 
-`overdue` não é status gravado: é a condição derivada `pendente + vencimento no
-passado`, e vem da mesma classe que calcula os juros — a regra tem uma fonte
-só, vista de dois ângulos.
+`overdue` is not a stored status: it is the derived condition `pending + due date in the
+past`, and it comes from the same class that computes the interest — the rule has one
+source, seen from two angles.
 
-### Totalizadores vêm de consulta separada
+### The totals come from a separate query
 
-Quantidade, valor original, juros, valor atualizado, recebido e pendente saem
-de **uma consulta de agregação sobre o conjunto filtrado inteiro**, nunca da
-soma da página exibida. Na página 3 de um relatório de mil cobranças, somar a
-página daria um número sem significado.
+The count, the original amount, the interest, the updated amount, received and pending all
+come from **one aggregation query over the entire filtered set**, never from the sum of
+the page on display. On page 3 of a thousand-billing report, summing the page would give a
+meaningless number.
 
-O teste monta 25 cobranças numa página de 10 e afirma que o total é 25, não 10.
+The test builds 25 billings on a page of 10 and asserts the total is 25, not 10.
 
-`rows()` e `totals()` partem do **mesmo objeto de filtros** — é isso que
-garante que o rodapé fale do mesmo conjunto que as linhas, e é o que as
-exportações vão reusar para produzir arquivo idêntico ao que está na tela.
+`rows()` and `totals()` start from the **same filters object** — that is what guarantees
+the footer talks about the same set as the rows, and it is what the exports reuse to
+produce a file identical to what is on screen.
 
-### Ordenar por valor atualizado
+### Sorting by updated value
 
-É a razão de o cálculo existir em SQL. Com ele apenas em PHP, ordenar por valor
-atualizado obrigaria a carregar o conjunto inteiro em memória — que é o que o
-teste proíbe. Há teste com uma cobrança de valor original menor porém muito
-mais atrasada, afirmando que o valor atualizado inverte a ordem.
+It is the reason the calculation exists in SQL. With it in PHP alone, sorting by updated
+value would force loading the whole set into memory — which is what the brief rules out.
+There is a test with a billing of a smaller original amount but far more overdue,
+asserting the updated value flips the order.
 
-A paginação tem desempate por `id`: sem ele, duas páginas podem repetir ou
-pular linhas quando há empate na coluna ordenada.
+Pagination has a tie-break on `id`: without it, two pages can repeat or skip rows when the
+sorted column has ties.
 
-### `whereDate()` não é usado
+### `whereDate()` is not used
 
-Envolver a coluna em `DATE()` impede o MySQL de usar o índice, e o relatório é
-exatamente onde isso não pode acontecer. As colunas já são do tipo `DATE`, e a
-comparação é direta.
+Wrapping the column in `DATE()` stops MySQL from using the index, and the report is exactly
+where that cannot happen. The columns are already of type `DATE`, and the comparison is
+direct.
 
-### Medição contra 2.000.000 de cobranças, antes dos índices
+### Measured against 2,000,000 billings, before the indexes
 
-| Consulta | Tempo |
+| Query | Time |
 |---|---|
-| 1 mês por vencimento (56.680 cobranças) | 3,8s |
-| 1 mês ordenado por valor atualizado | 3,5s |
-| 1 mês + filtro de vencidas | 4,2s |
-| 1 ano | 4,3s |
+| 1 month by due date (56,680 billings) | 3.8s |
+| 1 month sorted by updated value | 3.5s |
+| 1 month + the overdue filter | 4.2s |
+| 1 year | 4.3s |
 
-Um mês custa o mesmo que um ano, e isso é o diagnóstico: o custo não vem do
-tamanho do recorte, vem de varrer a tabela toda para encontrá-lo. O `EXPLAIN`
-confirma:
+A month costs the same as a year, and that is the diagnosis: the cost does not come from
+the size of the scope, it comes from scanning the whole table to find it. The `EXPLAIN`
+confirms it:
 
 ```
 EXPLAIN SELECT COUNT(*) FROM billings
@@ -343,92 +334,88 @@ WHERE due_date >= '2026-01-01' AND due_date <= '2026-01-31'
 type: ALL      key: NULL      rows: 1989965
 ```
 
-Com `customer_id` junto, a chave estrangeira entra e o plano muda para
-`type: ref`, `rows: 418`. Ou seja: o filtro por cliente já tem índice, o filtro
-por data não. É o que a seção seguinte resolve.
+With `customer_id` alongside, the foreign key comes into play and the plan changes to
+`type: ref`, `rows: 418`. In other words: the customer filter already has an index, the
+date filter does not. That is what the next section solves.
 
 ---
+## Access roles
 
-## Perfis de acesso
+Two roles: **administrator**, who operates, and **read-only**, who reads everything and
+writes nothing.
 
-Dois perfis: **administrador**, que opera, e **consulta**, que lê tudo e não
-escreve nada.
-
-| | Administrador | Consulta |
+| | Administrator | Read-only |
 |---|---|---|
-| Ver clientes, cobranças, relatório e painel | sim | sim |
-| Exportar CSV e PDF | sim | **sim** |
-| Cadastrar, editar e importar | sim | não |
-| Registrar pagamento | sim | não |
+| Viewing customers, billings, the report and the dashboard | yes | yes |
+| Exporting CSV and PDF | yes | **yes** |
+| Creating, editing and importing | yes | no |
+| Recording a payment | yes | no |
 
-Exportar é leitura, e fica do lado de quem consulta: o arquivo é o mesmo
-relatório em outro formato, e recusá-lo a quem pode ver a tela seria proteger o
-dado do lugar errado.
+Exporting is reading, and it sits on the read-only side: the file is the same report in
+another format, and refusing it to someone who can see the screen would be protecting the
+data from the wrong place.
 
-### A barreira é o backend, não a tela
+### The barrier is the backend, not the screen
 
-A interface esconde o que o perfil não pode fazer, e isso é **conveniência**.
-Quem sabe o endereço do endpoint chega nele sem passar por tela nenhuma:
+The interface hides what the role cannot do, and that is **convenience**. Whoever knows
+the endpoint's address reaches it without passing through any screen:
 
 ```bash
-curl -X POST localhost:8000/api/customers -H "Authorization: Bearer <token de consulta>"
+curl -X POST localhost:8000/api/customers -H "Authorization: Bearer <read-only token>"
 # 403 — Seu perfil é de consulta e não permite esta operação.
 ```
 
-`RoleAccessTest` bate direto na API, sem tela no caminho, e cobre **todo**
-endpoint que escreve. Um endpoint de escrita novo que não aparecer lá fica sem
-teste, que é o sinal seguinte.
+`RoleAccessTest` hits the API directly, with no screen in the way, and covers **every**
+endpoint that writes. A new write endpoint that does not appear there has no test, which
+is the next signal.
 
-Quem digitar o endereço de uma tela de escrita recebe a explicação — "seu perfil
-é de consulta" — e não um formulário que vai falhar no envio nem um 404
-mentiroso: a página existe, o que falta é permissão.
+Whoever types the address of a write screen gets the explanation — "seu perfil é de
+consulta" — and not a form that will fail on submit nor a lying 404: the page exists,
+what is missing is permission.
 
-### Middleware e não Policy
+### Middleware and not a Policy
 
-Policy resolve autorização **por registro**: "este usuário pode editar ESTA
-cobrança". A regra aqui é por **perfil** e vale para todo registro, então ela
-está amarrada ao grupo de rotas.
+A Policy resolves authorisation **per record**: "this user may edit THIS billing". The
+rule here is per **role** and holds for every record, so it is tied to the route group.
 
-O ganho é o `routes/api.php`: dá para ler quais rotas escrevem olhando o
-arquivo, porque elas estão num grupo só, com `can.write`. Espalhada por uma
-classe de política para cada model, a mesma informação exigiria abrir quatro
-arquivos.
+The gain is `routes/api.php`: you can read which routes write by looking at the file,
+because they are in a single group, with `can.write`. Scattered across one policy class
+per model, the same information would take opening four files.
 
-### Dois defaults que parecem se contradizer
+### Two defaults that look like a contradiction
 
-A coluna `role` tem default **`viewer`** — o menor privilégio. Um usuário criado
-por um caminho que esqueceu de definir o perfil não sai escrevendo, que é o
-comportamento seguro quando alguém erra.
+The `role` column defaults to **`viewer`** — the least privilege. A user created through a
+path that forgot to set the role does not go off writing, which is the safe behaviour when
+someone slips.
 
-A factory de testes cria **`admin`**. Não é contradição: o default do banco
-protege produção, e a factory serve a dezenas de testes que precisam escrever e
-não têm nada a ver com perfil. O default oposto ali faria todos eles falharem
-com 403 por um motivo que não é o deles.
+The test factory creates an **`admin`**. That is not a contradiction: the database's
+default protects production, and the factory serves dozens of tests that need to write and
+have nothing to do with roles. The opposite default there would make all of them fail with
+a 403 for a reason that is not theirs.
 
-E os usuários que já existiam quando a migration rodou viraram administradores,
-apesar do default: antes dela não havia outro perfil, então quem estava lá era
-administrador por definição. Aplicar o default a eles tiraria o acesso de quem
-já operava o sistema.
+And the users that already existed when the migration ran became administrators, despite
+the default: before it there was no other role, so whoever was in there was an
+administrator by definition. Applying the default to them would have stripped access from
+whoever was already operating the system.
 
 ---
 
-## Idempotência no pagamento
+## Payment idempotency
 
-Registrar pagamento é a operação da API em que repetir **cobra duas vezes** — e,
-desde o [estorno](#estorno-de-pagamento), não é mais a única em que repetir muda
-dinheiro de lugar. Criar dois clientes iguais esbarra no índice único do
-documento; reimportar um CSV devolve o relatório do que gravou. Pagar duas vezes
-grava dois valores congelados, e o segundo é o de outro dia.
+Recording a payment is the API operation where repeating **charges twice** — and, since
+[reversals](#payment-reversal), it is no longer the only one where repeating moves money
+around. Creating two identical customers hits the document's unique index; reimporting a
+CSV returns the report of what it wrote. Paying twice writes two frozen values, and the
+second is another day's.
 
-O usuário não precisa fazer nada de errado para isso acontecer: um clique duplo,
-uma conexão que cai depois de o servidor ter processado, um `F5` na tela de
-confirmação. A tela desabilita o botão enquanto envia, e isso resolve o caso
-fácil e nenhum dos outros — é a mesma história dos [perfis de
-acesso](#a-barreira-é-o-backend-não-a-tela): o que vale é o que o backend
-garante.
+The user does not have to do anything wrong for that to happen: a double click, a
+connection that drops after the server has processed, an `F5` on the confirmation screen.
+The screen disables the button while submitting, and that solves the easy case and none of
+the others — it is the same story as [access roles](#the-barrier-is-the-backend-not-the-screen):
+what counts is what the backend guarantees.
 
-A operação aceita o cabeçalho **`Idempotency-Key`**, e com ele a segunda chamada
-devolve o resultado da primeira em vez de processar de novo.
+The operation accepts the **`Idempotency-Key`** header, and with it the second call
+returns the first one's result instead of processing again.
 
 ```
 POST /api/billings/787/payment
@@ -437,128 +424,123 @@ Idempotency-Key: a446dee2-f551-4b68-a4ed-344dddf7301b
 HTTP/1.1 200 OK
 {"data":{"paid_amount":"13605.62","paid_interest_amount":"9593.85", ...}}
 
-  ↓ a mesma chamada, de novo
+  ↓ the same call, again
 
 HTTP/1.1 200 OK
 Idempotent-Replay: true
 {"data":{"paid_amount":"13605.62","paid_interest_amount":"9593.85", ...}}
 ```
 
-Os dois corpos são idênticos byte a byte. O cabeçalho `Idempotent-Replay` é a
-única diferença, e existe para quem chama distinguir "pagou agora" de "já tinha
-pago" no log — o corpo sozinho não conta essa história.
+The two bodies are identical byte for byte. The `Idempotent-Replay` header is the only
+difference, and it exists so the caller can tell "just paid" from "had already paid" in the
+log — the body alone does not tell that story.
 
-O nome do cabeçalho não foi inventado: é o do rascunho da IETF
-(`draft-ietf-httpapi-idempotency-key-header`), que é o mesmo que Stripe e
-Adyen usam. Escolher um nome próprio obrigaria a explicá-lo a cada integração.
+The header's name was not invented: it is the IETF draft's
+(`draft-ietf-httpapi-idempotency-key-header`), the same one Stripe and Adyen use. Choosing
+a name of our own would mean explaining it on every integration.
 
-### O índice único é o mecanismo, não a validação
+### The unique index is the mechanism, not the validation
 
-A reserva da chave é um `INSERT` numa tabela com `UNIQUE (user_id, key)`, feito
-**antes** de processar. A alternativa óbvia — consultar se a chave existe e
-inserir se não existir — tem uma janela entre as duas consultas em que duas
-requisições simultâneas passam as duas. E requisições simultâneas não são o caso
-raro aqui: são o caso principal, porque é assim que o clique duplo chega.
+Reserving the key is an `INSERT` into a table with `UNIQUE (user_id, key)`, done **before**
+processing. The obvious alternative — check whether the key exists and insert if it does
+not — has a window between the two queries in which two simultaneous requests both get
+through. And simultaneous requests are not the rare case here: they are the main case,
+because that is how the double click arrives.
 
-Com o `INSERT` primeiro, quem arbitra é o banco. Quem perde a corrida recebe a
-violação de unicidade e vai olhar o estado da linha para decidir o que fazer.
+With the `INSERT` first, the database is what arbitrates. Whoever loses the race receives
+the uniqueness violation and goes to look at the row's state to decide what to do.
 
-A linha nasce com `response_status` nulo, e esse estado — *reservada, ainda sem
-resposta* — é o que permite responder **409** para quem chega enquanto a
-primeira ainda processa. Sem ele, a segunda requisição não teria como saber se a
-chave está em uso ou se a resposta simplesmente não existe.
+The row is born with a null `response_status`, and that state — *reserved, still without a
+response* — is what makes it possible to answer **409** to whoever arrives while the first
+is still processing. Without it, the second request would have no way to know whether the
+key is in use or the response simply does not exist.
 
-Medido contra a base de 2.000.000 de cobranças, oito requisições disparadas ao
-mesmo tempo na mesma cobrança com a mesma chave:
+Measured against the base of 2,000,000 billings, eight requests fired at the same time
+against the same billing with the same key:
 
-| Desfecho | Quantas |
+| Outcome | How many |
 |---|---|
-| `200` — processou o pagamento | 1 |
-| `200 Idempotent-Replay` — recebeu o resultado guardado | 1 |
-| `409` — chegou com a primeira em voo | 6 |
+| `200` — processed the payment | 1 |
+| `200 Idempotent-Replay` — received the stored result | 1 |
+| `409` — arrived with the first in flight | 6 |
 
-Uma cobrança, um pagamento. Sem a chave, as oito teriam disputado a mesma
-cobrança e o resultado dependeria de quem chegasse primeiro no `UPDATE`.
+One billing, one payment. Without the key, all eight would have contended over the same
+billing and the result would depend on who reached the `UPDATE` first.
 
-### Middleware, e não código no controller
+### Middleware, and not code in the controller
 
-A resposta guardada precisa incluir **os erros de validação**: repetir uma
-chamada que falhou tem que repetir a falha, não processá-la. E o 422 do
-`RegisterPaymentRequest` nasce antes de o controller existir — no controller não
-haveria o que guardar.
+The stored response has to include **the validation errors**: replaying a call that failed
+has to replay the failure, not process it. And `RegisterPaymentRequest`'s 422 is born
+before the controller exists — in the controller there would be nothing to store.
 
-Do middleware dá para guardar o que a rota respondeu, independente de quem
-respondeu. Isso funciona porque o `Illuminate\Routing\Pipeline` renderiza a
-exceção dentro da pilha: o middleware recebe o 422 já como resposta, não como
-`ValidationException`.
+From the middleware you can store what the route answered, regardless of who answered it.
+That works because `Illuminate\Routing\Pipeline` renders the exception inside the stack:
+the middleware receives the 422 already as a response, not as a `ValidationException`.
 
-O middleware é registrado como alias `idempotent` e aplicado a duas rotas: o
-pagamento e o estorno. Não é preguiça: aplicá-lo ao grupo de escrita inteiro
-criaria linha de tabela para toda importação de CSV e todo cadastro de cliente,
-sem cobrir risco nenhum.
+The middleware is registered as the `idempotent` alias and applied to two routes: the
+payment and the reversal. That is not laziness: applying it to the whole write group would
+create a table row for every CSV import and every customer created, covering no risk at
+all.
 
-### O que a chave NÃO faz
+### What the key does NOT do
 
-Três recusas de propósito, e todas têm teste:
+Three deliberate refusals, and all of them have tests:
 
-**Sem o cabeçalho, nada muda.** Pagar uma cobrança já paga continua respondendo
-422. Idempotência serve a quem repete a **mesma** operação — transformar toda
-segunda tentativa em sucesso esconderia um erro de verdade.
+**Without the header, nothing changes.** Paying an already paid billing still answers 422.
+Idempotency serves whoever repeats the **same** operation — turning every second attempt
+into a success would hide a real error.
 
-**Mesma chave com outro conteúdo responde 422**, e "outro conteúdo" inclui outra
-cobrança: a impressão digital comparada é o método, o caminho e o payload. Um
-cliente que reaproveita chave está com bug, e devolver o resultado antigo
-esconderia o bug em vez de apontá-lo.
+**The same key with different content answers 422**, and "different content" includes a
+different billing: the fingerprint compared is the method, the path and the payload. A
+client that reuses a key has a bug, and returning the old result would hide the bug instead
+of pointing at it.
 
-**Erro de servidor devolve a chave.** Um 500 não é resultado da operação, é falha
-em produzi-lo, e o certo depois de um 500 é tentar de novo. Guardá-lo
-condenaria a chave a repetir a falha pelas 24 horas seguintes.
+**A server error gives the key back.** A 500 is not the operation's result, it is a failure
+to produce one, and the right move after a 500 is to try again. Storing it would condemn
+the key to replaying the failure for the next 24 hours.
 
-### A validade é de 24 horas
+### The validity is 24 hours
 
-Guardar para sempre não é opção: a tabela cresceria sem teto, e uma chave de
-meses atrás repetiria uma resposta que já não descreve o registro. Vinte e
-quatro horas cobre com folga o que a idempotência existe para cobrir: clique
-duplo, retry de rede, reenvio de formulário.
+Keeping them forever is not an option: the table would grow without bound, and a key from
+months ago would replay a response that no longer describes the record. Twenty-four hours
+comfortably covers what idempotency exists to cover: the double click, the network retry,
+the resubmitted form.
 
-A limpeza das vencidas é **por sorteio** — uma chance em duzentas, a cada chave
-nova. É a mesma estratégia que o Laravel usa para expirar sessão em arquivo, e a
-razão é a mesma: manutenção não pode custar um `DELETE` em toda operação de
-escrita. Tarefa agendada seria mais previsível, mas este projeto não sobe
-worker — agendar aqui seria escrever uma limpeza que nunca roda.
+Cleaning up the expired ones is **by lottery** — a one-in-two-hundred chance, on every new
+key. It is the same strategy Laravel uses to expire file-based sessions, and for the same
+reason: maintenance cannot cost a `DELETE` on every write. A scheduled task would be more
+predictable, but this project runs no worker — scheduling it here would mean writing a
+cleanup that never runs.
 
-### De onde a chave vem, na tela
+### Where the key comes from, on the screen
 
-O formulário de pagamento sorteia um UUID **no browser**, e o reaproveita
-enquanto o conteúdo dos campos não muda:
+The payment form draws a UUID **in the browser**, and reuses it as long as the fields'
+content does not change:
 
-- **conteúdo igual → mesma chave.** É o clique duplo e o reenvio depois de a
-  conexão cair. O backend devolve o primeiro resultado.
-- **conteúdo mudou → chave nova.** Quem corrigiu a data depois de um erro está
-  pedindo outra coisa; reaproveitar a chave devolveria o 422 antigo.
+- **same content → same key.** This is the double click and the resend after the
+  connection drops. The backend returns the first result.
+- **content changed → new key.** Someone who corrected the date after an error is asking
+  for something else; reusing the key would hand back the old 422.
 
-A chave não pode nascer na Server Action. Uma action reexecutada por retry de
-rede rodaria o sorteio de novo e produziria outra chave — que é exatamente o
-caso que a chave existe para cobrir. Nascendo no cliente, o reenvio manda a
-mesma.
+The key cannot be born in the Server Action. An action re-executed by a network retry would
+run the draw again and produce another key — which is exactly the case the key exists to
+cover. Born on the client, the resend sends the same one.
 
-Ela também não pode nascer durante a renderização: `crypto.randomUUID()` daria
-um valor no servidor e outro na hidratação. Por isso o envio passa por
-`onSubmit` com a action dentro de uma transição, o mesmo padrão que a
-[importação](#o-arquivo-não-fica-guardado-entre-a-prévia-e-a-confirmação) já
-usava por outro motivo.
+It also cannot be born during render: `crypto.randomUUID()` would give one value on the
+server and another at hydration. That is why submitting goes through `onSubmit` with the
+action inside a transition, the same pattern the
+[import](#the-file-is-not-kept-between-the-preview-and-the-confirmation) already used for
+another reason.
 
 ---
+## Audit trail
 
-## Trilha de auditoria
+Every **edit**, every **payment** and every **reversal** of a billing records who changed
+it, what changed and when. The trail is read at `GET /api/billings/{id}/audit` and appears
+at the bottom of the billing's page, as "Histórico de alterações" — including for the
+read-only role, because reading the history is reading.
 
-Toda **edição**, todo **pagamento** e todo **estorno** de cobrança registram quem
-alterou, o quê e quando. A trilha é lida em
-`GET /api/billings/{id}/audit` e aparece no fim da página da cobrança, como
-"Histórico de alterações" — inclusive para o perfil de consulta, porque ler o
-histórico é leitura.
-
-Cada entrada guarda **só o que mudou**, com o valor de antes e o de depois:
+Each entry keeps **only what changed**, with the before and after values:
 
 ```json
 {
@@ -575,267 +557,252 @@ Cada entrada guarda **só o que mudou**, com o valor de antes e o de depois:
 }
 ```
 
-A entrada de pagamento carrega os valores congelados no `to`, e a de estorno os
-traz no `from`: as colunas de pagamento da cobrança são limpas, e o que foi pago
-continua registrado aqui.
+The payment entry carries the frozen values in `to`, and the reversal's brings them in
+`from`: the billing's payment columns are cleared, and what was paid stays recorded here.
 
-Uma trilha vale pelo que garante, e são três garantias — cada uma com teste.
+A trail is worth what it guarantees, and there are three guarantees — each with a test.
 
-### Completa: observer, e não chamada explícita
+### Complete: an observer, not an explicit call
 
-A trilha é gravada por um observer do Eloquent em `Billing`, e não por uma
-chamada em cada ponto que altera cobrança. Chamada explícita é exatamente o tipo
-de coisa que o próximo caminho de escrita esquece; o observer pega toda
-alteração pelo Eloquent, venha do controller, do registro de pagamento ou do
-tinker.
+The trail is written by an Eloquent observer on `Billing`, and not by a call at each point
+that changes a billing. An explicit call is exactly the kind of thing the next write path
+forgets; the observer catches every change through Eloquent, whether it comes from the
+controller, from recording a payment, or from tinker.
 
-O **evento sai da transição de status**, não de quem chamou. Nenhum ponto do
-código declara "isto é um pagamento": pendente que vira paga é pagamento, paga
-que volta a pendente é estorno, venha de onde vier. Nenhum caminho novo consegue
-rotular errado — o estorno entrou na trilha sem uma linha nova no observer, só
-com um caso a mais no enum.
+The **event comes from the status transition**, not from the caller. No point in the code
+declares "this is a payment": pending becoming paid is a payment, paid going back to
+pending is a reversal, wherever it comes from. No new path can label it wrongly — the
+reversal entered the trail without a new line in the observer, with just one more case in
+the enum.
 
-O preço do observer é conhecido: **consulta crua passa por fora sem aviso.** Um
-`DB::table('billings')->update(...)` altera a cobrança e a trilha nunca fica
-sabendo. Por isso existe um teste que varre `app/` atrás desse padrão — e o
-limite dele fica dito no próprio teste: pega a escrita encadeada na mesma
-instrução, não o construtor guardado numa variável e alterado três linhas
-depois. Ele existe para o erro óbvio não passar na revisão, não para
-substituí-la.
+The observer's price is known: **a raw query slips past without warning.** A
+`DB::table('billings')->update(...)` changes the billing and the trail never finds out.
+That is why there is a test that sweeps `app/` looking for that pattern — and its limit is
+stated in the test itself: it catches the write chained in the same statement, not the
+builder held in a variable and updated three lines later. It exists so the obvious mistake
+does not get past review, not to replace it.
 
-As bibliotecas conhecidas para isso — `spatie/laravel-activitylog` e
-`owen-it/laravel-auditing` — foram consideradas e ficaram de fora. As duas se
-apoiam nos mesmos eventos do Eloquent, então a porta da consulta crua continuaria
-aberta do mesmo jeito; guardam tudo numa tabela polimórfica genérica, pensada
-para auditar muitos models, quando aqui há um; e a distinção entre pagamento e
-edição precisaria ser escrita por cima delas de qualquer forma. O que existe
-aqui é um observer, um enum e um model.
+The known libraries for this — `spatie/laravel-activitylog` and `owen-it/laravel-auditing`
+— were considered and left out. Both lean on the same Eloquent events, so the raw-query
+door would stay open just the same; they store everything in a generic polymorphic table,
+designed to audit many models, where here there is one; and the distinction between a
+payment and an edit would have to be written on top of them anyway. What exists here is an
+observer, an enum and a model.
 
-### Atômica: sem trilha, sem alteração
+### Atomic: without the trail, no change
 
-A edição e o pagamento gravam com `updateOrFail`, que abre transação. O observer
-escreve a trilha dentro dela, então se a escrita da trilha falhar, a alteração
-volta junto. Uma cobrança alterada sem registro na trilha é o furo que uma
-trilha não pode ter.
+Editing and paying write with `updateOrFail`, which opens a transaction. The observer
+writes the trail inside it, so if writing the trail fails, the change rolls back with it. A
+billing changed without a record in the trail is the hole a trail cannot have.
 
-O teste simula a falha no evento `creating` do próprio model da trilha, e não
-renomeando a tabela: DDL no meio do teste encerraria a transação do
-`RefreshDatabase` por commit implícito — a [armadilha que já custou 50
-segundos por teste](testes.md#o-teste-do-seeder-não-emite-ddl).
+The test simulates the failure on the trail model's own `creating` event, and not by
+renaming the table: DDL mid-test would end `RefreshDatabase`'s transaction through an
+implicit commit — [the trap that already cost 50 seconds per test](testes.md#the-seeders-test-emits-no-ddl).
 
-### Imutável: registro errado se corrige com outro registro
+### Immutable: a wrong record is corrected with another record
 
-O model da trilha **recusa `update` e `delete`** com exceção, e a tabela não tem
-`updated_at` porque não há o que atualizar. As chaves estrangeiras são
-`RESTRICT`: apagar uma cobrança ou um usuário que tem histórico falha, em vez de
-levar o histórico junto.
+The trail's model **refuses `update` and `delete`** by throwing, and the table has no
+`updated_at` because there is nothing to update. The foreign keys are `RESTRICT`: deleting
+a billing or a user that has history fails, rather than taking the history along.
 
-A recusa vale para todo caminho que passe pelo Eloquent, e só para ele. SQL cru
-com o usuário da aplicação ainda altera a tabela. Fechar isso de verdade é
-permissão no banco — um usuário de aplicação sem `UPDATE` e `DELETE` em
-`billing_audits` —, e este projeto usa um usuário só para a aplicação e para as
-migrations. Fica dito aqui em vez de parecer resolvido.
+The refusal holds for every path that goes through Eloquent, and only for those. Raw SQL
+with the application's user still changes the table. Closing that for real means database
+permissions — an application user without `UPDATE` and `DELETE` on `billing_audits` — and
+this project uses a single user for the application and for the migrations. It is stated
+here rather than made to look solved.
 
-### Só entra o que mudou de fato
+### Only what actually changed gets in
 
-Quem decide o que mudou são os casts do model. O valor que chega como `"1000"`
-sobre um `"1000.00"` gravado é o mesmo número, o Eloquent não o marca como
-alterado, e ele não aparece na trilha — registrar isso encheria o histórico de
-ruído que esconde a alteração verdadeira. Os carimbos `updated_at` e
-`created_at` ficam de fora pelo mesmo motivo, e uma edição que não muda nada não
-registra nada.
+What decides what changed are the model's casts. A value arriving as `"1000"` over a stored
+`"1000.00"` is the same number, Eloquent does not mark it as changed, and it does not appear
+in the trail — recording it would fill the history with noise that hides the real change.
+The `updated_at` and `created_at` stamps are left out for the same reason, and an edit that
+changes nothing records nothing.
 
-### A criação fica de fora, de propósito
+### Creation is deliberately left out
 
-O que a especificação pede na trilha é edição, pagamento e estorno — alterações. O
-quando da criação já está em `created_at`.
+What the brief asks for in the trail is edits, payments and reversals — changes. The when
+of creation is already in `created_at`.
 
-Registrar a criação **de forma consistente** exigiria o id de cada cobrança que a
-importação grava, e a importação grava em lote, com um `INSERT` de quinhentas
-linhas. O MySQL não devolve os ids de um insert em lote, e com
-`innodb_autoinc_lock_mode = 2` — o default do MySQL 8, conferido neste servidor
-— os ids de um mesmo insert em lote não têm garantia de serem consecutivos
-quando há inserts concorrentes. Calcular `LAST_INSERT_ID() + n` seria um
-palpite. As alternativas eram gravar linha a linha, desfazendo o lote que a
-importação usa, ou registrar a criação só para quem cadastra pela tela.
+Recording creation **consistently** would require the id of every billing the import
+writes, and the import writes in batches, with an `INSERT` of five hundred rows. MySQL does
+not return the ids of a batch insert, and with `innodb_autoinc_lock_mode = 2` — MySQL 8's
+default, checked on this server — the ids of one batch insert are not guaranteed to be
+consecutive when there are concurrent inserts. Computing `LAST_INSERT_ID() + n` would be a
+guess. The alternatives were writing row by row, undoing the batching the import uses, or
+recording creation only for whoever creates through the screen.
 
-A segunda é pior do que não registrar: uma trilha em que metade das cobranças
-tem "criada" e a outra metade não **mente por omissão**. A trilha começa, para
-toda cobrança igual, na primeira alteração.
+The second is worse than not recording it: a trail in which half the billings have "created"
+and the other half do not **lies by omission**. The trail starts, identically for every
+billing, at the first change.
 
-O seeder de volume também não grava trilha. Os dois milhões de linhas entram por
-insert cru, e as pagas recebem os valores congelados na própria linha, pelo
-`RegisterPayment::freeze()` — não houve alteração feita por alguém para
-registrar. O `truncate()` do seeder passou a limpar `billing_audits` junto,
-porque o `TRUNCATE` reinicia os ids das cobranças e a trilha antiga passaria a
-descrever cobranças que não são as dela.
+The volume seeder does not write a trail either. The two million rows go in through raw
+inserts, and the paid ones receive their frozen values on the row itself, through
+`RegisterPayment::freeze()` — no change was made by anyone to record. The seeder's
+`truncate()` now clears `billing_audits` along with the rest, because the `TRUNCATE`
+restarts the billings' ids and the old trail would end up describing billings that are not
+its own.
 
-### O MySQL reordena as chaves do JSON
+### MySQL reorders the JSON's keys
 
-`changes` é uma coluna JSON, e o MySQL não guarda a ordem das chaves: ele
-reordena por tamanho. `{"from": "a", "to": "b"}` volta do banco como
-`{"to": "b", "from": "a"}`, e `description` volta depois de `due_date`. Foi o
-teste que mostrou, com três asserções falhando por ordem e não por conteúdo.
+`changes` is a JSON column, and MySQL does not preserve the order of its keys: it reorders
+by size. `{"from": "a", "to": "b"}` comes back from the database as
+`{"to": "b", "from": "a"}`, and `description` comes back after `due_date`. The test is what
+showed it, with three assertions failing on order rather than on content.
 
-A ordem que a API entrega é imposta pelo resource — `field`, `label`, `from`,
-`to`, e os campos na ordem da ficha da cobrança, com o status primeiro —, e o
-teste compara o conteúdo gravado sem depender da ordem, mas com tipos estritos:
-`assertEquals` resolveria a ordem aceitando `null` igual a `''`, e o `from` nulo
-do pagamento é justamente o que importa.
+The order the API delivers is imposed by the resource — `field`, `label`, `from`, `to`, and
+the fields in the billing detail panel's order, with the status first — and the test
+compares the stored content without depending on order, but with strict types:
+`assertEquals` would solve the ordering by accepting `null` as equal to `''`, and the
+payment's null `from` is precisely what matters.
 
-### A leitura, medida com volume
+### Reading it, measured at volume
 
-A trilha não tem índice além dos das chaves estrangeiras, e não precisa. A
-leitura é `WHERE billing_id = ? ORDER BY id DESC LIMIT 50`, e o índice que a
-chave estrangeira cria em `billing_id` já está em ordem de id dentro de cada
-cobrança: no InnoDB o índice secundário carrega a chave primária no fim.
+The trail has no index beyond the foreign keys', and it does not need one. The read is
+`WHERE billing_id = ? ORDER BY id DESC LIMIT 50`, and the index the foreign key creates on
+`billing_id` is already in id order within each billing: in InnoDB a secondary index
+carries the primary key at the end.
 
-Uma tabela vazia não prova isso — o otimizador escolhe outro plano quando não há
-linhas. A medição foi feita com **200.080 entradas sintéticas** na base de
-2.000.000 de cobranças, 81 delas numa cobrança só, apagadas depois:
+An empty table does not prove that — the optimiser picks a different plan when there are no
+rows. The measurement was made with **200,080 synthetic entries** on the base of 2,000,000
+billings, 81 of them on a single billing, deleted afterwards:
 
-| Consulta | Plano | Tempo |
+| Query | Plan | Time |
 |---|---|---|
-| página de 50 da cobrança | `Index lookup ... (reverse)` na FK, sem filesort | 0,127 ms |
-| contagem para a paginação | `Covering index lookup` na FK | 0,049 ms |
+| a page of 50 for the billing | `Index lookup ... (reverse)` on the FK, no filesort | 0.127 ms |
+| the count for the pagination | `Covering index lookup` on the FK | 0.049 ms |
 
 ---
 
-## Estorno de pagamento
+## Payment reversal
 
-O estorno desfaz um pagamento que não se sustentou — cheque devolvido,
-transferência revertida, baixa lançada na cobrança errada.
-`POST /api/billings/{id}/reversal`, sem corpo, e na tela um cartão "Estornar
-pagamento" na cobrança paga, para o perfil de administrador.
+A reversal undoes a payment that did not hold up — a bounced cheque, a reversed transfer, a
+settlement posted against the wrong billing. `POST /api/billings/{id}/reversal`, with no
+body, and on screen an "Estornar pagamento" card on a paid billing, for the administrator
+role.
 
-Três regras, cada uma com teste:
+Three rules, each with a test:
 
-- **A cobrança volta a pendente**, com data e valores de pagamento nulos.
-- **Os valores congelados não somem.** Vão para a trilha de auditoria, no `from`
-  da entrada de estorno, e a entrada do pagamento original continua lá, intacta.
-- **Os juros voltam a correr desde o vencimento original.**
+- **The billing goes back to pending**, with the payment date and amounts null.
+- **The frozen values do not disappear.** They go into the audit trail, in the reversal
+  entry's `from`, and the original payment's entry stays there, untouched.
+- **The interest starts running again from the original due date.**
 
-### Desde o vencimento, e não de outra data
+### From the due date, and not from some other date
 
-Havia três datas candidatas para o relógio dos juros recomeçar, e elas dão três
-valores diferentes. Uma cobrança de R$ 1.000,00 a 2% ao mês, vencida em 16/05,
-paga em 20/05 e estornada em 15/06:
+There were three candidate dates for the interest clock to restart from, and they give three
+different values. A billing of R$ 1,000.00 at 2% a month, due on 16/05, paid on 20/05 and
+reversed on 15/06:
 
-| Juros correndo desde | Dias | Valor em 15/06 |
+| Interest running from | Days | Value on 15/06 |
 |---|---|---|
-| **o vencimento, 16/05** | **30** | **R$ 1.020,00** |
-| o pagamento, 20/05 | 26 | R$ 1.017,31 |
-| o estorno, 15/06 | 0 | R$ 1.000,00 |
+| **the due date, 16/05** | **30** | **R$ 1,020.00** |
+| the payment, 20/05 | 26 | R$ 1,017.31 |
+| the reversal, 15/06 | 0 | R$ 1,000.00 |
 
-A regra é a primeira. O pagamento que não se sustentou não aconteceu para o
-devedor: ele continua devendo desde o vencimento, e contar do pagamento ou do
-estorno transformaria o estorno num desconto de juros para quem pagou com um
-cheque sem fundo.
+The rule is the first. A payment that did not hold up did not happen as far as the debtor is
+concerned: they still owe from the due date, and counting from the payment or from the
+reversal would turn a reversal into an interest discount for someone who paid with a bounced
+cheque.
 
-### Não precisou de regra nova de juros
+### It needed no new interest rule
 
-O `ReversePayment` só limpa as colunas de pagamento e devolve o status a
-pendente. Os juros voltam a correr sem nenhuma linha no cálculo, porque o
-`InterestCalculator` só lê as colunas congeladas quando a cobrança está paga —
-nas duas faces. É a [regra que governa a arquitetura](arquitetura.md#cálculo-de-juros)
-pagando de novo: se o valor atualizado dependesse de algo gravado no pagamento
-além dessas colunas, o estorno teria que desfazê-lo em dois lugares.
+`ReversePayment` only clears the payment columns and returns the status to pending. The
+interest starts running again with no line in the calculation, because `InterestCalculator`
+only reads the frozen columns when the billing is paid — on both faces. It is
+[the rule that governs the architecture](arquitetura.md#interest-calculation) paying off
+again: if the updated value depended on something written at payment time beyond those
+columns, the reversal would have to undo it in two places.
 
-Conferido na base de 2.000.000 de cobranças com uma cobrança paga em 2023, dois
-dias depois do vencimento, por R$ 1.291,90. Estornada, ela passou a valer
-**R$ 7.302,09** nos três lugares em que o valor pode ser lido: o endpoint da
-cobrança (face PHP), a expressão SQL que a listagem e o relatório usam no
-`SELECT`, e a conta feita à parte, com os 1.067 dias desde o vencimento.
+Checked on the base of 2,000,000 billings with a billing paid in 2023, two days after its
+due date, for R$ 1,291.90. Reversed, it came to be worth **R$ 7,302.09** in all three places
+the value can be read: the billing's endpoint (the PHP face), the SQL expression the listing
+and the report use in the `SELECT`, and the arithmetic done separately, over the 1,067 days
+since the due date.
 
-A cobrança estornada pode ser paga de novo, e aí os juros congelam na nova data.
+A reversed billing can be paid again, and then the interest freezes at the new date.
 
-### Estorno e idempotência
+### Reversal and idempotency
 
-O estorno aceita `Idempotency-Key`, e o caso que justifica é concreto: pagou,
-estornou, pagou de novo — e o retry atrasado do estorno chega. Sem a chave, ele
-**estornaria o segundo pagamento**, que ninguém pediu para estornar. Com a
-chave, recebe o resultado do estorno original.
+The reversal accepts `Idempotency-Key`, and the case that justifies it is concrete: paid,
+reversed, paid again — and then the reversal's late retry arrives. Without the key, it would
+**reverse the second payment**, which nobody asked to reverse. With the key, it receives the
+original reversal's result.
 
-O outro lado da mesma pergunta pedia uma decisão: **o estorno invalida a chave
-do pagamento?** Não, e é de propósito. A chave descreve a operação de pagar, que
-aconteceu. Um retry atrasado do pagamento que chegue depois do estorno recebe o
-resultado original, com `Idempotent-Replay`, em vez de pagar de novo.
-Invalidar a chave no estorno transformaria esse retry exatamente no pagamento
-em dobro que ela existe para impedir. Quem quer pagar de novo depois de um
-estorno faz uma operação nova, com chave nova — que é o que a tela faz, porque
-o formulário de pagamento que reaparece é outra montagem, com outro sorteio.
+The other side of the same question called for a decision: **does a reversal invalidate the
+payment's key?** No, and that is on purpose. The key describes the act of paying, which
+happened. A late retry of the payment arriving after the reversal receives the original
+result, with `Idempotent-Replay`, instead of paying again. Invalidating the key on reversal
+would turn that retry into exactly the double payment it exists to prevent. Whoever wants to
+pay again after a reversal performs a new operation, with a new key — which is what the
+screen does, because the payment form that reappears is another mount, with another draw.
 
-Os dois testes que cobrem isso acontecem no mesmo dia, de propósito: a chave vale
-24 horas, e um teste que viajasse de maio a junho a venceria e passaria pelo
-motivo errado.
+The two tests covering that happen on the same day, on purpose: the key is valid for 24
+hours, and a test that travelled from May to June would expire it and pass for the wrong
+reason.
 
-Escrevê-los mostrou uma armadilha do próprio harness: `withHeaders()` guarda o
-cabeçalho para **todas** as requisições seguintes do teste. A chave do pagamento
-vazava para o estorno "sem chave", o middleware respondia 422 de chave
-reaproveitada, e o teste falhava pelo motivo errado. Ficou registrada como a
-armadilha 7 da skill de testes.
+Writing them revealed a trap in the harness itself: `withHeaders()` keeps the header for
+**all** the test's following requests. The payment's key leaked into the "keyless" reversal,
+the middleware answered 422 for a reused key, and the test failed for the wrong reason. It
+is recorded as trap 7 in the testing skill.
 
-### Sem campo de motivo
+### No reason field
 
-Um motivo do estorno seria o campo óbvio, e ficou de fora. A especificação não o
-pede, e o quem e o quando já estão na trilha. Acrescentá-lo não é só um campo no
-formulário: a trilha é gravada por um observer que só enxerga o model, e o
-motivo não é coluna da cobrança. Seria preciso uma coluna em `billing_audits` e
-um jeito de passar contexto da requisição para o observer — mecanismo que só
-vale construir quando houver o requisito.
+A reason for the reversal would be the obvious field, and it was left out. The brief does not
+ask for it, and the who and the when are already in the trail. Adding it is not just a field
+on the form: the trail is written by an observer that only sees the model, and the reason is
+not a column on the billing. It would take a column in `billing_audits` and a way to pass
+request context to the observer — machinery only worth building once the requirement exists.
 
-### Na tela: dois passos, sem modal
+### On screen: two steps, no modal
 
-O primeiro clique só abre a confirmação, que diz o que vai acontecer com o
-dinheiro antes de acontecer. O botão de confirmar usa a variante destrutiva, que
-neste sistema é a cor de vencida — no domínio, vermelho já significa perda.
-Modal seria mais um componente para uma pergunta de uma linha, e tiraria de
-vista os valores pagos que estão logo acima, que são justamente o que a pessoa
-precisa conferir antes de estornar.
+The first click only opens the confirmation, which says what is about to happen to the money
+before it happens. The confirm button uses the destructive variant, which in this system is
+the overdue colour — in this domain, red already means loss. A modal would be one more
+component for a one-line question, and it would hide the paid amounts sitting just above,
+which are exactly what someone needs to check before reversing.
 
-### Quanto custa, e para onde vai o tempo
+### What it costs, and where the time goes
 
-O primeiro estorno na base real levou 3,3 segundos, e esse número não podia
-ficar sem explicação. A primeira hipótese — o buffer pool de 128 MB forçando
-leitura de disco nos índices que contêm status e colunas de pagamento — **caiu
-na medição**: escritas com zero páginas lidas do disco levavam o mesmo tempo.
+The first reversal on the real base took 3.3 seconds, and that number could not be left
+unexplained. The first hypothesis — the 128 MB buffer pool forcing disk reads on the indexes
+containing status and the payment columns — **fell on measurement**: writes with zero pages
+read from disk took the same time.
 
-O que o tempo acompanha é o **número de transações de escrita**. Medido na base
-de 2.000.000 de cobranças, três repetições por cenário, com os contadores do
-MySQL calibrados contra o que as próprias consultas de medição somam:
+What the time tracks is the **number of write transactions**. Measured on the base of
+2,000,000 billings, three repetitions per scenario, with MySQL's counters calibrated against
+what the measuring queries themselves add:
 
-| Requisição | Tempo mediano | Transações de escrita |
+| Request | Median time | Write transactions |
 |---|---|---|
-| GET de uma cobrança | 0,40 s | 1 |
-| pagamento, sem chave | 0,46 s | 2 |
-| estorno, sem chave | 0,58 s | 2 |
-| pagamento, com chave | 1,41 s | 4 |
-| estorno, com chave | 1,23 s | 4 |
+| GET of one billing | 0.40 s | 1 |
+| payment, no key | 0.46 s | 2 |
+| reversal, no key | 0.58 s | 2 |
+| payment, with a key | 1.41 s | 4 |
+| reversal, with a key | 1.23 s | 4 |
 
-O trabalho do estorno no banco é pequeno: o `UPDATE` da cobrança e o `INSERT` da
-trilha somam **4 ms** medidos direto no MySQL, dentro de uma transação desfeita.
-O resto é commit. Um commit isolado — um `INSERT` de uma linha em autocommit —
-leva **de 183 a 360 ms** neste ambiente, porque a durabilidade está no máximo
-(`innodb_flush_log_at_trx_commit = 1`, `sync_binlog = 1`, binlog ligado: redo e
-binlog vão ao disco a cada commit) e o disco é o do Docker dentro do WSL2. Num
-servidor com disco decente o mesmo fsync custa milissegundos; a proporção entre
-as linhas da tabela é o que se leva daqui.
+The reversal's work in the database is small: the billing's `UPDATE` and the trail's `INSERT`
+add up to **4 ms** measured directly in MySQL, inside a rolled-back transaction. The rest is
+commit. An isolated commit — a one-row `INSERT` in autocommit — takes **183 to 360 ms** in
+this environment, because durability is at maximum (`innodb_flush_log_at_trx_commit = 1`,
+`sync_binlog = 1`, binlog on: redo and binlog both go to disk on every commit) and the disk
+is Docker's inside WSL2. On a server with a decent disk the same fsync costs milliseconds;
+what carries over from here is the proportion between the table's rows.
 
-As transações de cada requisição, uma a uma:
+Each request's transactions, one by one:
 
-- **`last_used_at` do token.** O Sanctum grava a cada requisição autenticada que
-  cai num segundo novo — inclusive no GET, que por isso faz um commit para ler.
-  Duas leituras no mesmo segundo levaram 0,51 s e 0,03 s.
-- **A transação do estorno ou do pagamento**, com a trilha dentro.
-- **A reserva da chave de idempotência**, antes de processar, e **a resposta
-  guardada**, depois. São as duas que a chave acrescenta, e não dá para
-  juntá-las à transação do negócio: a reserva precisa estar gravada *antes* de
-  processar, senão a requisição concorrente não a enxerga e as duas processam —
-  que é o caso inteiro que a chave existe para impedir.
+- **The token's `last_used_at`.** Sanctum writes it on every authenticated request that lands
+  in a new second — including the GET, which is why it makes a commit in order to read. Two
+  reads in the same second took 0.51 s and 0.03 s.
+- **The reversal's or the payment's transaction**, with the trail inside it.
+- **Reserving the idempotency key**, before processing, and **storing the response**,
+  afterwards. Those are the two the key adds, and they cannot be folded into the business
+  transaction: the reservation has to be written *before* processing, otherwise the concurrent
+  request does not see it and both process — which is the whole case the key exists to
+  prevent.
 
-Afrouxar a durabilidade (`innodb_flush_log_at_trx_commit = 2`) tiraria a maior
-parte desse tempo, trocando por até um segundo de pagamentos confirmados ao
-cliente e perdidos numa queda do servidor. Para uma escrita de dinheiro é a
-troca errada, e ajuste de configuração do MySQL é assunto do bloco de
-[pendências](producao.md#melhorias-que-ficariam-para-produção), com medição própria — não
-de um commit de funcionalidade.
+Loosening durability (`innodb_flush_log_at_trx_commit = 2`) would remove most of that time,
+trading it for up to a second of payments confirmed to the customer and lost in a server
+crash. For a money write that is the wrong trade, and tuning MySQL's configuration belongs to
+the [pending list](producao.md#improvements-that-would-be-left-for-production), with a
+measurement of its own — not to a feature commit.

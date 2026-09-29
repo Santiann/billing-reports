@@ -12,7 +12,7 @@ They are recorded because they are the ones this project's measurements actually
 point at, not a generic list.
 
 **Materialise the totals.** The per-scope cache
-[was built](performance.md#cache-dos-totalizadores) and takes a one-year scope
+[was built](performance.md#totals-cache) and takes a one-year scope
 from 12.9 s down to around 3 s on subsequent queries. But the first query for
 each scope, and the first after each write, still pay the full aggregation —
 which is O(n) by nature. An aggregates table updated by billing events would

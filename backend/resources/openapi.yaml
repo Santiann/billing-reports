@@ -76,7 +76,7 @@ tags:
       never over the page on display — and exports to CSV and PDF.
 
 paths:
-  # ------------------------------------------------------------- operação ---
+  # ----------------------------------------------------------- operations ---
 
   /api/health:
     get:
@@ -709,7 +709,7 @@ paths:
         422:
           $ref: '#/components/responses/ErroDeValidacao'
 
-  # ------------------------------------------------------------ cobranças ---
+  # ------------------------------------------------------------- billings ---
 
   /api/billings:
     get:

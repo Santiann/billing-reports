@@ -36,8 +36,8 @@ at where they changed the outcome.
 | Skill | Where it changed the outcome |
 |---|---|
 | `dataviz` | Rejected the dashboard chart's first palette for insufficient contrast between adjacent series — [ΔE 14.6 against a floor of 15](performance.md#dashboard) — and corrected the use of `tabular-nums`: proportional figures for an isolated value, tabular only in a column that aligns vertically |
-| `frontend-design` | The [visual foundation](frontend.md#fundação-visual): typography with personality, semantic tokens and the decision not to use a single `dark:` class |
-| `landing-page-design` and `copywriting` | The [public page](frontend.md#página-pública): the structure above the fold, and the explicit refusal of fabricated statistics — [not one of its numbers is invented](frontend.md#nenhum-número-da-página-é-inventado) |
+| `frontend-design` | The [visual foundation](frontend.md#visual-foundation): typography with personality, semantic tokens and the decision not to use a single `dark:` class |
+| `landing-page-design` and `copywriting` | The [public page](frontend.md#public-page): the structure above the fold, and the explicit refusal of fabricated statistics — [not one of its numbers is invented](frontend.md#not-one-of-the-pages-numbers-is-invented) |
 | `vercel-react-best-practices` | Server Component patterns, and the fetch parallelism on the billing detail page, where the trail and the billing are fetched together rather than in sequence |
 
 ### What the configuration actually prevented
@@ -79,7 +79,7 @@ and three of them did not survive contact with measurement.
 - **`make lint` did not prove what it claimed to prove.** It passed on the
   developer's machine because the development server had generated Next's route
   types; on a clean clone the typecheck fails. What surfaced it was
-  [CI](operacao.md#integração-contínua), on the first push. The missing step went
+  [CI](operacao.md#continuous-integration), on the first push. The missing step went
   into the target and the workflow, and the rule — a check that depends on a
   generated artefact has to generate it — went back into `CLAUDE.md`.
 
