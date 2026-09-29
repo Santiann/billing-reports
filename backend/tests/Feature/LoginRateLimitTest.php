@@ -9,16 +9,15 @@ use Tests\TestCase;
 /**
  * Rate limit no login.
  *
- * Ficou pendente da etapa 1 com um motivo registrado: escolher um limite que
- * não deixe a própria suíte intermitente exige cuidado. O cuidado está aqui —
- * o limite é por CREDENCIAL, então um teste que erra a senha de um usuário não
- * atrapalha os outros, e cada teste começa com o contador limpo porque o cache
- * da suíte é o de memória.
+ * This was left pending earlier with a recorded reason: choosing a limit that does not make the
+ * suite itself flaky takes care. The care is here — the limit is per CREDENTIAL, so a test that
+ * gets one user's password wrong does not disturb the others, and each test starts with a clean
+ * counter because the suite's cache is the in-memory one.
  *
- * Duas contagens, porque são dois ataques diferentes:
+ * Two counts, because these are two different attacks:
  *
  *   por e-mail + IP  -> força bruta contra uma conta
- *   por IP           -> varredura de e-mails, uma tentativa em cada
+ *   per IP           -> sweeping emails, one attempt at each
  */
 class LoginRateLimitTest extends TestCase
 {
@@ -49,7 +48,7 @@ class LoginRateLimitTest extends TestCase
         $this->tentar('admin@billing.test')->assertStatus(429);
     }
 
-    /** O 429 diz quando tentar de novo, em vez de só recusar. */
+    /** The 429 says when to try again, rather than only refusing. */
     public function test_the_refusal_says_how_long_is_left(): void
     {
         $this->usuario();
@@ -68,9 +67,9 @@ class LoginRateLimitTest extends TestCase
     }
 
     /**
-     * O limite é por credencial: quem erra a senha de uma conta não tranca as
-     * outras. Sem isso, bastaria errar de propósito para deixar um colega de
-     * fora — e a suíte, que faz login com e-mails diferentes, ficaria
+     * The limit is per credential: getting one account's password wrong does not lock the others.
+     * Without that, deliberately getting it wrong would be enough to shut a colleague out — and
+     * the suite, which logs in with different emails, would become
      * intermitente.
      */
     public function test_failing_on_one_account_does_not_lock_another(): void
@@ -86,7 +85,7 @@ class LoginRateLimitTest extends TestCase
         $this->tentar('outro@billing.test')->assertUnauthorized();
     }
 
-    /** Acertar a senha limpa o contador da credencial. */
+    /** Getting the password right clears the credential's counter. */
     public function test_a_successful_login_clears_the_count(): void
     {
         $this->usuario();
@@ -102,11 +101,11 @@ class LoginRateLimitTest extends TestCase
         }
     }
 
-    // --- varredura de e-mails -----------------------------------------
+    // --- sweeping emails ----------------------------------------------
 
     /**
-     * Uma tentativa em cada e-mail nunca estoura o limite por credencial. O
-     * limite por IP é o que pega esse caso.
+     * One attempt at each email never trips the per-credential limit. The per-IP limit is what
+     * catches that case.
      */
     public function test_sweeping_emails_from_the_same_ip_is_refused(): void
     {
@@ -117,9 +116,9 @@ class LoginRateLimitTest extends TestCase
         $this->tentar('inexistente-21@billing.test')->assertStatus(429);
     }
 
-    // --- o que não muda -----------------------------------------------
+    // --- what does not change -----------------------------------------
 
-    /** Payload inválido não é tentativa de autenticação: não conta. */
+    /** An invalid payload is not an authentication attempt: it does not count. */
     public function test_a_request_without_credentials_does_not_consume_the_limit(): void
     {
         $this->usuario();

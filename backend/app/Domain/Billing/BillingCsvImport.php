@@ -10,22 +10,22 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * Importa cobranças de um CSV.
+ * Imports billings from a CSV.
  *
- * Mesma estrutura da importação de clientes — leitura em gerador, validação por
- * linha, insert em lote, relatório com a linha e o motivo — com duas regras
- * próprias:
+ * The same structure as the customer import — generator-based reading, per-row
+ * validation, batch insert, a report carrying the line and the reason — with two rules
+ * of its own:
  *
- * **O cliente é resolvido por DOCUMENTO.** O arquivo vem de fora e não conhece
- * o id interno; documento é a identidade de negócio que as duas pontas têm. A
- * resolução acontece por lote, numa consulta que traz os clientes dos 500
- * documentos de uma vez — resolver linha a linha transformaria um arquivo de
- * dez mil cobranças em dez mil consultas.
+ * **The customer is resolved by DOCUMENT.** The file comes from outside and does not
+ * know the internal id; the document is the business identity both ends have. Resolution
+ * happens per batch, in one query that brings back the customers for all 500 documents
+ * at once — resolving row by row would turn a ten-thousand-billing file into ten
+ * thousand queries.
  *
- * **A cobrança nasce pendente.** Status e valores de pagamento não são lidos do
- * arquivo nem que estejam lá. Aceitar `status = paid` criaria cobrança paga sem
- * os valores congelados, que é exatamente o que o formulário de cadastro também
- * recusa — quem faz essa transição é o registro de pagamento.
+ * **A billing is born pending.** Status and payment amounts are not read from the file
+ * even if they are there. Accepting `status = paid` would create a paid billing without
+ * the frozen amounts, which is exactly what the create form refuses too — what makes
+ * that transition is recording a payment.
  */
 final class BillingCsvImport
 {
@@ -75,8 +75,8 @@ final class BillingCsvImport
                 continue;
             }
 
-            // A linha só é contada como válida depois que o cliente é
-            // encontrado, e isso acontece no fechamento do lote.
+            // A row only counts as valid once the customer has been found, and that
+            // happens when the batch is closed.
             $batch[$row] = $normalized;
 
             if (count($batch) >= self::BATCH) {
@@ -93,9 +93,9 @@ final class BillingCsvImport
     }
 
     /**
-     * Fecha um lote: resolve os clientes e grava o que sobrou.
+     * Closes a batch: resolves the customers and writes whatever is left.
      *
-     * @param  array<int, array<string, string>>  $batch  linha => valores
+     * @param  array<int, array<string, string>>  $batch  line => values
      */
     private function flush(array $batch, ImportReport $report, bool $store): void
     {
@@ -113,9 +113,9 @@ final class BillingCsvImport
                 $report->addError(
                     $row,
                     ['Nenhum cliente cadastrado com este documento.'],
-                    // As mesmas chaves que um erro de validação devolve: a tela
-                    // exibe o registro por uma delas, e trocar o nome do campo
-                    // aqui faria metade dos erros aparecer sem identificação.
+                    // The same keys a validation error returns: the screen shows the
+                    // record by one of them, and changing the field name here would
+                    // leave half the errors displayed without identification.
                     ['document' => $values['document'], 'description' => $values['description']],
                 );
 
@@ -131,7 +131,7 @@ final class BillingCsvImport
                 'monthly_interest_rate' => $values['monthly_interest_rate'],
                 'issue_date' => $values['issue_date'],
                 'due_date' => $values['due_date'],
-                // Nasce pendente, sem exceção. O arquivo não decide isto.
+                // Born pending, no exceptions. The file does not decide this.
                 'status' => BillingStatus::Pending->value,
                 'payment_date' => null,
                 'paid_amount' => null,
@@ -153,8 +153,8 @@ final class BillingCsvImport
         }
 
         if ($store && $insert !== []) {
-            // O insert em lote não passa pelo Eloquent, então não dispara o
-            // observer: a versão dos dados sobe aqui, na mesma transação do lote.
+            // The batch insert does not go through Eloquent, so it does not fire the
+            // observer: the data version is bumped here, in the batch's own transaction.
             DB::transaction(function () use ($insert): void {
                 DB::table('billings')->insert($insert);
                 $this->version->bump();
@@ -174,8 +174,9 @@ final class BillingCsvImport
             'document' => preg_replace('/\D/', '', $values['document'] ?? '') ?? '',
             'description' => trim($values['description'] ?? ''),
             'original_amount' => $this->normalizeNumber($values['original_amount'] ?? ''),
-            // Taxa ausente vira zero: cobrança sem juros é cobrança legítima, e
-            // exigir a coluna recusaria arquivo de quem não cobra juros.
+            // A missing rate becomes zero: a billing with no interest is a legitimate
+            // billing, and requiring the column would refuse files from whoever does not
+            // charge interest.
             'monthly_interest_rate' => $this->normalizeNumber($values['monthly_interest_rate'] ?? '0'),
             'issue_date' => $this->data($values['issue_date'] ?? ''),
             'due_date' => $this->data($values['due_date'] ?? ''),
@@ -183,12 +184,11 @@ final class BillingCsvImport
     }
 
     /**
-     * Aceita 1.234,56 e 1234.56.
+     * Accepts 1.234,56 and 1234.56.
      *
-     * O Excel em português escreve a primeira forma, e recusá-la faria o
-     * arquivo exportado da própria planilha do usuário não servir. A regra é
-     * simples: se tem vírgula, ela é o separador decimal e o ponto é de
-     * milhar.
+     * Excel in Portuguese writes the first form, and refusing it would make the file
+     * exported from the user's own spreadsheet useless. The rule is simple: if there is a
+     * comma, it is the decimal separator and the dot is the thousands one.
      */
     private function normalizeNumber(string $value): string
     {
@@ -206,17 +206,16 @@ final class BillingCsvImport
     }
 
     /**
-     * Aceita 2026-08-09 e 09/08/2026.
+     * Accepts 2026-08-09 and 09/08/2026.
      *
-     * `DateTimeImmutable` e não `CarbonImmutable`: o Carbon LANÇA exceção
-     * quando o valor não casa com o formato, em vez de devolver false como o
-     * nativo. Aqui a tentativa que falha é o caso normal — são quatro formatos
-     * testados em sequência — e usar exceção para fluxo esperado custa caro e
-     * lê pior.
+     * `DateTimeImmutable` and not `CarbonImmutable`: Carbon THROWS when the value does not
+     * match the format, instead of returning false like the native one. Here the failing
+     * attempt is the normal case — four formats are tried in sequence — and using an
+     * exception for expected flow is expensive and reads worse.
      *
-     * A volta com `format` e a comparação existem porque os dois aceitam
-     * 32/13/2026 e rolam para o mês seguinte. Sem ela, data inválida viraria
-     * cobrança com vencimento errado em vez de erro na linha.
+     * The round trip through `format` and the comparison exist because both accept
+     * 32/13/2026 and roll over into the following month. Without it, an invalid date would
+     * become a billing with the wrong due date instead of an error on the row.
      */
     private function data(string $value): string
     {

@@ -9,17 +9,17 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Torna a requisição repetível quando ela traz `Idempotency-Key`.
+ * Makes a request repeatable when it carries `Idempotency-Key`.
  *
- * Middleware, e não código no controller, por um motivo que se vê no teste: a
- * resposta de validação precisa ser repetida também, e o 422 nasce no
- * FormRequest, antes de o controller existir. Só daqui de fora dá para guardar
- * o que a rota respondeu, independente de quem respondeu.
+ * Middleware, and not code in the controller, for a reason the test makes visible: the
+ * validation response has to be replayed too, and the 422 is born in the FormRequest,
+ * before the controller exists. Only from out here can you store what the route
+ * answered, regardless of who answered it.
  *
- * O cabeçalho é opcional. Sem ele nada muda — inclusive a recusa de pagar uma
- * cobrança já paga, que continua 422. Idempotência serve a quem REPETE a mesma
- * operação; transformar a segunda tentativa em sucesso para todo mundo
- * esconderia um erro de verdade.
+ * The header is optional. Without it nothing changes — including the refusal to pay an
+ * already paid billing, which stays a 422. Idempotency serves whoever REPEATS the same
+ * operation; turning the second attempt into a success for everyone would hide a real
+ * error.
  */
 class IdempotentRequest
 {
@@ -30,9 +30,9 @@ class IdempotentRequest
         $key = trim((string) $request->header(IdempotencyStore::HEADER, ''));
         $user = $request->user();
 
-        // Sem chave, ou sem usuário — este segundo caso é do `auth`, que roda
-        // antes e responde 401; chegar aqui sem usuário seria middleware fora
-        // de ordem, e inventar uma resposta aqui esconderia isso.
+        // No key, or no user — the second case belongs to `auth`, which runs before and
+        // answers 401; arriving here with no user would mean middleware out of order, and
+        // inventing a response here would hide that.
         if ($key === '' || $user === null) {
             return $next($request);
         }
@@ -69,12 +69,12 @@ class IdempotentRequest
         $response = $next($request);
 
         /*
-         * Erro de servidor devolve a chave.
+         * A server error gives the key back.
          *
-         * Um 500 não é resultado da operação, é falha em produzi-lo — e o certo
-         * depois de um 500 é tentar de novo. Guardá-lo faria a chave repetir a
-         * falha pelas 24 horas seguintes, que é o oposto do que ela existe para
-         * fazer.
+         * A 500 is not the operation's result, it is a failure to produce one — and the
+         * right move after a 500 is to try again. Storing it would make the key replay
+         * the failure for the next 24 hours, which is the opposite of what it exists to
+         * do.
          */
         if ($response->getStatusCode() >= 500) {
             $this->store->release($userId, $key);
@@ -83,10 +83,10 @@ class IdempotentRequest
         }
 
         /*
-         * Resposta em stream não tem corpo para guardar: o conteúdo só existe
-         * enquanto é enviado, e lê-lo aqui anularia o streaming. Nenhuma rota
-         * idempotente exporta arquivo hoje; a guarda existe para o dia em que
-         * alguém aplicar este middleware numa que exporte.
+         * A streamed response has no body to store: the content only exists while it is
+         * being sent, and reading it here would undo the streaming. No idempotent route
+         * exports a file today; the guard exists for the day someone applies this
+         * middleware to one that does.
          */
         if ($response->getContent() === false) {
             $this->store->release($userId, $key);
@@ -106,11 +106,11 @@ class IdempotentRequest
     }
 
     /**
-     * A resposta guardada, devolvida como veio.
+     * The stored response, returned exactly as it came.
      *
-     * O cabeçalho `Idempotent-Replay` avisa que é repetição. Quem chama não
-     * precisa dele para funcionar — o corpo é idêntico —, mas precisa para
-     * distinguir "pagou agora" de "já tinha pago" no log.
+     * The `Idempotent-Replay` header signals that this is a replay. The caller does not
+     * need it to work — the body is identical — but does need it to tell "just paid"
+     * from "had already paid" in the log.
      */
     private function replay(int $status, string $body): Response
     {
@@ -125,11 +125,11 @@ class IdempotentRequest
     }
 
     /**
-     * O que identifica o PEDIDO, para separar repetição de reaproveitamento.
+     * What identifies the REQUEST, to tell a replay from a reuse.
      *
-     * Entram o método, o caminho — com o id da cobrança dentro dele, então a
-     * mesma chave em outra cobrança é outro pedido — e os dados enviados,
-     * ordenados para que a ordem das chaves do JSON não mude a impressão.
+     * It takes in the method, the path — with the billing's id inside it, so the same key
+     * on another billing is another request — and the submitted data, sorted so the order
+     * of the JSON's keys does not change the fingerprint.
      */
     private function fingerprint(Request $request): string
     {

@@ -12,16 +12,16 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * @extends Factory<Billing>
  *
- * Todos os states montam datas relativas a `now()`, nunca literais de
- * calendário. É isso que faz um teste com `travelTo()` ser determinístico: com
- * data fixa o cenário mudaria de significado conforme o relógio andasse.
+ * Every state builds dates relative to `now()`, never calendar literals. That is what makes
+ * a test with `travelTo()` deterministic: with a fixed date the scenario would change meaning
+ * as the clock moved on.
  */
 class BillingFactory extends Factory
 {
     protected $model = Billing::class;
 
     /**
-     * Estado base: pendente e ainda dentro do prazo. Não acumula juros.
+     * The base state: pending and still within term. It accrues no interest.
      *
      * @return array<string, mixed>
      */
@@ -43,7 +43,7 @@ class BillingFactory extends Factory
         ];
     }
 
-    /** Vencida e não paga: é a única situação que acumula juros. */
+    /** Overdue and unpaid: the only situation that accrues interest. */
     public function overdue(int $daysLate = 30): static
     {
         return $this->state(function (array $attributes) use ($daysLate) {
@@ -61,12 +61,11 @@ class BillingFactory extends Factory
     }
 
     /**
-     * Paga antes de vencer: juros zero.
+     * Paid before falling due: zero interest.
      *
-     * O congelamento passa pelo RegisterPayment, o mesmo serviço que a API
-     * usa. Escrever os valores à mão aqui faria a factory virar uma segunda
-     * implementação da regra, e os testes passariam a validar a cópia em vez
-     * do original.
+     * The freezing goes through RegisterPayment, the same service the API uses. Writing the
+     * amounts by hand here would turn the factory into a second implementation of the rule, and
+     * the tests would start validating the copy instead of the original.
      */
     public function paid(): static
     {
@@ -81,7 +80,7 @@ class BillingFactory extends Factory
             });
     }
 
-    /** Paga com atraso: os juros congelam na data do pagamento. */
+    /** Paid late: the interest freezes at the payment date. */
     public function paidLate(int $daysLate = 30): static
     {
         return $this->paidOn(fn (CarbonImmutable $dueDate) => $dueDate->addDays($daysLate))
@@ -96,11 +95,11 @@ class BillingFactory extends Factory
     }
 
     /**
-     * Registra o pagamento depois da criação, pelo serviço de produção.
+     * Records the payment after creation, through the production service.
      *
-     * Precisa ser `afterCreating`: o RegisterPayment opera sobre um model já
-     * persistido, e o cálculo dos juros depende do vencimento que só existe
-     * quando a linha foi gravada.
+     * It has to be `afterCreating`: RegisterPayment operates on an already persisted model, and
+     * the interest calculation depends on the due date, which only exists once the row has been
+     * written.
      *
      * @param  callable(CarbonImmutable): CarbonImmutable  $paymentDate
      */

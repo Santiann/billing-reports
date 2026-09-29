@@ -10,8 +10,8 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * A exportação devolve StreamedResponse: `assertSee` e `getContent()` não
- * funcionam nela, porque o corpo só existe quando o callback roda. Tudo aqui
+ * The export returns a StreamedResponse: `assertSee` and `getContent()` do not work on it,
+ * because the body only exists once the callback runs. Everything here
  * passa por `streamedContent()`.
  */
 class BillingReportCsvExportTest extends TestCase
@@ -60,7 +60,7 @@ class BillingReportCsvExportTest extends TestCase
             'status' => 'paid',
         ]);
 
-        // O teste exige que o arquivo identifique período e filtros usados.
+        // The brief requires the file to identify the period and filters used.
         $this->assertStringContainsString('Data de emissão', $content);
         $this->assertStringContainsString('01/01/2026', $content);
         $this->assertStringContainsString('31/03/2026', $content);
@@ -73,8 +73,8 @@ class BillingReportCsvExportTest extends TestCase
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
 
-        // Cada rótulo é um ramo próprio, e um ramo não exercitado é um rótulo
-        // que pode estar errado sem ninguém notar.
+        // Each label is a branch of its own, and an unexercised branch is a label that can be
+        // wrong without anyone noticing.
         $this->assertStringContainsString(
             'Data de pagamento',
             $this->exportar(['date_field' => 'payment_date']),
@@ -124,7 +124,7 @@ class BillingReportCsvExportTest extends TestCase
         $rodape = substr($content, (int) strpos($content, 'TOTAIS'));
 
         $this->assertStringContainsString('TOTAIS', $content);
-        // 3 x 1000 original, 3 x 20 de juros, 3060 atualizado.
+        // 3 x 1000 original, 3 x 20 interest, 3060 updated.
         $this->assertStringContainsString('3.000,00', $rodape);
         $this->assertStringContainsString('60,00', $rodape);
         $this->assertStringContainsString('3.060,00', $rodape);
@@ -143,8 +143,8 @@ class BillingReportCsvExportTest extends TestCase
 
         $content = $this->exportar(['customer_id' => $dentro->id]);
 
-        // Contar linhas não basta: é preciso afirmar que o que está fora do
-        // filtro realmente não aparece.
+        // Counting rows is not enough: you have to assert that what falls outside the filter
+        // really does not appear.
         $this->assertStringContainsString('Cobranca dentro', $content);
         $this->assertStringNotContainsString('Cobranca fora', $content);
         $this->assertStringNotContainsString('Cliente Excluido', $content);
@@ -161,16 +161,16 @@ class BillingReportCsvExportTest extends TestCase
 
         $rows = $this->dataRows($this->exportar(['customer_id' => $customer->id]));
 
-        // Sete linhas de dados, e o totalizador — que vem de outra consulta —
-        // concordando com esse número.
+        // Seven data rows, and the total — which comes from another query — agreeing with that
+        // number.
         $this->assertCount(7, $rows);
         $this->assertSame('7', $this->totalsRow($this->exportar(['customer_id' => $customer->id]))[1]);
     }
 
     /**
-     * Linhas de dados de verdade: o que está entre o cabeçalho das colunas e
-     * o bloco de totais. Parsear é mais honesto que procurar substring — um
-     * grep por texto acharia o mesmo termo no cabeçalho e no rodapé.
+     * The actual data rows: what sits between the column header and the totals block. Parsing is
+     * more honest than looking for a substring — a text grep would find the same term in the
+     * header and in the footer.
      *
      * @return array<int, array<int, string>>
      */
@@ -221,8 +221,8 @@ class BillingReportCsvExportTest extends TestCase
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
 
-        // Mais registros do que caberia numa página do relatório: a
-        // exportação leva o conjunto inteiro.
+        // More records than would fit on one page of the report: the export takes the whole
+        // set.
         Billing::factory()->count(60)->create(['description' => 'Linha exportada']);
 
         $content = $this->exportar();
@@ -240,7 +240,7 @@ class BillingReportCsvExportTest extends TestCase
         $response = $this->get('/api/reports/billings/csv'.($query ? "?{$query}" : ''));
         $response->assertOk();
 
-        // O corpo de um StreamedResponse só existe depois que o callback roda.
+        // A StreamedResponse's body only exists after the callback runs.
         return $response->streamedContent();
     }
 }

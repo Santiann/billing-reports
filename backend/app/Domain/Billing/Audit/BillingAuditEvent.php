@@ -20,11 +20,11 @@ enum BillingAuditEvent: string
     }
 
     /**
-     * O evento sai da TRANSIÇÃO de status, não de quem chamou.
+     * The event comes from the status TRANSITION, not from the caller.
      *
-     * Nenhum ponto do código declara "isto é um pagamento": pendente que vira
-     * paga é pagamento, paga que volta a pendente é estorno, venha de onde
-     * vier. Assim nenhum caminho novo consegue rotular errado.
+     * No point in the code declares "this is a payment": pending becoming paid is a
+     * payment, paid going back to pending is a reversal, wherever it comes from. That way
+     * no new path can label it wrongly.
      */
     public static function fromTransition(?BillingStatus $before, ?BillingStatus $after): self
     {

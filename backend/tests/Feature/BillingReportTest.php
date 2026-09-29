@@ -21,7 +21,7 @@ class BillingReportTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    // --- proteção -----------------------------------------------------
+    // --- protection ---------------------------------------------------
 
     public function test_report_requires_authentication(): void
     {
@@ -35,7 +35,7 @@ class BillingReportTest extends TestCase
         $this->getJson('/api/reports/billings')->assertOk();
     }
 
-    // --- período e base de data ---------------------------------------
+    // --- period and date basis ----------------------------------------
 
     public function test_period_by_issue_date(): void
     {
@@ -60,8 +60,8 @@ class BillingReportTest extends TestCase
         Billing::factory()->create(['issue_date' => '2026-03-10', 'due_date' => '2026-04-10']);
         Billing::factory()->create(['issue_date' => '2026-05-20', 'due_date' => '2026-06-20']);
 
-        // Mesmo par de cobranças, outra base de data, outro recorte: é isso
-        // que a escolha da base precisa provar.
+        // The same pair of billings, a different date basis, a different scope: that is what
+        // choosing the basis has to prove.
         $response = $this->getJson(
             '/api/reports/billings?date_field=due_date&start_date=2026-06-01&end_date=2026-06-30',
         )->assertOk();
@@ -81,7 +81,7 @@ class BillingReportTest extends TestCase
             '/api/reports/billings?date_field=payment_date&start_date=2026-01-01&end_date=2026-12-31',
         )->assertOk();
 
-        // Cobrança sem pagamento tem payment_date nulo e fica fora do recorte.
+        // An unpaid billing has a null payment_date and falls outside the scope.
         $this->assertSame(1, $response->json('totals.count'));
     }
 
@@ -137,8 +137,8 @@ class BillingReportTest extends TestCase
         Billing::factory()->count(2)->overdue(30)->create(); // pendentes vencidas
         Billing::factory()->count(3)->paid()->create();
 
-        // `pending` é o status gravado e inclui as vencidas, que são pendentes
-        // com vencimento no passado. Quem quer só as vencidas usa `overdue`.
+        // `pending` is the stored status and includes the overdue ones, which are pending with
+        // the due date in the past. Whoever wants only the overdue ones uses `overdue`.
         $response = $this->getJson('/api/reports/billings?status=pending')->assertOk();
 
         $this->assertSame(6, $response->json('totals.count'));
@@ -155,21 +155,20 @@ class BillingReportTest extends TestCase
 
         $response = $this->getJson('/api/reports/billings?status=overdue')->assertOk();
 
-        // "Vencida" não existe como valor gravado: é pendente com vencimento
-        // no passado, resolvido em SQL.
+        // "Overdue" does not exist as a stored value: it is pending with the due date in the
+        // past, resolved in SQL.
         $this->assertSame(2, $response->json('totals.count'));
     }
 
-    // --- ordenação ----------------------------------------------------
+    // --- sorting ------------------------------------------------------
 
     public function test_sorts_by_updated_amount(): void
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
 
-        // Valor original menor, mas muito mais atrasada: o valor atualizado
-        // inverte a ordem. Só é possível ordenar assim porque o cálculo
-        // existe em SQL.
+        // A smaller original amount, but far more overdue: the updated amount flips the order.
+        // Sorting this way is only possible because the calculation exists in SQL.
         Billing::factory()->overdue(5)->create([
             'original_amount' => '1000.00', 'monthly_interest_rate' => '0.0200',
         ]);
@@ -201,7 +200,7 @@ class BillingReportTest extends TestCase
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
 
-        // 25 cobranças de R$ 100,00 sem juros, numa página de 10.
+        // 25 billings of R$ 100.00 with no interest, on a page of 10.
         Billing::factory()->count(25)->create([
             'original_amount' => '100.00',
             'monthly_interest_rate' => '0.0000',
@@ -211,7 +210,7 @@ class BillingReportTest extends TestCase
 
         $this->assertCount(10, $response->json('data'), 'A página deveria trazer 10.');
 
-        // O erro fácil é somar a página: daria 1000,00.
+        // The easy mistake is to sum the page: that would give 1000.00.
         $this->assertSame(25, $response->json('totals.count'));
         $this->assertSame('2500.00', $response->json('totals.original_amount'));
         $this->assertSame('2500.00', $response->json('totals.updated_amount'));
@@ -241,7 +240,7 @@ class BillingReportTest extends TestCase
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
 
-        // 1000 * 1.02^1 = 1020,00 -> 20,00 de juros, tres vezes.
+        // 1000 * 1.02^1 = 1020.00 -> 20.00 of interest, three times over.
         Billing::factory()->count(3)->overdue(30)->create([
             'original_amount' => '1000.00', 'monthly_interest_rate' => '0.0200',
         ]);
@@ -266,7 +265,7 @@ class BillingReportTest extends TestCase
 
         $response = $this->getJson('/api/reports/billings')->assertOk();
 
-        // Recebido vem das colunas congeladas; pendente, do valor atualizado.
+        // Received comes from the frozen columns; pending, from the updated amount.
         $this->assertSame('1000.00', $response->json('totals.paid_amount'));
         $this->assertSame('600.00', $response->json('totals.pending_amount'));
     }
@@ -277,8 +276,8 @@ class BillingReportTest extends TestCase
     {
         $this->actingAsUser();
 
-        // As exportações precisam imprimir período e filtros no arquivo, e
-        // devem sair da mesma fonte que a tela usa.
+        // The exports have to print the period and filters in the file, and they should come
+        // from the same source the screen uses.
         $response = $this->getJson(
             '/api/reports/billings?date_field=issue_date&start_date=2026-01-01&end_date=2026-12-31&status=paid',
         )->assertOk();
@@ -302,8 +301,8 @@ class BillingReportTest extends TestCase
 
         Billing::factory()->count(2)->create();
 
-        // A tela usa isto para desabilitar o botão antes do clique, em vez de
-        // mandar o usuário bater num 422.
+        // The screen uses this to disable the button before the click, rather than sending the
+        // user into a 422.
         $this->getJson('/api/reports/billings')
             ->assertOk()
             ->assertJsonPath('export.pdf_available', false);
@@ -319,10 +318,9 @@ class BillingReportTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        // count da paginação + linhas + clientes + versão dos dados + agregação
-        // dos totais. A versão entrou com o cache dos totalizadores: é uma
-        // consulta fixa por chamada, e o que este teste prova — o número de
-        // consultas não cresce com o número de linhas — continua valendo.
+        // the pagination count + rows + customers + data version + totals aggregation. The
+        // version arrived with the totals cache: it is one fixed query per call, and what this
+        // test proves — that the query count does not grow with the row count — still holds.
         $this->assertLessThanOrEqual(5, count($queries));
     }
 }

@@ -6,28 +6,28 @@ use Generator;
 use RuntimeException;
 
 /**
- * Lê um CSV linha a linha, com o cabeçalho traduzido para nomes de campo.
+ * Reads a CSV row by row, with the header translated into field names.
  *
- * Linha a linha, e não `file()` nem `str_getcsv` no conteúdo inteiro: um
- * arquivo de cem mil clientes não pode existir de uma vez na memória do
- * processo. O gerador devolve uma linha por vez e esquece a anterior.
+ * Row by row, and not `file()` nor `str_getcsv` over the whole content: a file with a
+ * hundred thousand customers cannot exist all at once in the process's memory. The
+ * generator returns one row at a time and forgets the previous one.
  *
- * Duas conveniências que vêm da realidade de quem exporta planilha:
+ * Two conveniences that come from the reality of people exporting spreadsheets:
  *
- * - O separador é detectado. O Excel em português salva com `;`, e o resto do
- *   mundo com `,`. Exigir um dos dois transformaria "o arquivo não funciona"
- *   num problema de suporte.
- * - O cabeçalho aceita apelidos. `nome` e `name` são a mesma coluna; quem
- *   exportou do próprio sistema e quem montou a planilha à mão chegam com
- *   nomes diferentes para o mesmo dado.
+ * - The separator is detected. Excel in Portuguese saves with `;`, and the rest of the
+ *   world with `,`. Demanding one of the two would turn "the file does not work" into a
+ *   support problem.
+ * - The header accepts aliases. `nome` and `name` are the same column; someone who
+ *   exported from this system and someone who built the spreadsheet by hand arrive with
+ *   different names for the same data.
  */
 final class CsvReader
 {
-    /** O BOM que o Excel escreve no começo do arquivo, e que não é dado. */
+    /** The BOM Excel writes at the start of the file, which is not data. */
     private const BOM = "\xEF\xBB\xBF";
 
     /**
-     * @param  array<string, array<int, string>>  $columns  campo => apelidos aceitos
+     * @param  array<string, array<int, string>>  $columns  field => accepted aliases
      */
     public function __construct(
         private readonly array $columns,
@@ -35,14 +35,14 @@ final class CsvReader
     ) {}
 
     /**
-     * Percorre o arquivo devolvendo [numeroDaLinha, valoresPorCampo].
+     * Walks the file returning [lineNumber, valuesByField].
      *
-     * O número é o da LINHA DO ARQUIVO, contando o cabeçalho — é assim que o
-     * usuário vai encontrar o erro ao abrir a planilha.
+     * The number is the FILE'S LINE, counting the header — that is how the user will
+     * find the error when they open the spreadsheet.
      *
      * @return Generator<int, array{0: int, 1: array<string, string>}>
      *
-     * @throws RuntimeException quando o cabeçalho não tem as colunas exigidas
+     * @throws RuntimeException when the header is missing the required columns
      */
     public function rows(string $path): Generator
     {
@@ -66,9 +66,9 @@ final class CsvReader
             while (($values = fgetcsv($file, 0, $separator)) !== false) {
                 $row++;
 
-                // fgetcsv devolve [null] para linha em branco, inclusive a do
-                // fim do arquivo. Pular é o que evita um "erro na linha 6" que
-                // o usuário não consegue ver na planilha.
+                // fgetcsv returns [null] for a blank line, including the one at the end
+                // of the file. Skipping is what avoids an "error on line 6" the user
+                // cannot see in the spreadsheet.
                 if ($values === [null] || $this->isEmptyRow($values)) {
                     continue;
                 }
@@ -81,11 +81,11 @@ final class CsvReader
     }
 
     /**
-     * Detecta o separador pela primeira linha.
+     * Detects the separator from the first line.
      *
-     * Conta ocorrências fora de aspas seria mais correto, mas cabeçalho com
-     * aspas é raro o bastante para não valer o custo: o que decide é qual dos
-     * dois aparece mais.
+     * Counting occurrences outside quotes would be more correct, but a quoted header is
+     * rare enough not to be worth the cost: what decides is which of the two appears
+     * more often.
      *
      * @param  resource  $file
      */
@@ -102,7 +102,7 @@ final class CsvReader
     }
 
     /**
-     * Liga cada posição do cabeçalho a um campo.
+     * Ties each header position to a field.
      *
      * @param  array<int, string|null>  $header
      * @return array<int, string>
@@ -127,9 +127,9 @@ final class CsvReader
         if ($missing !== []) {
             throw new RuntimeException(sprintf(
                 'O arquivo precisa das colunas: %s. Cabeçalho recebido: %s.',
-                // O nome que o usuário precisa DIGITAR, não o nome interno do
-                // campo: dizer que falta "document" manda procurar no arquivo
-                // uma palavra que o cabeçalho dele nunca vai ter.
+                // The name the user has to TYPE, not the field's internal name: saying
+                // "document" is missing sends them looking in the file for a word their
+                // header will never contain.
                 implode(', ', array_map(fn (string $field) => $this->columns[$field][0], $missing)),
                 implode(', ', array_map(fn ($t) => (string) $t, $header)),
             ));
@@ -166,7 +166,7 @@ final class CsvReader
         return true;
     }
 
-    /** Sem BOM, sem acento, sem caixa: "E-mail" e "email" são a mesma coluna. */
+    /** No BOM, no accents, no case: "E-mail" and "email" are the same column. */
     private function normalize(string $title): string
     {
         $clean = str_replace(self::BOM, '', $title);

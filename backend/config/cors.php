@@ -1,18 +1,17 @@
 <?php
 
 /*
- * CORS restrito ao frontend da aplicação.
+ * CORS restricted to the application's frontend.
  *
- * O default do framework é `allowed_origins => ['*']`, e neste desenho isso é
- * superfície sem uso: o browser NUNCA chama esta API direto. Toda leitura passa
- * por Server Component, toda escrita por Server Action e todo download por
- * Route Handler — sempre do servidor do Next, onde CORS não se aplica. O que
- * sobra é defesa em profundidade para o dia em que alguém apontar um cliente de
- * browser para cá.
+ * The framework's default is `allowed_origins => ['*']`, and in this design that is unused
+ * surface: the browser NEVER calls this API directly. Every read goes through a Server
+ * Component, every write through a Server Action and every download through a Route Handler —
+ * always from Next's server, where CORS does not apply. What is left is defence in depth for
+ * the day someone points a browser client here.
  *
- * `supports_credentials` fica falso: a autenticação é por token no cabeçalho, e
- * não por cookie de sessão. Habilitá-lo junto com origem `*` é a combinação que
- * o próprio navegador recusa, e não é necessária aqui.
+ * `supports_credentials` stays false: authentication is by token in the header, not by a
+ * session cookie. Enabling it together with origin `*` is the combination the browser itself
+ * refuses, and it is not needed here.
  */
 
 return [
@@ -25,7 +24,7 @@ return [
 
     'allowed_origins_patterns' => [],
 
-    // Só os que a API realmente lê.
+    // Only the ones the API actually reads.
     'allowed_headers' => [
         'Accept',
         'Authorization',
@@ -34,7 +33,7 @@ return [
         'X-Request-Id',
     ],
 
-    // Os que o cliente precisa conseguir ler na resposta.
+    // The ones the client needs to be able to read in the response.
     'exposed_headers' => [
         'Idempotent-Replay',
         'Retry-After',

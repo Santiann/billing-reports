@@ -10,11 +10,11 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Não há asserção sobre o binário do PDF: ele não é estável nem legível, e
- * afirmar sobre bytes de um documento gerado é teste que quebra sozinho.
+ * There is no assertion about the PDF's binary: it is neither stable nor readable, and asserting
+ * on the bytes of a generated document is a test that breaks on its own.
  *
- * O que se testa é o que é verificável: o status, o content-type, e sobretudo
- * o TETO — que é a decisão de projeto desta exportação.
+ * What gets tested is what is verifiable: the status, the content type, and above all the CAP —
+ * which is this export's design decision.
  */
 class BillingReportPdfExportTest extends TestCase
 {
@@ -57,8 +57,8 @@ class BillingReportPdfExportTest extends TestCase
 
         $response = $this->get('/api/reports/billings/pdf');
 
-        // Única asserção sobre o conteúdo, e é sobre a assinatura do formato,
-        // não sobre o que está desenhado dentro.
+        // The only assertion about the content, and it is about the format's signature, not
+        // about what is drawn inside.
         $this->assertStringStartsWith('%PDF-', $response->streamedContent());
     }
 
@@ -85,7 +85,7 @@ class BillingReportPdfExportTest extends TestCase
 
         $response = $this->get('/api/reports/billings/pdf')->assertUnprocessable();
 
-        // A mensagem precisa dizer o que fazer, não só que falhou.
+        // The message has to say what to do, not just that it failed.
         $this->assertStringContainsStringIgnoringCase('csv', $response->json('message'));
         $this->assertSame(6, $response->json('count'));
         $this->assertSame(5, $response->json('limit'));
@@ -102,9 +102,9 @@ class BillingReportPdfExportTest extends TestCase
         Billing::factory()->count(3)->for($customer)->create();
         Billing::factory()->count(20)->create();
 
-        // Vinte e três cobranças na tabela, mas o filtro deixa três: o PDF
-        // tem que sair. Checar o tamanho da tabela em vez do recorte tornaria
-        // a exportação inútil em qualquer base real.
+        // Twenty-three billings in the table, but the filter leaves three: the PDF has to come
+        // out. Checking the table's size instead of the scope would make the export useless on
+        // any real base.
         $this->get("/api/reports/billings/pdf?customer_id={$customer->id}")->assertOk();
     }
 
@@ -116,7 +116,7 @@ class BillingReportPdfExportTest extends TestCase
         config(['reports.pdf_max_rows' => 4]);
         Billing::factory()->count(4)->create();
 
-        // Limite é teto inclusivo: exatamente 4 passa, 5 não.
+        // The limit is an inclusive cap: exactly 4 passes, 5 does not.
         $this->get('/api/reports/billings/pdf')->assertOk();
     }
 
@@ -124,7 +124,7 @@ class BillingReportPdfExportTest extends TestCase
     {
         $this->actingAsUser();
 
-        // Filtro que não casa nada é resultado legítimo, não falha.
+        // A filter that matches nothing is a legitimate result, not a failure.
         $this->get('/api/reports/billings/pdf?start_date=2000-01-01&end_date=2000-01-02')
             ->assertOk();
     }

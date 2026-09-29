@@ -6,11 +6,11 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Status e dados de pagamento não estão nas regras de propósito.
+ * Status and payment data are deliberately absent from the rules.
  *
- * Só o que passa por `rules()` chega em `validated()`, então enviá-los não tem
- * efeito. Aceitar `status = paid` aqui criaria uma cobrança paga sem os
- * valores congelados — quem faz essa transição é o registro de pagamento.
+ * Only what passes through `rules()` reaches `validated()`, so sending them has no effect.
+ * Accepting `status = paid` here would create a paid billing without the frozen amounts —
+ * what makes that transition is recording a payment.
  */
 class StoreBillingRequest extends FormRequest
 {

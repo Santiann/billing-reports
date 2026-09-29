@@ -8,15 +8,15 @@ use Carbon\CarbonImmutable;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Exportação do relatório em PDF.
+ * The PDF report export.
  *
- * Diferente do CSV, aqui NÃO há streaming — e isso é da natureza do formato,
- * não descuido. Um PDF precisa ser paginado e montado inteiro antes de existir:
- * não há como emitir a página 1 sem saber quantas páginas haverá. O documento
- * ocupa memória proporcional ao número de linhas.
+ * Unlike the CSV, there is NO streaming here — and that is the nature of the format, not
+ * carelessness. A PDF has to be paginated and assembled whole before it exists: there is no way
+ * to emit page 1 without knowing how many pages there will be. The document takes memory
+ * proportional to the number of rows.
  *
- * É por isso que existe um teto, verificado ANTES de qualquer linha ser
- * carregada. Acima dele a resposta é 422 apontando o CSV, que não tem limite.
+ * That is why a cap exists, checked BEFORE any row is loaded. Above it the response is a 422
+ * pointing at the CSV, which has no limit.
  */
 final class BillingReportPdfExport
 {
@@ -37,8 +37,8 @@ final class BillingReportPdfExport
      */
     public function stream(BillingReportFilters $filters, array $totals): StreamedResponse
     {
-        // get() e não lazy(): o dompdf precisa do conjunto inteiro de qualquer
-        // forma. O teto é o que torna isso seguro.
+        // get() and not lazy(): dompdf needs the whole set either way. The cap is what makes
+        // that safe.
         $billings = $this->report->rows($filters)->get();
 
         $pdf = Pdf::loadView('reports.billings', [

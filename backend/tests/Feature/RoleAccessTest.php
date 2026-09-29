@@ -13,14 +13,14 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Perfis de acesso: administrador e consulta.
+ * Access roles: administrator and read-only.
  *
- * A regra é simples e a proteção é no BACKEND. Esconder o botão na tela é
- * conveniência para quem não pode usá-lo, nunca a barreira: quem sabe o
- * endereço do endpoint chega nele sem passar por tela nenhuma.
+ * The rule is simple and the protection is in the BACKEND. Hiding the button on screen is a
+ * convenience for whoever cannot use it, never the barrier: whoever knows the endpoint's address
+ * reaches it without passing through any screen.
  *
- * Por isso estes testes batem direto na API, e cobrem todo endpoint que
- * escreve. Um endpoint de escrita novo sem entrada aqui é um buraco.
+ * That is why these tests hit the API directly, and cover every endpoint that writes. A new write
+ * endpoint with no entry here is a hole.
  */
 class RoleAccessTest extends TestCase
 {
@@ -39,32 +39,32 @@ class RoleAccessTest extends TestCase
     private function comIds(string $rota, Billing $billing): string
     {
         return str_replace(
-            ['{cliente}', '{cobranca}'],
+            ['{customer}', '{billing}'],
             [(string) $billing->customer_id, (string) $billing->id],
             $rota,
         );
     }
 
     /**
-     * Todo endpoint que escreve, com um payload qualquer: o que se afirma aqui
-     * é o 403, não a validação.
+     * Every endpoint that writes, with any payload at all: what gets asserted here is the 403,
+     * not the validation.
      *
      * @return array<string, array{0: string, 1: string}>
      */
     public static function endpointsDeEscrita(): array
     {
-        // {cliente} e {cobranca} viram os ids reais no teste: id fixo falharia
-        // com 404 antes de chegar ao 403, porque o auto-increment não reinicia
+        // {customer} and {billing} become the real ids in the test: a fixed id would fail with a
+        // 404 before reaching the 403, because the auto-increment does not restart
         // entre os testes.
         return [
             'create customer' => ['post', '/api/customers'],
-            'edit customer' => ['put', '/api/customers/{cliente}'],
+            'edit customer' => ['put', '/api/customers/{customer}'],
             'import customers' => ['post', '/api/customers/import'],
             'create billing' => ['post', '/api/billings'],
-            'edit billing' => ['put', '/api/billings/{cobranca}'],
+            'edit billing' => ['put', '/api/billings/{billing}'],
             'import billings' => ['post', '/api/billings/import'],
-            'record payment' => ['post', '/api/billings/{cobranca}/payment'],
-            'reverse payment' => ['post', '/api/billings/{cobranca}/reversal'],
+            'record payment' => ['post', '/api/billings/{billing}/payment'],
+            'reverse payment' => ['post', '/api/billings/{billing}/reversal'],
         ];
     }
 
@@ -73,15 +73,15 @@ class RoleAccessTest extends TestCase
     {
         $this->comoConsulta();
 
-        // Os registros existem para o 403 não se confundir com um 404.
+        // The records exist so the 403 cannot be confused with a 404.
         $billing = Billing::factory()->create();
 
         $this->json($method, $this->comIds($rota, $billing), [])->assertForbidden();
     }
 
     /**
-     * A outra metade do par. Só o 403 não provaria nada — provaria o mesmo se
-     * a rota estivesse quebrada para todo mundo.
+     * The other half of the pair. The 403 alone would prove nothing — it would prove the same if
+     * the route were broken for everyone.
      */
     public function test_the_admin_role_can_write(): void
     {
@@ -112,10 +112,10 @@ class RoleAccessTest extends TestCase
     {
         return [
             'list customers' => ['/api/customers'],
-            'show customer' => ['/api/customers/{cliente}'],
+            'show customer' => ['/api/customers/{customer}'],
             'list billings' => ['/api/billings'],
-            'show billing' => ['/api/billings/{cobranca}'],
-            'billing trail' => ['/api/billings/{cobranca}/audit'],
+            'show billing' => ['/api/billings/{billing}'],
+            'billing trail' => ['/api/billings/{billing}/audit'],
             'report' => ['/api/reports/billings'],
             'dashboard' => ['/api/dashboard'],
         ];
@@ -130,7 +130,7 @@ class RoleAccessTest extends TestCase
         $this->getJson($this->comIds($rota, $billing))->assertOk();
     }
 
-    /** Exportar é leitura: o arquivo é o mesmo relatório em outro formato. */
+    /** Exporting is reading: the file is the same report in another format. */
     public function test_the_read_only_role_can_export(): void
     {
         $this->comoConsulta();
@@ -139,7 +139,7 @@ class RoleAccessTest extends TestCase
         $this->get('/api/reports/billings/csv')->assertOk();
     }
 
-    // --- a identidade do perfil ---------------------------------------
+    // --- the role's identity ------------------------------------------
 
     public function test_the_session_reports_the_role(): void
     {
@@ -155,10 +155,10 @@ class RoleAccessTest extends TestCase
     }
 
     /**
-     * Sem perfil declarado, o usuário é de consulta.
+     * With no role declared, the user is read-only.
      *
-     * O default é o menor privilégio de propósito: um usuário criado por
-     * caminho que esqueceu de definir o perfil não pode sair escrevendo.
+     * The default is the least privilege on purpose: a user created through a path that forgot to
+     * set the role must not go off writing.
      */
     public function test_the_default_role_is_the_least_privileged(): void
     {
@@ -171,14 +171,14 @@ class RoleAccessTest extends TestCase
         $this->assertSame(UserRole::Viewer, $user->fresh()->role);
     }
 
-    /** Sem token, o 401 continua vindo antes do 403. */
+    /** With no token, the 401 still comes before the 403. */
     public function test_with_no_session_it_is_still_401_and_not_403(): void
     {
         $this->postJson('/api/customers', [])->assertUnauthorized();
     }
 
     /**
-     * O 403 precisa explicar. Uma resposta vazia manda o usuário achar que o
+     * The 403 has to explain. An empty response leaves the user thinking the
      * sistema quebrou.
      */
     public function test_the_refusal_explains_why(): void

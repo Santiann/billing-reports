@@ -14,17 +14,17 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         /*
-         * Limite geral da API, além do limite específico do login.
+         * The API's general limit, on top of the login-specific one.
          *
-         * O motivo não é força bruta — é custo. O relatório agrega o conjunto
-         * filtrado inteiro, e uma consulta sem cache no recorte de um ano leva
-         * doze segundos de banco. Sem teto, um cliente em laço derruba o
-         * serviço para todos usando credencial legítima.
+         * The reason is not brute force — it is cost. The report aggregates the whole filtered
+         * set, and an uncached query over a one-year scope takes twelve seconds of database
+         * time. With no cap, a client in a loop brings the service down for everyone using
+         * legitimate credentials.
          *
-         * A contagem é por USUÁRIO quando há um, e só cai no IP para as rotas
-         * públicas. Contar sempre por IP seria errado aqui: o frontend chama a
-         * API pelo servidor do Next, então todas as requisições da aplicação
-         * chegam do mesmo endereço e um usuário ativo limitaria os outros.
+         * The count is per USER when there is one, and only falls back to the IP for the public
+         * routes. Always counting by IP would be wrong here: the frontend calls the API through
+         * Next's server, so every one of the application's requests arrives from the same
+         * address and one active user would limit the others.
          */
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(180)
             ->by($request->user()?->id ?: $request->ip()));

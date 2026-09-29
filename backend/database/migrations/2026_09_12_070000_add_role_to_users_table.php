@@ -7,19 +7,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Perfil de acesso do usuário.
+ * The user's access role.
  *
- * O default da coluna é `viewer`, o menor privilégio: usuário criado por um
- * caminho que esqueceu de definir o perfil não sai escrevendo. Esse é o
- * comportamento seguro quando alguém erra.
+ * The column's default is `viewer`, the least privilege: a user created through a path that
+ * forgot to set the role does not go off writing. That is the safe behaviour when someone slips.
  *
- * Os usuários que JÁ EXISTEM viram administradores, e isso não contradiz o
- * default: antes desta migration não havia outro perfil, então quem estava lá
- * dentro era administrador por definição. Aplicar o default a eles tiraria o
- * acesso de escrita de quem já operava o sistema.
+ * The users that ALREADY EXIST become administrators, and that does not contradict the default:
+ * before this migration there was no other role, so whoever was already in there was an
+ * administrator by definition. Applying the default to them would strip write access from
+ * whoever was already operating the system.
  *
- * String curta e não ENUM do MySQL, pelo mesmo motivo do status do cliente:
- * acrescentar um perfil vira mudança de código, não ALTER TABLE.
+ * A short string and not a MySQL ENUM, for the same reason as the customer's status: adding a
+ * role becomes a code change, not an ALTER TABLE.
  */
 return new class extends Migration
 {

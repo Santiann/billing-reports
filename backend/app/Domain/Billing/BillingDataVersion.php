@@ -5,19 +5,19 @@ namespace App\Domain\Billing;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Um número que muda sempre que os dados das cobranças mudam.
+ * A number that changes whenever the billings' data changes.
  *
- * O cache dos totalizadores guarda junto dos totais a versão com que eles
- * foram calculados, e só os serve se a versão ainda for a corrente.
+ * The totals cache stores, alongside the totals, the version they were computed with, and
+ * only serves them if that version is still the current one.
  *
- * O `bump()` precisa rodar DENTRO da transação da escrita. Aí a linha fica
- * travada até o commit, duas escritas simultâneas sobem o número em fila, e os
- * dados novos e a versão nova ficam visíveis no mesmo instante. Fora da
- * transação haveria um intervalo entre o commit dos dados e o da versão em que
- * o cache serviria o total de antes.
+ * `bump()` has to run INSIDE the write's transaction. There the row stays locked until the
+ * commit, two simultaneous writes raise the number in a queue, and the new data and the new
+ * version become visible at the same instant. Outside the transaction there would be an
+ * interval between committing the data and committing the version in which the cache would
+ * serve the earlier total.
  *
- * O preço é justamente essa fila: toda escrita em cobrança passa por esta
- * linha. Para pagamentos feitos por pessoas é imperceptível; o README registra
+ * The price is precisely that queue: every write to a billing goes through this row. For
+ * payments made by people it is imperceptible; the README records
  * a troca.
  */
 final class BillingDataVersion

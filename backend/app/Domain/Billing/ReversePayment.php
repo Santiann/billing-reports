@@ -5,16 +5,15 @@ namespace App\Domain\Billing;
 use App\Models\Billing;
 
 /**
- * Estorna o pagamento: a cobrança volta a pendente.
+ * Reverses the payment: the billing goes back to pending.
  *
- * Limpar as colunas de pagamento é tudo o que o estorno precisa fazer, e é por
- * isso que ele é pequeno. Os juros voltam a correr desde o vencimento original
- * sem nenhuma regra nova: o InterestCalculator só lê as colunas congeladas
- * quando a cobrança está paga, e uma cobrança pendente é calculada a partir do
- * vencimento — nas duas faces, PHP e SQL.
+ * Clearing the payment columns is all a reversal has to do, and that is why it is small. The
+ * interest starts running again from the original due date with no new rule:
+ * InterestCalculator only reads the frozen columns when the billing is paid, and a pending
+ * billing is computed from its due date — on both faces, PHP and SQL.
  *
- * Os valores que saem daqui não se perdem: a trilha de auditoria os grava no
- * `from` da entrada de estorno, dentro da mesma transação.
+ * The amounts that leave here are not lost: the audit trail writes them into the reversal
+ * entry's `from`, inside the same transaction.
  */
 final class ReversePayment
 {

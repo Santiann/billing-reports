@@ -11,16 +11,15 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Health para monitoramento: pública, barata e honesta.
+ * Health for monitoring: public, cheap and honest.
  *
- * Honesta é a parte que importa. Um health que responde 200 sempre é pior que
- * nenhum, porque o monitoramento passa a confiar nele e para de avisar. Aqui,
- * dependência fora do ar derruba a resposta para 503 e diz qual delas.
+ * Honest is the part that matters. A health check that always answers 200 is worse than none,
+ * because the monitoring starts trusting it and stops warning. Here, a dependency being down
+ * drops the response to 503 and says which one.
  *
- * A checagem do cache é de LEITURA. Escrever provaria mais, e custaria um
- * commit por sonda — com o driver de banco, cada gravação vai ao disco. Um
- * monitoramento que consulta a cada dez segundos escreveria 8.640 vezes por
- * dia para responder uma pergunta que a leitura já responde: o driver está
+ * The cache check is a READ. Writing would prove more, and would cost one commit per probe —
+ * with the database driver, every write goes to disk. Monitoring that polls every ten seconds
+ * would write 8,640 times a day to answer a question the read already answers: the driver is
  * acessível.
  */
 class HealthController extends Controller
@@ -49,17 +48,17 @@ class HealthController extends Controller
             $check();
         } catch (Throwable $error) {
             /*
-             * A mensagem do driver fica no LOG, não na resposta.
+             * The driver's message stays in the LOG, not in the response.
              *
-             * A rota é pública, e o erro do PDO nomeia host, porta e driver —
-             * `SQLSTATE[HY000] [2002] Connection refused`, e o DSN junto. Isso
-             * é reconhecimento gratuito para quem sonda. Quem precisa do
-             * detalhe é quem opera, e tem o log estruturado com o identificador
-             * da requisição para achá-lo.
+             * The route is public, and PDO's error names the host, the port and the driver —
+             * `SQLSTATE[HY000] [2002] Connection refused`, with the DSN alongside. That is
+             * free reconnaissance for whoever is probing. Whoever needs the detail is
+             * whoever operates the system, and they have the structured log with the request
+             * identifier to find it.
              */
-            Log::error('health.failed', ['erro' => $error->getMessage()]);
+            Log::error('health.failed', ['error' => $error->getMessage()]);
 
-            return ['ok' => false, 'error' => 'não respondeu'];
+            return ['ok' => false, 'error' => 'did not respond'];
         }
 
         return ['ok' => true, 'duration_ms' => round((microtime(true) - $start) * 1000, 2)];

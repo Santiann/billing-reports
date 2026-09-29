@@ -3,19 +3,19 @@
 namespace App\Domain\Report;
 
 /**
- * Os filtros do relatório, já validados.
+ * The report's filters, already validated.
  *
- * Existe como objeto e não como array solto porque três consumidores precisam
- * exatamente do mesmo recorte: a tela, a exportação CSV e a exportação PDF.
- * Se cada uma montasse o seu, um filtro aplicado na tela poderia não valer no
- * arquivo exportado — e o teste exige que as exportações respeitem os filtros.
+ * It exists as an object rather than a loose array because three consumers need exactly the
+ * same scope: the screen, the CSV export and the PDF export. If each built its own, a filter
+ * applied on the screen might not hold in the exported file — and the test requires the
+ * exports to respect the filters.
  */
 final class BillingReportFilters
 {
-    /** O usuário escolhe qual das três datas define o período. */
+    /** The user chooses which of the three dates defines the period. */
     public const DATE_FIELDS = ['issue_date', 'due_date', 'payment_date'];
 
-    /** `overdue` não é status gravado: é condição derivada. */
+    /** `overdue` is not a stored status: it is a derived condition. */
     public const STATUSES = ['pending', 'paid', 'overdue'];
 
     public const SORTABLE = [
@@ -57,8 +57,8 @@ final class BillingReportFilters
     {
         $value = isset($input[$key]) ? (string) $input[$key] : null;
 
-        // Segunda barreira além do FormRequest: estes valores viram nome de
-        // coluna em SQL, e depender de uma camada só para isso é frágil.
+        // A second barrier beyond the FormRequest: these values become column names in SQL,
+        // and depending on a single layer for that is fragile.
         return $value !== null && in_array($value, $allowed, true) ? $value : null;
     }
 
@@ -82,11 +82,11 @@ final class BillingReportFilters
     }
 
     /**
-     * O que define o CONJUNTO, e portanto os totais.
+     * What defines the SET, and therefore the totals.
      *
-     * Ordenação e direção ficam de fora: mudam a ordem das linhas, não quais
-     * linhas entram. Recalcular os totais a cada clique de ordenação
-     * desperdiçaria o cache no uso mais comum da tela.
+     * Sorting and direction are left out: they change the order of the rows, not which rows are
+     * in. Recomputing the totals on every sort click would waste the cache on the screen's most
+     * common use.
      *
      * @return array<string, mixed>
      */
@@ -102,7 +102,7 @@ final class BillingReportFilters
     }
 
     /**
-     * Eco para a tela e para o cabeçalho dos arquivos exportados.
+     * An echo for the screen and for the exported files' header.
      *
      * @return array<string, mixed>
      */

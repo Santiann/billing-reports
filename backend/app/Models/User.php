@@ -31,11 +31,11 @@ class User extends Authenticatable
     }
 
     /**
-     * O default do banco só vale no INSERT.
+     * The database's default only applies on the INSERT.
      *
-     * Sem esta linha, a instância recém-criada em memória ficaria com o perfil
-     * nulo até ser relida — e `$user->role->canWrite()` explodiria no meio de
-     * uma autorização, que é o pior lugar possível para isso acontecer.
+     * Without this line, a freshly created in-memory instance would have a null role until it
+     * was read back — and `$user->role->canWrite()` would blow up in the middle of an
+     * authorisation, which is the worst possible place for that to happen.
      *
      * @var array<string, mixed>
      */

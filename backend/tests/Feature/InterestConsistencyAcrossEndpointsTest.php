@@ -10,16 +10,16 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * A especificação exige que o valor calculado seja "consistente em todas as telas
+ * The brief requires the computed value to be "consistent across every screen
  * e relatórios".
  *
- * `InterestCalculatorTest` prova que as duas FACES do calculador concordam.
- * Este prova o degrau seguinte: que os três ENDPOINTS que expõem o valor
- * concordam entre si, pela HTTP, com o mesmo registro.
+ * `InterestCalculatorTest` proves the calculator's two FACES agree. This one proves the next
+ * step: that the three ENDPOINTS exposing the value agree with each other, over HTTP, on the
+ * same record.
  *
- * São caminhos diferentes de propósito — a cobrança isolada calcula em PHP, e
- * a listagem e o relatório calculam em SQL dentro do SELECT. É exatamente por
- * serem caminhos diferentes que precisam ser confrontados.
+ * They are different paths on purpose — the single billing computes in PHP, while the listing and
+ * the report compute in SQL inside the SELECT. It is precisely because they are different paths
+ * that they have to be set against each other.
  */
 class InterestConsistencyAcrossEndpointsTest extends TestCase
 {
@@ -32,7 +32,7 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
      */
     public static function cenarios(): array
     {
-        //        [ valor,       taxa,     dias de atraso ]
+        //        [ amount,      rate,     days late ]
         return [
             'within term' => ['1000.00', '0.0200', -10],
             'overdue by 1 day' => ['1000.00', '0.0200', 1],
@@ -62,13 +62,13 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
                 'monthly_interest_rate' => $rate,
             ]);
 
-        // Cobrança isolada: face PHP.
+        // A single billing: the PHP face.
         $isolada = $this->getJson("/api/billings/{$billing->id}")->assertOk()->json('data');
 
-        // Listagem de cobranças: face SQL, via selectRaw.
+        // The billings listing: the SQL face, via selectRaw.
         $listagem = $this->getJson('/api/billings')->assertOk()->json('data.0');
 
-        // Relatório: face SQL, por outro caminho de consulta.
+        // The report: the SQL face, through another query path.
         $report = $this->getJson('/api/reports/billings')->assertOk()->json('data.0');
 
         foreach (['updated_amount', 'interest_amount'] as $field) {
@@ -98,9 +98,9 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
 
         $response = $this->getJson('/api/reports/billings?per_page=100')->assertOk();
 
-        // O totalizador vem de uma consulta de agregação separada. Somar as
-        // linhas exibidas e comparar é o único jeito de provar que as duas
-        // consultas falam do mesmo conjunto e da mesma regra.
+        // The total comes from a separate aggregation query. Summing the displayed rows and
+        // comparing is the only way to prove the two queries talk about the same set and the
+        // same rule.
         $somaDasLinhas = array_sum(array_map(
             fn (array $row) => (float) $row['updated_amount'],
             $response->json('data'),
@@ -124,7 +124,7 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
             'due_date' => '2026-06-01',
         ]);
 
-        // Fronteira: pagar no próprio dia do vencimento é zero dia de atraso.
+        // The boundary: paying on the due date itself is zero days late.
         $this->postJson("/api/billings/{$billing->id}/payment", [
             'payment_date' => '2026-06-01',
         ])->assertOk();

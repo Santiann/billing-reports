@@ -3,7 +3,7 @@
 namespace App\Domain\Idempotency;
 
 /**
- * O desfecho da reserva, com a resposta guardada quando há uma.
+ * The reservation's outcome, with the stored response when there is one.
  */
 final readonly class IdempotencyReservation
 {

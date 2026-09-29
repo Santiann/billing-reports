@@ -3,10 +3,10 @@
 namespace App\Domain\Billing;
 
 /**
- * Resultado do cálculo, com os valores já em string decimal de dois dígitos.
+ * The calculation's result, with the amounts already as two-digit decimal strings.
  *
- * String e não float: é o formato em que o valor atravessa a API e chega à
- * tela, e converter para float no caminho é onde o centavo se perde.
+ * Strings and not floats: it is the format the amount travels through the API and reaches the
+ * screen in, and converting to float along the way is where the cent gets lost.
  */
 final class InterestCalculation
 {

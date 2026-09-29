@@ -1,14 +1,13 @@
 <?php
 
 /**
- * Mensagens de validação em português.
+ * Validation messages in Portuguese.
  *
- * A interface é em português e as mensagens de erro chegam nela cruas, campo a
- * campo. Sem este arquivo o usuário veria "The name field is required."
- * misturado com as mensagens customizadas em português.
+ * The interface is in Portuguese and the error messages reach it raw, field by field. Without
+ * this file the user would see "The name field is required." mixed in with the custom
+ * Portuguese messages.
  *
- * Só as regras efetivamente usadas no projeto: um arquivo completo seria
- * centenas de linhas mortas.
+ * Only the rules the project actually uses: a complete file would be hundreds of dead lines.
  */
 return [
     'after_or_equal' => 'O campo :attribute deve ser uma data igual ou posterior a :date.',
@@ -42,7 +41,7 @@ return [
     ],
 
     /**
-     * Nomes de campo em português, para a mensagem não citar a coluna do banco.
+     * Field names in Portuguese, so the message does not quote the database column.
      */
     'attributes' => [
         'name' => 'nome',

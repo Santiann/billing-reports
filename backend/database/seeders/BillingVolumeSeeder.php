@@ -13,70 +13,70 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Gera volume real para medir o relatório.
+ * Generates real volume to measure the report against.
  *
- * Não roda no DatabaseSeeder: são milhões de linhas e vários minutos. Invocar
- * explicitamente:
+ * It does not run from DatabaseSeeder: this is millions of rows and several
+ * minutes. Invoke it explicitly:
  *
  *     docker compose exec php php artisan db:seed --class=BillingVolumeSeeder
  *
- * O total é configurável por env para permitir uma amostra menor:
+ * The total is configurable by env so a smaller sample is possible:
  *
  *     docker compose exec -e BILLING_SEED_COUNT=100000 php \
  *         php artisan db:seed --class=BillingVolumeSeeder
  *
- * Insert em lote, nunca factory registro a registro: a factory instancia um
- * model, dispara eventos e faz um INSERT por linha. Em dois milhões de
- * cobranças a diferença não é de porcentagem, é de ordem de grandeza.
+ * Batch inserts, never a factory row by row: the factory instantiates a model,
+ * fires events and issues one INSERT per row. Over two million billings the
+ * difference is not a percentage, it is an order of magnitude.
  *
- * Parte das pagas é paga COM ATRASO, com juros congelados de verdade. Sem
- * isso a base de medição não exercita a regra de congelamento: o relatório
- * mostraria zero de juros recebidos e a tela de detalhe nunca teria o que
- * exibir. Quem calcula o valor congelado é o RegisterPayment, o mesmo serviço
- * da API — o insert em lote continua, o que muda é de onde vem o número.
+ * Some of the paid ones are paid LATE, with genuinely frozen interest. Without
+ * that the measurement base does not exercise the freezing rule: the report
+ * would show zero interest received and the detail screen would never have
+ * anything to display. What computes the frozen amount is RegisterPayment, the
+ * same service the API uses — the batch insert stays, what changes is where the
+ * number comes from.
  */
 class BillingVolumeSeeder extends Seeder
 {
     private const CUSTOMERS = 5_000;
 
-    /** Proporção das cobranças que nascem pagas. */
+    /** The share of billings that are born paid. */
     private const PAID_PERCENT = 40;
 
-    /** Proporção DAS PAGAS que foram pagas com atraso, e portanto com juros. */
+    /** The share OF THE PAID ONES paid late, and therefore with interest. */
     private const PAID_LATE_PERCENT = 35;
 
     /**
-     * Teto de atraso do pagamento, em dias.
+     * The cap on payment lateness, in days.
      *
-     * Sem teto, uma cobrança vencida há três anos e paga hoje a 5% ao mês
-     * acumularia 1,05^36 — quase seis vezes o valor original. Existe, mas não
-     * é o que uma base de faturamento parece.
+     * Without a cap, a billing three years overdue and paid today at 5% a month
+     * would accrue 1.05^36 — nearly six times the original amount. It happens, but
+     * it is not what a billing base looks like.
      */
     private const MAX_DAYS_LATE = 120;
 
-    /** Antecedência máxima de um pagamento em dia, em dias. */
+    /** The maximum earliness of an on-time payment, in days. */
     private const MAX_DAYS_EARLY = 25;
 
-    /** Linhas por INSERT. Acima disso o max_allowed_packet começa a apertar. */
+    /** Rows per INSERT. Above this max_allowed_packet starts to bite. */
     private const CHUNK = 2_000;
 
     /**
-     * A partir de quantas cobranças os índices são derrubados antes da carga.
+     * The billing count from which the indexes are dropped before loading.
      *
-     * Índice não acelera insert, desacelera: cada linha mantém oito árvores a
-     * mais. Numa carga grande, derrubar e recriar no fim sai mais barato — a
-     * medição está no docs/performance.md. Numa carga pequena não compensa, e
-     * há um motivo mais forte para não fazer: o teste do seeder semeia uma
-     * amostra, e DDL dentro de teste encerra a transação do RefreshDatabase
-     * por commit implícito, fazendo cada teste seguinte da suíte refazer as
-     * migrations.
+     * An index does not speed an insert up, it slows it down: every row maintains
+     * eight more trees. On a large load, dropping and recreating at the end is
+     * cheaper — the measurement is in docs/performance.md. On a small load it does
+     * not pay off, and there is a stronger reason not to: the seeder's test seeds a
+     * sample, and DDL inside a test ends RefreshDatabase's transaction through an
+     * implicit commit, making every following test in the suite redo the migrations.
      */
     private const DEFER_INDEXES_FROM = 100_000;
 
     /**
-     * O total também entra por construtor, e não só por env, para o teste
-     * conseguir semear uma amostra pequena: sobrescrever `env()` de dentro do
-     * teste mexeria no ambiente do processo inteiro.
+     * The total also comes in through the constructor, not only through env, so the
+     * test can seed a small sample: overriding `env()` from inside the test would
+     * touch the whole process's environment.
      */
     public function __construct(private readonly ?int $total = null) {}
 
@@ -84,13 +84,13 @@ class BillingVolumeSeeder extends Seeder
     {
         $total = $this->total ?? (int) (env('BILLING_SEED_COUNT') ?: 2_000_000);
 
-        // Uma amostra de 600 cobranças espalhada por 5.000 clientes não se
-        // parece com nada: quase todo cliente ficaria com zero ou uma
-        // cobrança. A partir de 100.000 o teto vale e a carga real não muda.
+        // A sample of 600 billings spread over 5,000 customers looks like nothing:
+        // almost every customer would end up with zero or one billing. From 100,000
+        // on the cap applies and the real load is unchanged.
         $customers = max(1, min(self::CUSTOMERS, intdiv($total, 20)));
 
-        // Sem isso o Laravel guarda cada INSERT em memória e o processo morre
-        // por exaustão muito antes do fim.
+        // Without this Laravel keeps every INSERT in memory and the process dies of
+        // exhaustion long before the end.
         DB::connection()->disableQueryLog();
 
         $this->command?->info(sprintf(
@@ -103,9 +103,9 @@ class BillingVolumeSeeder extends Seeder
 
         $this->truncate();
 
-        // Cura de uma execução anterior interrompida à força: se ela morreu com
-        // os índices derrubados, eles voltam agora — com a tabela recém-
-        // truncada, recriar é instantâneo. Sem nada faltando, é só uma leitura.
+        // Healing a previous run that was killed: if it died with the indexes
+        // dropped, they come back now — with the table freshly truncated, recreating
+        // them is instant. With nothing missing, this is just a read.
         $this->recreateMissingIndexes();
 
         $this->seedCustomers($customers);
@@ -117,8 +117,8 @@ class BillingVolumeSeeder extends Seeder
             $this->seedBillings($total, $customerIds);
         }
 
-        // Insert cru em lote não passa pelo observer. Sem isto, um total em
-        // cache de antes da carga continuaria sendo servido depois dela.
+        // A raw batch insert does not go through the observer. Without this, a total
+        // cached from before the load would keep being served after it.
         app(BillingDataVersion::class)->bump();
 
         $this->command?->info(sprintf(
@@ -128,26 +128,26 @@ class BillingVolumeSeeder extends Seeder
     }
 
     /**
-     * Começa do zero a cada execução.
+     * Starts from scratch on every run.
      *
-     * Os documentos são sequenciais para garantir unicidade sem consultar o
-     * banco, o que torna uma segunda execução impossível sobre os dados da
-     * primeira. E medir consulta sobre volume acumulado de execuções
-     * anteriores não diria nada — o ponto é o volume ser conhecido.
+     * The documents are sequential to guarantee uniqueness without querying the
+     * database, which makes a second run impossible over the first one's data. And
+     * measuring a query over volume accumulated from previous runs would say
+     * nothing — the point is for the volume to be known.
      */
     private function truncate(): void
     {
-        // TRUNCATE é DDL e custa segundos mesmo sobre tabela vazia. Sair cedo
-        // quando não há o que limpar tira esse custo de cada teste da suíte —
-        // e, de quebra, preserva a transação do RefreshDatabase, que um
-        // TRUNCATE encerraria por commit implícito.
+        // TRUNCATE is DDL and costs seconds even on an empty table. Bailing out early
+        // when there is nothing to clear removes that cost from every test in the
+        // suite — and, as a bonus, preserves RefreshDatabase's transaction, which a
+        // TRUNCATE would end through an implicit commit.
         if (! DB::table('billings')->exists() && ! DB::table('customers')->exists()) {
             return;
         }
 
         Schema::disableForeignKeyConstraints();
-        // A trilha vai junto: o TRUNCATE reinicia os ids das cobranças, e a
-        // trilha antiga passaria a descrever cobranças que não são as dela.
+        // The trail goes with it: the TRUNCATE restarts the billings' ids, and the
+        // old trail would end up describing billings that are not its own.
         DB::table('billing_audits')->truncate();
         DB::table('billings')->truncate();
         DB::table('customers')->truncate();
@@ -155,17 +155,17 @@ class BillingVolumeSeeder extends Seeder
     }
 
     /**
-     * Roda a carga com os índices secundários derrubados, e os recria depois.
+     * Runs the load with the secondary indexes dropped, and recreates them after.
      *
-     * A recriação está num `finally`: se a carga falhar no meio, a tabela não
-     * fica sem índices — ficaria, para quem subisse a aplicação em seguida, um
-     * relatório varrendo dois milhões de linhas a cada consulta, sem nenhum
-     * erro que apontasse a causa.
+     * The recreation sits in a `finally`: if the load fails halfway, the table is not
+     * left without indexes — whoever brought the application up next would get a
+     * report scanning two million rows on every query, with no error pointing at the
+     * cause.
      *
-     * O `finally` não cobre o processo morto à força. Esse caso é o que o
-     * `recreateMissingIndexes()` no início de `run()` cura.
+     * The `finally` does not cover a process that gets killed. That case is what
+     * `recreateMissingIndexes()` at the start of `run()` heals.
      *
-     * Pública para o teste exercitar a garantia com uma carga que falha.
+     * Public so the test can exercise the guarantee with a load that fails.
      */
     public function withDeferredIndexes(callable $load): void
     {
@@ -213,8 +213,8 @@ class BillingVolumeSeeder extends Seeder
             return;
         }
 
-        // Uma instrução só: cada ALTER separado pegaria o bloqueio de metadados
-        // da tabela de novo.
+        // A single statement: each separate ALTER would take the table's metadata
+        // lock again.
         DB::statement('ALTER TABLE billings '.implode(', ', array_map(
             fn (string $name) => "DROP INDEX {$name}",
             $present,
@@ -222,21 +222,20 @@ class BillingVolumeSeeder extends Seeder
     }
 
     /**
-     * Cria o que estiver faltando, um ALTER por índice.
+     * Creates whatever is missing, one ALTER per index.
      *
-     * Idempotente de propósito: é chamada tanto no `finally` da carga quanto na
-     * cura do início, e nos dois casos pode encontrar parte dos índices já de
-     * pé.
+     * Idempotent on purpose: it is called both from the load's `finally` and from the
+     * healing at the start, and in both cases it may find some of the indexes already
+     * standing.
      *
-     * Um ALTER por índice, e não um só com todos — e a primeira versão deste
-     * método fazia o contrário, com um comentário afirmando que era mais
-     * barato. A medição sobre os 2.000.000 de linhas em repouso desmentiu: os
-     * oito num ALTER único levaram 19min12s, e um por um, 10min44s.
+     * One ALTER per index, and not a single one with all of them — and the first
+     * version of this method did the opposite, with a comment claiming it was cheaper.
+     * Measuring against the 2,000,000 rows at rest disproved it: all eight in a single
+     * ALTER took 19min12s, and one by one, 10min44s.
      *
-     * O manual do MySQL documenta que o buffer de DDL é dividido entre as
-     * threads de DDL; como ele se reparte entre vários índices construídos na
-     * mesma instrução, não documenta. O número decide a implementação — a
-     * explicação fica em aberto.
+     * MySQL's manual documents that the DDL buffer is split between DDL threads; how
+     * it divides between several indexes built in the same statement, it does not
+     * document. The number decides the implementation — the explanation stays open.
      */
     private function recreateMissingIndexes(): void
     {
@@ -252,9 +251,9 @@ class BillingVolumeSeeder extends Seeder
     }
 
     /**
-     * Tira o índice provisório — e só se os índices que começam por
-     * `customer_id` já estiverem de volta. Se a recriação tiver falhado, o
-     * provisório fica: a chave estrangeira não pode ficar sem apoio.
+     * Drops the temporary index — and only if the indexes starting with `customer_id`
+     * are already back. If the recreation failed, the temporary one stays: the foreign
+     * key cannot be left without support.
      */
     private function removeForeignKeySupport(): void
     {
@@ -279,8 +278,8 @@ class BillingVolumeSeeder extends Seeder
         for ($i = 1; $i <= $customers; $i++) {
             $rows[] = [
                 'name' => "Cliente {$i}",
-                // Sequencial e não aleatório: garante unicidade sem colisão e
-                // sem precisar consultar o banco a cada linha.
+                // Sequential and not random: it guarantees uniqueness with no
+                // collision and without querying the database on every row.
                 'document' => str_pad((string) $i, 11, '0', STR_PAD_LEFT),
                 'email' => "cliente{$i}@exemplo.test",
                 'status' => $i % 20 === 0
@@ -310,8 +309,8 @@ class BillingVolumeSeeder extends Seeder
         $today = now()->startOfDay();
         $lastCustomer = count($customerIds) - 1;
 
-        // Faker é lento demais para milhões de linhas: um sorteio num pool
-        // pequeno gera dados suficientes para medir consulta e índice.
+        // Faker is far too slow for millions of rows: drawing from a small pool
+        // produces enough data to measure queries and indexes.
         $descriptions = [
             'Mensalidade', 'Serviço prestado', 'Licença de uso',
             'Consultoria', 'Suporte técnico', 'Hospedagem',
@@ -324,8 +323,8 @@ class BillingVolumeSeeder extends Seeder
         $inserted = 0;
 
         for ($i = 0; $i < $total; $i++) {
-            // Emissão espalhada por três anos para o filtro de período ter o
-            // que recortar.
+            // Issue dates spread over three years so the period filter has something
+            // to narrow.
             $issueDate = $today->copy()->subDays(mt_rand(0, 1_095));
             $dueDate = $issueDate->copy()->addDays(30);
             $amount = mt_rand(10_000, 1_000_000) / 100;
@@ -371,16 +370,16 @@ class BillingVolumeSeeder extends Seeder
     }
 
     /**
-     * Sorteia QUANDO a cobrança foi paga e devolve as colunas congeladas.
+     * Draws WHEN the billing was paid and returns the frozen columns.
      *
-     * Quem calcula o valor é o RegisterPayment, o mesmo serviço que a API usa.
-     * Este método decide a data e nada além disso: repetir a fórmula de juros
-     * aqui faria do seeder uma segunda implementação da regra, e a base de
-     * medição deixaria de valer como prova do que a tela mostra.
+     * What computes the amount is RegisterPayment, the same service the API uses. This
+     * method decides the date and nothing else: repeating the interest formula here
+     * would make the seeder a second implementation of the rule, and the measurement
+     * base would stop counting as proof of what the screen shows.
      *
-     * Devolve null quando não existe data de pagamento possível — cobrança que
-     * vence daqui a mais de MAX_DAYS_EARLY dias ainda não foi paga, porque o
-     * pagamento cairia no futuro.
+     * Returns null when no payment date is possible — a billing falling due more than
+     * MAX_DAYS_EARLY days from now has not been paid yet, because the payment would
+     * land in the future.
      *
      * @return array<string, string>|null
      */
@@ -398,9 +397,9 @@ class BillingVolumeSeeder extends Seeder
                 mt_rand(1, min(self::MAX_DAYS_LATE, $daysOverdue)),
             );
         } else {
-            // Paga em dia. O piso da antecedência é o que ainda falta para
-            // vencer: sem ele, uma cobrança que vence semana que vem seria
-            // paga depois de hoje.
+            // Paid on time. The floor on earliness is how long there is still to go
+            // before it falls due: without it, a billing due next week would be paid
+            // after today.
             $daysEarly = $daysOverdue > 0 ? 1 : (int) $today->diffInDays($dueDate);
 
             if ($daysEarly > self::MAX_DAYS_EARLY) {
@@ -412,8 +411,9 @@ class BillingVolumeSeeder extends Seeder
             );
         }
 
-        // Model não persistido: serve só para o calculador ler valor, taxa e
-        // vencimento. Persistir aqui seria voltar ao INSERT por linha.
+        // An unpersisted model: it only exists for the calculator to read the amount,
+        // the rate and the due date. Persisting here would be back to one INSERT per
+        // row.
         return $registerPayment->freeze(
             new Billing([
                 'original_amount' => $amount,

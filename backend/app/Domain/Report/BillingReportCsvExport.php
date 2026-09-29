@@ -8,23 +8,23 @@ use Carbon\CarbonImmutable;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Exportação do relatório em CSV.
+ * The CSV report export.
  *
- * Escreve linha a linha em `php://output` enquanto percorre o resultado com
- * `lazy()`. Em nenhum momento o conjunto existe inteiro em memória — é o que
- * permite exportar um recorte de centenas de milhares de cobranças sem
+ * It writes row by row into `php://output` while walking the result with `lazy()`. At no point
+ * does the set exist whole in memory — that is what makes it possible to export a scope of
+ * hundreds of thousands of billings without
  * estourar o processo.
  *
- * Usa o MESMO BillingReportQuery e o MESMO objeto de filtros que a tela. É o
- * que garante que o arquivo exportado seja o relatório que o usuário está
- * vendo, e não uma segunda consulta parecida.
+ * It uses the SAME BillingReportQuery and the SAME filters object as the screen. That is what
+ * guarantees the exported file is the report the user is looking at, and not a second, similar
+ * query.
  */
 final class BillingReportCsvExport
 {
-    /** Linhas por bloco lido do banco. */
+    /** Rows per chunk read from the database. */
     private const CHUNK = 1_000;
 
-    /** A cada N linhas o buffer é esvaziado, para o download começar já. */
+    /** Every N rows the buffer is flushed, so the download starts right away. */
     private const FLUSH_EVERY = 500;
 
     private const DELIMITER = ';';
@@ -41,7 +41,7 @@ final class BillingReportCsvExport
             $filename,
             [
                 'Content-Type' => 'text/csv; charset=UTF-8',
-                // Sem isto, proxies e o próprio browser podem tentar bufferizar.
+                // Without this, proxies and the browser itself may try to buffer.
                 'X-Accel-Buffering' => 'no',
                 'Cache-Control' => 'no-store',
             ],
@@ -52,8 +52,8 @@ final class BillingReportCsvExport
     {
         $out = fopen('php://output', 'wb');
 
-        // BOM: sem ele o Excel abre UTF-8 como Latin-1 e os acentos viram
-        // lixo. É o formato que quem recebe este arquivo vai usar.
+        // BOM: without it Excel opens UTF-8 as Latin-1 and the accents turn to garbage. It is
+        // the program whoever receives this file will use.
         fwrite($out, "\xEF\xBB\xBF");
 
         $this->writeContext($out, $filters);
@@ -75,7 +75,7 @@ final class BillingReportCsvExport
     }
 
     /**
-     * Período e filtros aplicados, no topo do arquivo.
+     * The applied period and filters, at the top of the file.
      *
      * @param  resource  $out
      */
@@ -121,8 +121,8 @@ final class BillingReportCsvExport
     }
 
     /**
-     * Totalizadores no rodapé, da consulta de agregação sobre o conjunto
-     * filtrado inteiro — não a soma das linhas que acabaram de ser escritas.
+     * The totals in the footer, from the aggregation query over the whole filtered set — not
+     * the sum of the rows that have just been written.
      *
      * @param  resource  $out
      */
@@ -156,8 +156,8 @@ final class BillingReportCsvExport
     }
 
     /**
-     * Formato brasileiro: quem abre este arquivo abre no Excel em pt-BR, onde
-     * a vírgula é separador decimal. Por isso o delimitador é ponto e vírgula.
+     * Brazilian format: whoever opens this file opens it in Excel in pt-BR, where the comma is
+     * the decimal separator. That is why the delimiter is a semicolon.
      */
     private function money(mixed $value): string
     {

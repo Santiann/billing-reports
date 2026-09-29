@@ -11,17 +11,17 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * O dashboard agrega no banco, e é isso que os testes precisam fixar.
+ * The dashboard aggregates in the database, and that is what these tests have to pin down.
  *
- * Volume aqui é pequeno de propósito: o que se afirma é a REGRA — de onde vem
- * cada número e o que ele inclui. A prova de que o dashboard responde em tempo
- * é medição contra os dois milhões, fora da suíte.
+ * Volume here is small on purpose: what gets asserted is the RULE — where each number comes from
+ * and what it includes. The proof that the dashboard answers in time is measurement against the
+ * two million, outside the suite.
  */
 class DashboardTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Congelado: o mês corrente precisa significar o mesmo amanhã. */
+    /** Frozen: the current month has to mean the same thing tomorrow. */
     private const HOJE = '2026-09-12 10:00:00';
 
     private function actingAsUser(): void
@@ -41,7 +41,7 @@ class DashboardTest extends TestCase
 
         $customer = Customer::factory()->create();
 
-        // Dentro do mês: duas cobranças.
+        // Inside the month: two billings.
         Billing::factory()->create([
             'customer_id' => $customer->id,
             'original_amount' => '1000.00',
@@ -57,7 +57,7 @@ class DashboardTest extends TestCase
             'due_date' => '2026-09-20',
         ]);
 
-        // Fora do mês: não pode entrar em nenhum indicador.
+        // Outside the month: it must not enter any indicator.
         Billing::factory()->create([
             'customer_id' => $customer->id,
             'original_amount' => '9999.00',
@@ -72,8 +72,8 @@ class DashboardTest extends TestCase
     }
 
     /**
-     * A cobrança vencida do mês acumula juros; a que ainda vai vencer, não.
-     * 1000 a 2% com 2 dias de atraso, e 500 com vencimento daqui a 8 dias.
+     * The month's overdue billing accrues interest; the one still to fall due does not.
+     * 1000 at 2% with 2 days late, and 500 falling due in 8 days.
      */
     public function test_interest_for_the_period_sums_only_the_overdue_ones(): void
     {
@@ -97,13 +97,13 @@ class DashboardTest extends TestCase
 
         $this->assertSame(1, $response->json('period.overdue_count'));
 
-        // 1000 * 1.02^(2/30) = 1001.32 -> 1,32 de juros. A de 500 não entra.
+        // 1000 * 1.02^(2/30) = 1001.32 -> 1.32 of interest. The 500 one does not count.
         $this->assertSame('1.32', $response->json('period.interest_amount'));
     }
 
     /**
-     * Recebido vem das colunas congeladas, nunca de recálculo — é a mesma
-     * regra do relatório, e o dashboard não pode discordar dele.
+     * Received comes from the frozen columns, never from a recompute — it is the report's rule,
+     * and the dashboard cannot disagree with it.
      */
     public function test_received_comes_from_the_frozen_columns(): void
     {
@@ -117,20 +117,20 @@ class DashboardTest extends TestCase
             'due_date' => '2026-09-10',
         ]);
 
-        // Paga com 2 dias de atraso: 1000 * 1.02^(2/30) = 1001.32.
+        // Paid 2 days late: 1000 * 1.02^(2/30) = 1001.32.
         app(RegisterPayment::class)($billing, '2026-09-12');
 
         $response = $this->getJson('/api/dashboard')->assertOk();
 
         $this->assertSame('1001.32', $response->json('period.received_amount'));
-        // Paga não é vencida, e não entra nos juros a receber.
+        // Paid is not overdue, and does not count towards receivable interest.
         $this->assertSame(0, $response->json('period.overdue_count'));
         $this->assertSame('0.00', $response->json('period.interest_amount'));
     }
 
     /**
-     * Cobrança paga não muda de valor com o tempo. Sem avançar o relógio, o
-     * teste passaria mesmo se o dashboard recalculasse.
+     * A paid billing does not change value over time. Without moving the clock forward, the test
+     * would pass even if the dashboard recomputed.
      */
     public function test_received_does_not_change_over_time(): void
     {
@@ -147,7 +147,7 @@ class DashboardTest extends TestCase
 
         $before = $this->getJson('/api/dashboard')->json('period.received_amount');
 
-        // Ainda dentro do mesmo mês, para o recorte não mudar.
+        // Still inside the same month, so the scope does not change.
         $this->travelTo('2026-09-30 23:00:00');
 
         $this->assertSame($before, $this->getJson('/api/dashboard')->json('period.received_amount'));
@@ -189,16 +189,16 @@ class DashboardTest extends TestCase
 
         $this->assertSame(2, $julho['count']);
         $this->assertSame('1400.00', $julho['original_amount']);
-        // Paga em dia: recebeu exatamente o valor original.
+        // Paid on time: exactly the original amount was received.
         $this->assertSame('1000.00', $julho['received_amount']);
     }
 
     /**
-     * A consulta da série soma `paid_amount` direto, sem filtrar por `status`.
-     * Isso só dá o número certo porque as duas coisas são equivalentes, e é
-     * uma invariante que nada no schema garante: é o RegisterPayment que a
-     * mantém. Este teste é o que impede alguém de quebrá-la sem perceber e
-     * fazer o dashboard passar a contar cobrança pendente como recebida.
+     * The series query sums `paid_amount` directly, without filtering by `status`. That only
+     * gives the right number because the two are equivalent, and it is an invariant nothing in the
+     * schema guarantees: RegisterPayment is what maintains it. This test is what stops someone
+     * breaking it without noticing and having the dashboard start counting a pending billing as
+     * received.
      */
     public function test_paid_amount_exists_if_and_only_if_the_billing_is_paid(): void
     {

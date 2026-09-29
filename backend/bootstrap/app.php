@@ -16,12 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Primeiro de todos: o identificador precisa existir antes de qualquer
-        // linha de log da requisição, inclusive as de erro.
+        // First of all: the identifier has to exist before any of the request's log lines,
+        // including the error ones.
         $middleware->api(prepend: [RequestId::class]);
 
-        // Teto de requisições da API. O limitador `api` está no
-        // AppServiceProvider, com a razão do número.
+        // The API's request cap. The `api` limiter lives in AppServiceProvider, alongside the
+        // reasoning behind the number.
         $middleware->api(append: ['throttle:api']);
 
         $middleware->alias([

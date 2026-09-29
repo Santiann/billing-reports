@@ -7,11 +7,11 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Valida os parâmetros de consulta da listagem.
+ * Validates the listing's query parameters.
  *
- * `sort` é validado contra allowlist porque ele entra no ORDER BY: aceitar o
- * valor cru seria injeção. E `per_page` tem teto porque sem ele
- * `?per_page=999999` derruba a API com uma requisição.
+ * `sort` is validated against an allowlist because it goes into the ORDER BY: accepting the
+ * raw value would be injection. And `per_page` is capped because without it
+ * `?per_page=999999` takes the API down with a single request.
  */
 class IndexCustomerRequest extends FormRequest
 {

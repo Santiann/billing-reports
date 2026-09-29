@@ -18,7 +18,7 @@ class CustomersTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    // --- proteção -----------------------------------------------------
+    // --- protection ---------------------------------------------------
 
     public function test_the_listing_requires_authentication(): void
     {
@@ -46,8 +46,8 @@ class CustomersTest extends TestCase
 
         $response = $this->getJson('/api/customers?per_page=10')->assertOk();
 
-        // A página traz 10 registros, mas o total conhece os 25: prova que o
-        // recorte é do banco e não de uma coleção carregada inteira.
+        // The page brings 10 records, but the total knows all 25: proof the narrowing is the
+        // database's and not a fully loaded collection's.
         $this->assertCount(10, $response->json('data'));
         $this->assertSame(25, $response->json('meta.total'));
         $this->assertSame(10, $response->json('meta.per_page'));
@@ -68,7 +68,7 @@ class CustomersTest extends TestCase
     {
         $this->actingAsUser();
 
-        // Sem teto, ?per_page=999999 seria um jeito trivial de derrubar a API.
+        // Without a cap, ?per_page=999999 would be a trivial way to take the API down.
         $this->getJson('/api/customers?per_page=100000')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('per_page');
@@ -120,7 +120,7 @@ class CustomersTest extends TestCase
     {
         $this->actingAsUser();
 
-        // Sem allowlist, o parâmetro entraria cru no ORDER BY.
+        // Without an allowlist, the parameter would go raw into the ORDER BY.
         $this->getJson('/api/customers?sort=password')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('sort');
@@ -153,7 +153,7 @@ class CustomersTest extends TestCase
             'status' => 'active',
         ])->assertCreated();
 
-        // Guardar com máscara faria a busca depender do formato digitado.
+        // Storing it formatted would make the search depend on how it was typed.
         $this->assertDatabaseHas('customers', ['document' => '12345678901']);
     }
 
@@ -179,7 +179,7 @@ class CustomersTest extends TestCase
             ->assertJsonValidationErrors(['name', 'document', 'email', 'status']);
     }
 
-    // --- visualização e edição ---------------------------------------
+    // --- viewing and editing -----------------------------------------
 
     public function test_shows_a_customer(): void
     {
@@ -222,8 +222,8 @@ class CustomersTest extends TestCase
         $this->actingAsUser();
         $customer = Customer::factory()->create(['document' => '12345678901']);
 
-        // A unique precisa ignorar o próprio registro, senão ninguém consegue
-        // salvar uma edição sem trocar de documento.
+        // The unique rule has to ignore the record itself, otherwise nobody can save an edit
+        // without changing the document.
         $this->putJson("/api/customers/{$customer->id}", [
             'name' => 'Nome Novo',
             'document' => '12345678901',

@@ -61,16 +61,16 @@ return [
         ],
 
         /*
-         * Log estruturado: uma linha, um objeto JSON.
+         * Structured logging: one line, one JSON object.
          *
-         * Vai para `stderr` porque é o que `docker compose logs` lê — e porque
-         * a imagem oficial do php-fpm já liga `catch_workers_output` e aponta o
-         * `error_log` para o fd 2, então a linha do worker chega ao log do
-         * container. Arquivo dentro do container só serviria a quem já está
+         * It goes to `stderr` because that is what `docker compose logs` reads — and because
+         * the official php-fpm image already turns on `catch_workers_output` and points
+         * `error_log` at fd 2, so the worker's line reaches the container's log. A file inside
+         * the container would only serve whoever is already
          * dentro dele.
          *
-         * O `RequestContextProcessor` acrescenta identificador da requisição,
-         * usuário, método, caminho e IP a cada linha, no momento em que ela é
+         * `RequestContextProcessor` adds the request identifier, the user, the method, the
+         * path and the IP to each line, at the moment it is
          * escrita.
          */
         'json' => [

@@ -11,23 +11,22 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * O teste que sustenta a exigência de resultado consistente entre telas e
+ * The test that upholds the requirement of a consistent result across screens and
  * relatório.
  *
- * O InterestCalculator tem duas faces — uma em SQL, usada na listagem e nas
- * agregações, e uma em PHP, usada para exibir uma cobrança isolada. Elas podem
- * divergir silenciosamente: arredondamento, precisão de DECIMAL contra float,
- * contagem de dias. Aqui a mesma matriz de casos passa pelas duas e os
- * resultados são comparados até o centavo.
+ * InterestCalculator has two faces — one in SQL, used in the listing and in the aggregations,
+ * and one in PHP, used to display a single billing. They can drift apart silently: rounding,
+ * DECIMAL precision against float, day counting. Here the same matrix of cases passes through
+ * both and the results are compared down to the cent.
  *
- * Toca o banco de propósito: a face SQL só existe dentro do MySQL. Fica em
- * tests/Unit porque o objeto sob teste é o calculador, não uma rota.
+ * It touches the database on purpose: the SQL face only exists inside MySQL. It lives in
+ * tests/Unit because the object under test is the calculator, not a route.
  */
 class InterestCalculatorTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Congelado: "vencida há 30 dias" precisa significar o mesmo amanhã. */
+    /** Frozen: "overdue by 30 days" has to mean the same thing tomorrow. */
     private const HOJE = '2026-06-15 09:30:00';
 
     /**
@@ -35,7 +34,7 @@ class InterestCalculatorTest extends TestCase
      */
     public static function casos(): array
     {
-        //        [ valor,      taxa,     vencimento,   pagamento ]
+        //        [ amount,     rate,     due date,     payment ]
         return [
             'within term, due tomorrow' => ['1000.00', '0.0200', '2026-06-16', null],
             'due today' => ['1000.00', '0.0200', '2026-06-15', null],
@@ -46,19 +45,18 @@ class InterestCalculatorTest extends TestCase
             'high rate, overdue by 45 days' => ['1000.00', '0.1500', '2026-05-01', null],
             'broken cents' => ['1234.57', '0.0333', '2026-04-02', null],
             'high amount and odd cent' => ['987654.31', '0.0250', '2026-01-07', null],
-            // Caso escolhido por medição, não por intuição: um varrimento de
-            // 900 dias x 6 taxas x 3 valores achou 78 combinações em que a
-            // divisão DECIMAL do MySQL (400/30 = 13.3333, truncado em quatro
-            // casas) muda o centavo contra a divisão double. Esta é uma
-            // delas, e é o caso que guarda o `/ 30e0` do compoundSql:
-            // sem ele, DECIMAL da 1363158.13 e PHP da 1363158.14.
+            // A case chosen by measurement, not by intuition: a sweep of 900 days x 6 rates
+            // x 3 amounts found 78 combinations in which MySQL's DECIMAL division
+            // (400/30 = 13.3333, truncated to four places) changes the cent against the
+            // double division. This is one of them, and it is the case that guards
+            // compoundSql's `/ 30e0`: without it, DECIMAL gives 1363158.13 and PHP gives
+            // 1363158.14.
             'decimal vs double divergence' => ['987654.31', '0.0350', '2025-09-07', null],
-            // Outro caso achado por varredura, e de natureza diferente do
-            // anterior: aqui a conta cai EXATAMENTE no meio centavo. 4224,10
-            // a 5% por 30 dias dá 4435,305. PHP arredonda meio para longe do
-            // zero e dá 4435,31; o ROUND do MySQL sobre DOUBLE arredonda meio
-            // para par e dá 4435,30. Varredura de 200.000 combinações achou
-            // uma divergência dessas, e a base de dois milhões achou outra.
+            // Another case found by sweeping, and of a different nature from the previous
+            // one: here the arithmetic lands EXACTLY on the half cent. 4224.10 at 5% for 30
+            // days gives 4435.305. PHP rounds half away from zero and gives 4435.31; MySQL's
+            // ROUND over a DOUBLE rounds half to even and gives 4435.30. A sweep of 200,000
+            // combinations found one such divergence, and the two-million base found another.
             'half cent tie' => ['4224.10', '0.0500', '2026-05-16', null],
             'half cent tie, high amount' => ['435254.90', '0.0500', '2026-05-16', null],
             'paid within term' => ['1500.00', '0.0200', '2026-05-20', '2026-05-18'],
@@ -93,14 +91,14 @@ class InterestCalculatorTest extends TestCase
         );
     }
 
-    // --- a regra em si ------------------------------------------------
+    // --- the rule itself ----------------------------------------------
 
     /**
-     * O empate não podia ficar só na matriz de consistência: lá as duas faces
-     * concordarem bastaria, mesmo que concordassem no valor errado. Aqui o
-     * valor está escrito.
+     * The tie could not live only in the consistency matrix: there it would be enough for the
+     * two faces to agree, even if they agreed on the wrong value. Here the value is written
+     * down.
      *
-     * 4224,10 a 5% por 30 dias = 4435,305, e meio centavo arredonda para cima.
+     * 4224.10 at 5% for 30 days = 4435.305, and half a cent rounds up.
      */
     public function test_a_half_cent_tie_rounds_up(): void
     {
@@ -143,7 +141,7 @@ class InterestCalculatorTest extends TestCase
     {
         $this->travelTo(self::HOJE);
 
-        // 1000 * 1.02^2 = 1040.40, e não 1040.00 — a diferença é o composto.
+        // 1000 * 1.02^2 = 1040.40, and not 1040.00 — the difference is the compounding.
         $calculation = (new InterestCalculator())->for(
             $this->makeBilling('1000.00', '0.0200', '2026-04-16', null),
         );
@@ -158,8 +156,8 @@ class InterestCalculatorTest extends TestCase
         $billing = $this->makeBilling('1000.00', '0.0200', '2026-04-10', '2026-05-10');
         $congelado = (new InterestCalculator())->for($billing);
 
-        // Avançar o relógio depois do pagamento é o que dá sentido ao teste:
-        // sem isto ele passaria mesmo com a regra errada.
+        // Moving the clock forward after the payment is what gives the test meaning: without
+        // it, it would pass even with the rule wrong.
         $this->travelTo('2027-01-01 09:30:00');
 
         $after = (new InterestCalculator())->for($billing->fresh());
@@ -186,10 +184,9 @@ class InterestCalculatorTest extends TestCase
 
         $billing = $this->makeBilling('1000.00', '0.0200', '2026-04-10', null);
 
-        // Estado inconsistente que a API não produz — status pago sem data —
-        // mas que um import ou uma correção manual no banco pode criar. O
-        // ramo defensivo existe para isso, e existir sem teste é o mesmo que
-        // não existir.
+        // An inconsistent state the API does not produce — paid status with no date — but one
+        // an import or a manual fix in the database can create. The defensive branch exists for
+        // that, and existing without a test is the same as not existing.
         DB::table('billings')
             ->where('id', $billing->id)
             ->update(['status' => 'paid', 'payment_date' => null, 'paid_amount' => null]);
@@ -217,8 +214,8 @@ class InterestCalculatorTest extends TestCase
         ]);
 
         if ($paymentDate !== null) {
-            // Passa pelo mesmo serviço que a API usa: congelar à mão aqui
-            // faria o teste validar um congelamento que não é o de produção.
+            // It goes through the same service the API uses: freezing by hand here would have
+            // the test validate a freeze that is not production's.
             app(RegisterPayment::class)($billing, $paymentDate);
         }
 

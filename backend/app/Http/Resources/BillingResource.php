@@ -17,9 +17,9 @@ class BillingResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // Na listagem os valores já vêm do SELECT (face SQL do calculador);
-        // numa cobrança isolada são calculados em PHP. InterestCalculatorTest
-        // afirma que os dois caminhos dão o mesmo número até o centavo.
+        // In the listing the values already come from the SELECT (the calculator's SQL face);
+        // on a single billing they are computed in PHP. InterestCalculatorTest asserts both
+        // paths give the same number down to the cent.
         $fromQuery = $this->resource->getAttribute('updated_amount') !== null;
 
         $calculation = $fromQuery
@@ -45,13 +45,13 @@ class BillingResource extends JsonResource
             'updated_amount' => $fromQuery
                 ? $this->money($this->resource->getAttribute('updated_amount'))
                 : $calculation->updatedAmount,
-            // whenLoaded: sem relação carregada a chave some, em vez de
-            // disparar uma consulta por linha na serialização.
+            // whenLoaded: with the relation not loaded the key disappears, rather than firing
+            // one query per row while serialising.
             'customer' => CustomerResource::make($this->whenLoaded('customer')),
         ];
     }
 
-    /** O SELECT devolve DOUBLE; a API entrega decimal de dois dígitos. */
+    /** The SELECT returns a DOUBLE; the API delivers a two-digit decimal. */
     private function money(mixed $value): string
     {
         return number_format((float) $value, 2, '.', '');

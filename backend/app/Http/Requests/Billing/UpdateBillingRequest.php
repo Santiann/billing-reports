@@ -9,11 +9,11 @@ use Illuminate\Contracts\Validation\Validator;
 class UpdateBillingRequest extends StoreBillingRequest
 {
     /**
-     * Cobrança paga é imutável.
+     * A paid billing is immutable.
      *
-     * Alterar valor ou taxa depois do pagamento invalidaria `paid_amount` e
-     * `paid_interest_amount`, que foram congelados na data do pagamento e não
-     * são recalculáveis — o cálculo é função da data de então.
+     * Changing the amount or the rate after payment would invalidate `paid_amount` and
+     * `paid_interest_amount`, which were frozen at the payment date and are not
+     * recomputable — the calculation is a function of that date.
      */
     public function withValidator(Validator $validator): void
     {

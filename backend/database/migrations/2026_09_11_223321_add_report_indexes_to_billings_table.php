@@ -5,30 +5,29 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Índices do relatório.
+ * The report's indexes.
  *
- * O princípio é um só: coluna de IGUALDADE antes da coluna de RANGE. O MySQL
- * percorre um índice composto da esquerda para a direita e para de usá-lo na
- * primeira coluna de range — tudo que vier depois dela vira filtro pós-leitura,
- * não busca.
+ * There is a single principle: the EQUALITY column before the RANGE column. MySQL walks
+ * a composite index left to right and stops using it at the first range column —
+ * everything after it becomes a post-read filter, not a seek.
  *
- * Antes destes índices, filtrar por período fazia varredura completa:
+ * Before these indexes, filtering by period meant a full scan:
  *
  *     EXPLAIN SELECT COUNT(*) FROM billings
  *     WHERE due_date >= '2026-01-01' AND due_date <= '2026-01-31'
  *     -> type: ALL   key: NULL   rows: 1989965
  *
- * Por isso um recorte de um mês custava o mesmo que um de um ano: o custo não
- * vinha do tamanho do recorte, vinha de varrer a tabela para encontrá-lo.
+ * That is why a one-month scope cost the same as a one-year one: the cost did not come
+ * from the size of the scope, it came from scanning the table to find it.
  */
 return new class extends Migration
 {
     public function up(): void
     {
         Schema::table('billings', function (Blueprint $table) {
-            // O usuário escolhe qual das três datas define o período, e o
-            // MySQL não usa um índice de `due_date` para filtrar `issue_date`.
-            // Cada base de período precisa da sua.
+            // The user chooses which of the three dates defines the period, and MySQL
+            // will not use a `due_date` index to filter `issue_date`. Each period basis
+            // needs its own.
             //
             //   WHERE issue_date BETWEEN ? AND ?
             $table->index('issue_date', 'billings_issue_date_index');
@@ -37,16 +36,16 @@ return new class extends Migration
             $table->index('due_date', 'billings_due_date_index');
 
             //   WHERE payment_date BETWEEN ? AND ?
-            // Nulo para cobrança não paga, o que é conveniente: o filtro por
-            // data de pagamento já exclui as pendentes sem cláusula extra.
+            // Null for an unpaid billing, which is convenient: filtering by payment date
+            // already excludes the pending ones with no extra clause.
             $table->index('payment_date', 'billings_payment_date_index');
 
-            // Filtro por cliente combinado com período. `customer_id` é
-            // igualdade e vem primeiro; a data é range e vem depois.
+            // Filtering by customer combined with a period. `customer_id` is equality
+            // and comes first; the date is a range and comes after.
             //
-            // A chave estrangeira já indexa `customer_id` sozinho, mas com ela
-            // o MySQL encontra as linhas do cliente e só então testa a data
-            // linha a linha. Com o par, a data também é busca.
+            // The foreign key already indexes `customer_id` on its own, but with that
+            // MySQL finds the customer's rows and only then tests the date row by row.
+            // With the pair, the date is a seek too.
             //
             //   WHERE customer_id = ? AND issue_date BETWEEN ? AND ?
             $table->index(['customer_id', 'issue_date'], 'billings_customer_issue_date_index');
@@ -57,33 +56,33 @@ return new class extends Migration
             //   WHERE customer_id = ? AND payment_date BETWEEN ? AND ?
             $table->index(['customer_id', 'payment_date'], 'billings_customer_payment_date_index');
 
-            // Status é igualdade e vem primeiro. Serve dois casos:
+            // Status is equality and comes first. It serves two cases:
             //
             //   WHERE status = ? AND due_date BETWEEN ? AND ?
-            //   WHERE status = 'pending' AND due_date < ?   (o filtro "vencida")
+            //   WHERE status = 'pending' AND due_date < ?   (the "overdue" filter)
             //
-            // Baixa seletividade na primeira coluna — são dois valores — mas o
-            // range na segunda é que faz o trabalho, e o par evita varrer as
-            // pagas para descobrir quais pendentes venceram.
+            // Low selectivity on the first column — there are two values — but the range
+            // on the second is what does the work, and the pair avoids scanning the paid
+            // ones to find which pending ones went past due.
             $table->index(['status', 'due_date'], 'billings_status_due_date_index');
         });
     }
 
     /**
-     * A ordem aqui não é cosmética.
+     * The order here is not cosmetic.
      *
-     * O índice que a chave estrangeira usava era criado automaticamente pelo
-     * InnoDB. Quando os compostos com `customer_id` à esquerda apareceram, ele
-     * o descartou por redundância — e passou a apoiar a constraint num deles.
+     * The index the foreign key used was created automatically by InnoDB. When the
+     * composites with `customer_id` on the left appeared, it discarded that one as
+     * redundant — and started supporting the constraint with one of them.
      *
-     * Derrubar os compostos direto falha com:
+     * Dropping the composites directly fails with:
      *
      *     SQLSTATE[HY000] 1553 Cannot drop index
      *     'billings_customer_payment_date_index': needed in a foreign key
      *     constraint
      *
-     * Por isso o índice de `customer_id` é recriado ANTES, devolvendo à
-     * constraint um apoio próprio. Verificado rodando o rollback de verdade.
+     * So the `customer_id` index is recreated FIRST, giving the constraint support of its
+     * own back. Verified by running the rollback for real.
      */
     public function down(): void
     {

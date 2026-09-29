@@ -15,8 +15,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class CustomerController extends Controller
 {
     /**
-     * Filtro, ordenação e paginação acontecem no banco. Em nenhum ponto o
-     * conjunto inteiro é carregado para ser recortado em memória.
+     * Filtering, sorting and pagination happen in the database. At no point is the whole set
+     * loaded to be narrowed in memory.
      */
     public function index(IndexCustomerRequest $request): AnonymousResourceCollection
     {
@@ -28,8 +28,8 @@ class CustomerController extends Controller
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
 
-                // Documento só entra na busca se o termo tiver dígitos. Sem
-                // essa guarda, um termo puramente textual viraria
+                // The document only joins the search if the term has digits. Without that
+                // guard, a purely textual term would become
                 // `document like '%'` e traria a tabela inteira.
                 $digits = preg_replace('/\D/', '', $search);
 

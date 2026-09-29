@@ -22,8 +22,8 @@ class CustomerResource extends JsonResource
             'document' => $this->document,
             'email' => $this->email,
             'status' => $this->status->value,
-            // O rótulo vem do enum de PHP para não duplicar a tradução no
-            // frontend e as duas saírem de sincronia.
+            // The label comes from the PHP enum so the translation is not duplicated in the
+            // frontend and the two do not drift out of sync.
             'status_label' => $this->status->label(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

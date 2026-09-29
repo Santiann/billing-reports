@@ -31,7 +31,7 @@
 <body>
     <h1>Relatório de faturamento</h1>
 
-    {{-- Período e filtros aplicados: o arquivo precisa se explicar sozinho,
+    {{-- The applied period and filters: the file has to explain itself,
          porque quem recebe não viu a tela que o gerou. --}}
     <div class="meta">
         <strong>Período baseado em:</strong> {{ $filters->dateFieldLabel() }} &nbsp;|&nbsp;
@@ -78,7 +78,7 @@
         </tbody>
     </table>
 
-    {{-- Totalizadores da consulta de agregação, sobre o conjunto filtrado
+    {{-- The totals from the aggregation query, over the filtered
          inteiro — os mesmos que a tela e o CSV exibem. --}}
     <table class="totals">
         <tr>

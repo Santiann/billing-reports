@@ -8,19 +8,17 @@ use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
 
 /**
- * Põe em toda linha de log quem pediu, o que pediu e sob qual identificador.
+ * Puts on every log line who asked, what they asked for, and under which identifier.
  *
- * Processador, e não `Log::withContext()` num middleware, por causa do
- * `user_id`: middleware de grupo roda ANTES do `auth:sanctum`, então ali o
- * usuário ainda não existe e o campo sairia nulo em produção — enquanto no
- * teste, onde `actingAs` resolve o usuário mais cedo, pareceria funcionar. O
- * processador é avaliado no momento de cada linha, quando a autenticação já
- * aconteceu.
+ * A processor, and not `Log::withContext()` in a middleware, because of `user_id`: group
+ * middleware runs BEFORE `auth:sanctum`, so there the user does not exist yet and the field
+ * would come out null in production — while in the tests, where `actingAs` resolves the user
+ * earlier, it would appear to work. The processor is evaluated at each line's moment, when
+ * authentication has already happened.
  *
- * `hasUser()` antes de `id()` de propósito: perguntar o id resolveria o guard
- * a partir do logger, o que inverteria a ordem das coisas. Linha registrada
- * antes da autenticação — uma tentativa de login falha, por exemplo — sai sem
- * usuário, que é a verdade.
+ * `hasUser()` before `id()` on purpose: asking for the id would resolve the guard from the
+ * logger, which would invert the order of things. A line logged before authentication — a
+ * failed login attempt, for instance — comes out with no user, which is the truth.
  */
 final class RequestContextProcessor implements ProcessorInterface
 {
@@ -32,13 +30,13 @@ final class RequestContextProcessor implements ProcessorInterface
         $identifier = $request->headers->get(RequestId::HEADER);
 
         /*
-         * A presença do cabeçalho é o que diz que houve requisição HTTP.
+         * The header's presence is what says an HTTP request happened.
          *
-         * `runningInConsole()` parecia a pergunta certa e não é: a suíte roda
-         * pelo artisan, então em console o teste nunca veria o contexto que a
-         * produção veria. E em comando de verdade o container ainda expõe um
-         * `Request` sintético, com método GET e caminho "/", que seria ruído —
-         * mas sem este cabeçalho, porque quem o põe é o middleware.
+         * `runningInConsole()` looked like the right question and is not: the suite runs
+         * through artisan, so in console the tests would never see the context production
+         * sees. And in a real command the container still exposes a synthetic `Request`, with
+         * method GET and path "/", which would be noise — but without this header, because
+         * the middleware is what sets it.
          */
         if ($identifier !== null) {
             $context += [
@@ -49,8 +47,8 @@ final class RequestContextProcessor implements ProcessorInterface
             ];
         }
 
-        // O contexto de quem chamou vence: se alguém logou um `user_id`
-        // explícito, é porque quis falar daquele usuário, não do autenticado.
+        // The caller's context wins: if someone logged an explicit `user_id`, it is because
+        // they meant that user, not the authenticated one.
         return $record->with(context: [...$context, ...$record->context]);
     }
 }

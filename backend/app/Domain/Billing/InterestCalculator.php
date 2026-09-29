@@ -7,66 +7,64 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 
 /**
- * Fonte única da regra de juros.
+ * The single source of the interest rule.
  *
- * Juros compostos: valor_original * (1 + taxa_mensal) ^ (dias_atraso / 30).
+ * Compound interest: original_amount * (1 + monthly_rate) ^ (days_late / 30).
  *
- * A classe tem duas faces e elas precisam concordar até o centavo:
+ * The class has two faces and they have to agree down to the cent:
  *
  *   sqlExpression (updatedAmountSql / interestAmountSql)
- *     Usada em selectRaw na listagem e nas agregações. É o que permite
- *     ORDENAR por valor atualizado e SOMAR juros sobre o conjunto filtrado
- *     inteiro sem carregar nada em memória.
+ *     Used in selectRaw in the listing and in the aggregations. It is what makes
+ *     it possible to SORT by updated amount and SUM interest over the whole
+ *     filtered set without loading anything into memory.
  *
  *   for(Billing)
- *     Usada para exibir uma cobrança isolada.
+ *     Used to display a single billing.
  *
- * InterestCalculatorTest roda a mesma matriz de casos pelas duas e afirma
- * igualdade. Sem esse teste as duas divergem em silêncio.
+ * InterestCalculatorTest runs the same matrix of cases through both and asserts
+ * they are equal. Without that test the two drift apart in silence.
  */
 final class InterestCalculator
 {
     private const DAYS_IN_MONTH = 30;
 
     /**
-     * Casas de guarda antes do arredondamento final.
+     * Guard digits before the final rounding.
      *
-     * As duas faces partem do mesmo produto em ponto flutuante, mas
-     * arredondam o empate de formas diferentes: PHP faz meio para longe do
-     * zero, e o ROUND do MySQL sobre DOUBLE faz meio para par. 4224,10 a 5%
-     * por 30 dias dá exatamente 4435,305 — PHP devolvia 4435,31 e o MySQL,
-     * 4435,30. Uma varredura de 200.000 combinações achou uma ocorrência, e a
-     * base de dois milhões achou outra: raro, e ainda assim é a tela
-     * discordando do relatório.
+     * Both faces start from the same floating-point product, but they round a tie
+     * differently: PHP rounds half away from zero, and MySQL's ROUND over a DOUBLE
+     * rounds half to even. 4224.10 at 5% for 30 days gives exactly 4435.305 — PHP
+     * returned 4435.31 and MySQL 4435.30. A sweep of 200,000 combinations found one
+     * occurrence, and the two-million base found another: rare, and still the screen
+     * disagreeing with the report.
      *
-     * Arredondar primeiro em seis casas e só então em duas resolve nos dois
-     * motores, porque em ambos o segundo arredondamento passa a operar sobre
-     * um decimal exato, e não sobre o double. De quebra, absorve diferença de
-     * 1 ULP entre a `pow()` do PHP e a do MySQL, que rodam em containers
-     * diferentes e não precisam compartilhar a mesma libm.
+     * Rounding first to six places and only then to two fixes it on both engines,
+     * because in both the second rounding then operates on an exact decimal rather
+     * than on the double. As a bonus it absorbs a 1 ULP difference between PHP's
+     * `pow()` and MySQL's, which run in different containers and need not share the
+     * same libm.
      */
     private const GUARD_DIGITS = 6;
 
     /**
-     * A data de referência desce do PHP em vez de a face SQL usar CURDATE().
+     * The reference date comes down from PHP instead of the SQL face using CURDATE().
      *
-     * Isso não é preciosismo: `travelTo()` move o relógio do PHP e não o do
-     * MySQL. Com CURDATE() embutido, o teste de consistência compararia PHP em
-     * tempo congelado contra SQL em tempo real e nunca fecharia.
+     * This is not fussiness: `travelTo()` moves PHP's clock and not MySQL's. With
+     * CURDATE() embedded, the consistency test would compare PHP on frozen time
+     * against SQL on real time and would never close.
      *
-     * Também é o que permite calcular juros "na data do pagamento", que é
-     * exatamente o que o congelamento precisa.
+     * It is also what makes it possible to compute interest "at the payment date",
+     * which is exactly what freezing needs.
      */
     public function __construct(
         private readonly CarbonInterface|string|null $reference = null,
     ) {}
 
     /**
-     * A data em que os juros são calculados.
+     * The date the interest is computed at.
      *
-     * Pública para o cache dos totalizadores: a chave precisa da MESMA data que
-     * o SQL usa, e não de um `now()` paralelo que poderia virar o dia entre um
-     * e outro.
+     * Public for the totals cache: the key needs the SAME date the SQL uses, and not
+     * a parallel `now()` that could roll over the day between one and the other.
      */
     public function referenceDate(): CarbonImmutable
     {
@@ -75,13 +73,13 @@ final class InterestCalculator
             : CarbonImmutable::parse($this->reference)->startOfDay();
     }
 
-    // --- face PHP -----------------------------------------------------
+    // --- PHP face -----------------------------------------------------
 
     public function for(Billing $billing): InterestCalculation
     {
-        // Cobrança paga não acumula juros: os valores vêm das colunas
-        // gravadas no ato do pagamento, nunca de recálculo. Recalcular faria
-        // uma cobrança paga com atraso mudar de valor a cada dia que passa.
+        // A paid billing accrues no interest: the amounts come from the columns
+        // written at payment time, never from a recompute. Recomputing would make a
+        // billing paid late change value with every day that passes.
         if ($billing->status === BillingStatus::Paid) {
             return new InterestCalculation(
                 originalAmount: $this->money($billing->original_amount),
@@ -109,19 +107,19 @@ final class InterestCalculator
 
         return new InterestCalculation(
             originalAmount: $this->money($original),
-            // Subtrai do valor JÁ arredondado, na mesma ordem que a face SQL:
-            // arredondar a diferença separadamente divergiria em um centavo.
+            // Subtracts from the ALREADY rounded amount, in the same order as the SQL
+            // face: rounding the difference separately would drift by a cent.
             interestAmount: $this->money($updated - $this->round($original)),
             updatedAmount: $this->money($updated),
             daysLate: $daysLate,
         );
     }
 
-    // --- face SQL -----------------------------------------------------
+    // --- SQL face -----------------------------------------------------
 
     /**
-     * A data entra como literal, e isso é seguro: ela é gerada aqui a partir
-     * de um Carbon, nunca vem da requisição.
+     * The date goes in as a literal, and that is safe: it is generated here from a
+     * Carbon, never taken from the request.
      */
     public function daysLateSql(string $table = 'billings'): string
     {
@@ -131,10 +129,11 @@ final class InterestCalculator
     }
 
     /**
-     * "Vencida" em SQL: pendente com vencimento no passado.
+     * "Overdue" in SQL: pending with the due date in the past.
      *
-     * Mora aqui, junto do cálculo, porque é a mesma regra vista de outro
-     * ângulo — e pela mesma razão usa a data vinda do PHP, não CURDATE().
+     * It lives here, next to the calculation, because it is the same rule seen from
+     * another angle — and for the same reason it uses the date coming from PHP, not
+     * CURDATE().
      */
     public function overdueSql(string $table = 'billings'): string
     {
@@ -161,19 +160,19 @@ final class InterestCalculator
     }
 
     /**
-     * `/ 30e0` não é estilo, é correção.
+     * `/ 30e0` is not style, it is correctness.
      *
-     * Em MySQL a divisão de DECIMAL devolve DECIMAL truncado em quatro casas
-     * por padrão: 400 / 30 vira 13.3333, enquanto em PHP é 13.333333…. Com
-     * expoentes diferentes, POW devolve valores diferentes e as duas faces
-     * divergem. O literal `30e0` é double e força a divisão a virar double.
+     * In MySQL, dividing a DECIMAL returns a DECIMAL truncated to four places by
+     * default: 400 / 30 becomes 13.3333, whereas in PHP it is 13.333333…. With
+     * different exponents, POW returns different values and the two faces drift
+     * apart. The literal `30e0` is a double and forces the division to become one.
      */
     private function compoundSql(string $table): string
     {
-        // CAST para DECIMAL antes do ROUND, e não ROUND direto: o ROUND do
-        // MySQL sobre DOUBLE arredonda meio para par, enquanto o PHP
-        // arredonda meio para longe do zero. Convertido para decimal exato
-        // com as casas de guarda, o arredondamento final concorda nos dois.
+        // CAST to DECIMAL before the ROUND, rather than rounding directly: MySQL's
+        // ROUND over a DOUBLE rounds half to even, while PHP rounds half away from
+        // zero. Converted to an exact decimal with the guard digits, the final
+        // rounding agrees on both.
         return 'ROUND(CAST('
             ."{$table}.original_amount * POW("
             ."1 + {$table}.monthly_interest_rate, "
@@ -185,14 +184,14 @@ final class InterestCalculator
 
     private function daysBetween(CarbonInterface $due, CarbonInterface|string $target): int
     {
-        // CarbonImmutable para startOfDay() não mutar a data do model.
+        // CarbonImmutable so startOfDay() does not mutate the model's date.
         $from = CarbonImmutable::parse($due)->startOfDay();
         $to = CarbonImmutable::parse($target)->startOfDay();
 
         return max(0, (int) $from->diffInDays($to));
     }
 
-    /** Arredondamento da regra: casas de guarda primeiro, centavo depois. */
+    /** The rule's rounding: guard digits first, the cent afterwards. */
     private function round(float $value): float
     {
         return round(round($value, self::GUARD_DIGITS), 2);

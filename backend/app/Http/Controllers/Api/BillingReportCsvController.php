@@ -10,8 +10,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class BillingReportCsvController extends Controller
 {
     /**
-     * Mesmo FormRequest do relatório: os filtros aceitos são exatamente os
-     * mesmos, e validá-los em outro lugar abriria espaço para divergirem.
+     * The same FormRequest as the report: the accepted filters are exactly the same, and
+     * validating them somewhere else would leave room for them to drift apart.
      */
     public function __invoke(
         BillingReportRequest $request,

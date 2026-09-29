@@ -8,12 +8,12 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Um identificador por requisição, na resposta e no log.
+ * One identifier per request, in the response and in the log.
  *
- * Preserva o que vem de fora. O nginx já gera um `X-Request-Id` e o imprime no
- * log de acesso; sobrescrever aqui cortaria a ligação entre a linha da borda e
- * as linhas da aplicação. O valor volta no cabeçalho da resposta para que um
- * relato de problema possa citá-lo.
+ * It preserves what comes from outside. nginx already generates an `X-Request-Id` and prints it
+ * in the access log; overwriting it here would cut the link between the edge's line and the
+ * application's lines. The value comes back in the response header so a problem report can
+ * quote it.
  */
 class RequestId
 {

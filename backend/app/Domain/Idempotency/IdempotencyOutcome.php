@@ -3,24 +3,24 @@
 namespace App\Domain\Idempotency;
 
 /**
- * Os quatro desfechos possíveis de uma reserva de chave.
+ * The four possible outcomes of reserving a key.
  *
- * São quatro porque "a chave já existe" não é uma situação só, e tratá-la como
- * uma seria o erro do desenho: repetir a mesma requisição, reaproveitar a
- * chave para outra, e chegar enquanto a primeira ainda processa pedem respostas
+ * There are four because "the key already exists" is not one situation, and treating it as one
+ * would be the design's mistake: repeating the same request, reusing the key for another one,
+ * and arriving while the first is still processing all call for different
  * diferentes.
  */
 enum IdempotencyOutcome
 {
-    /** Chave nova: a requisição segue e o resultado será guardado. */
+    /** A new key: the request carries on and the result will be stored. */
     case Reserved;
 
-    /** Mesma chave, mesmo pedido: devolve-se o resultado guardado. */
+    /** Same key, same request: the stored result is returned. */
     case Replayed;
 
-    /** Mesma chave, pedido diferente: é bug de quem chama. */
+    /** Same key, different request: this is the caller's bug. */
     case Conflict;
 
-    /** Mesma chave, primeira requisição ainda em voo. */
+    /** Same key, the first request still in flight. */
     case InFlight;
 }

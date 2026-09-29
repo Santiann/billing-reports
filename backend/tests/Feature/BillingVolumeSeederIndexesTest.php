@@ -11,17 +11,17 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Os índices adiados do seeder de volume.
+ * The volume seeder's deferred indexes.
  *
- * Esta classe NÃO usa RefreshDatabase, e é de propósito. O que ela testa é
+ * This class does NOT use RefreshDatabase, and that is on purpose. What it tests is
  * DDL — derrubar e recriar índice —, e DDL faz commit implícito no MySQL.
- * Dentro da transação do RefreshDatabase, esse commit encerraria a transação e
- * faria cada teste seguinte da suíte refazer as migrations (armadilha 6 da
- * skill de testes). Fora dela, o DDL não quebra nada.
+ * Inside RefreshDatabase's transaction, that commit would end the transaction and make every
+ * following test in the suite redo the migrations (trap 6 in the testing skill). Outside it, the
+ * DDL breaks nothing.
  *
- * O preço é cuidar do estado à mão, e aqui ele é pequeno: os testes só mexem
- * na ESTRUTURA de uma tabela vazia, e terminam com a estrutura igual à do
- * começo. Nenhuma linha é gravada.
+ * The price is looking after the state by hand, and here it is small: the tests only touch the
+ * STRUCTURE of an empty table, and finish with the structure the same as at the start. Not a
+ * single row is written.
  */
 class BillingVolumeSeederIndexesTest extends TestCase
 {
@@ -29,8 +29,8 @@ class BillingVolumeSeederIndexesTest extends TestCase
     {
         parent::setUp();
 
-        // Sem RefreshDatabase, ninguém garante que o schema exista se esta
-        // classe for a primeira da suíte a tocar o banco.
+        // Without RefreshDatabase, nobody guarantees the schema exists if this class is the
+        // first in the suite to touch the database.
         if (! Schema::hasTable('billings')) {
             Artisan::call('migrate', ['--force' => true]);
         }
@@ -58,11 +58,10 @@ class BillingVolumeSeederIndexesTest extends TestCase
     }
 
     /**
-     * A lista do seeder é uma cópia das migrations, e a cópia é vigiada aqui.
+     * The seeder's list is a copy of the migrations, and the copy is watched here.
      *
-     * Se alguém criar um índice numa migration e esquecer da lista, o seeder
-     * derrubaria sete e recriaria sete — e o oitavo sumiria na primeira carga,
-     * sem erro nenhum.
+     * If someone creates an index in a migration and forgets the list, the seeder would drop seven
+     * and recreate seven — and the eighth would vanish on the first load, with no error at all.
      */
     public function test_the_seeder_list_is_exactly_what_the_migrations_create(): void
     {
@@ -84,7 +83,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
             $this->assertArrayNotHasKey($nome, $durante, "{$nome} ainda existia durante a carga.");
         }
 
-        // A chave estrangeira de customer_id não pode ficar sem índice: o
+        // customer_id's foreign key cannot be left without an index: the
         // MySQL recusaria o DROP.
         $this->assertSame(['customer_id'], $durante[ReportIndexes::FOREIGN_KEY_SUPPORT] ?? null);
     }
@@ -100,9 +99,9 @@ class BillingVolumeSeederIndexesTest extends TestCase
     }
 
     /**
-     * A garantia que a especificação pede: se a carga falhar no meio, os índices
-     * voltam do mesmo jeito. Sem isso, quem subisse a aplicação depois teria
-     * um relatório varrendo a tabela inteira, sem erro que apontasse a causa.
+     * The guarantee the brief asks for: if the load fails halfway, the indexes come back just the
+     * same. Without it, whoever brought the application up afterwards would have a report scanning
+     * the whole table, with no error pointing at the cause.
      */
     public function test_the_indexes_come_back_even_if_the_load_fails(): void
     {

@@ -69,8 +69,8 @@ class BillingPaymentTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        // Avançar o relógio seis meses é o que dá sentido ao teste: sem isto
-        // ele passaria mesmo se a regra recalculasse juros de cobrança paga.
+        // Moving the clock forward six months is what gives the test meaning: without it, it
+        // would pass even if the rule recomputed interest on a paid billing.
         $this->travelTo('2026-12-15 09:30:00');
 
         $seisMesesDepois = $this->getJson("/api/billings/{$billing->id}")
@@ -94,7 +94,7 @@ class BillingPaymentTest extends TestCase
             'due_date' => '2026-05-16',
         ]);
 
-        // Pagamento retroativo: 15 dias de atraso, não 30.
+        // A backdated payment: 15 days late, not 30.
         $this->postJson("/api/billings/{$billing->id}/payment", [
             'payment_date' => '2026-05-31',
         ])->assertOk();
@@ -136,7 +136,7 @@ class BillingPaymentTest extends TestCase
             'monthly_interest_rate' => '0.0200',
         ]);
 
-        // Acordo, desconto: o valor efetivamente recebido pode diferir.
+        // A settlement, a discount: the amount actually received may differ.
         $this->postJson("/api/billings/{$billing->id}/payment", [
             'paid_amount' => '1000.00',
         ])->assertOk();
@@ -144,7 +144,7 @@ class BillingPaymentTest extends TestCase
         $billing->refresh();
 
         $this->assertSame('1000.00', $billing->paid_amount);
-        // Os juros calculados continuam registrados, mesmo com o desconto.
+        // The computed interest stays recorded, even with the discount.
         $this->assertSame('20.00', $billing->paid_interest_amount);
     }
 

@@ -10,11 +10,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Os states desta factory são a base de todo teste de juros e de relatório que
- * vem depois. Se `overdue()` mentir sobre o que é uma cobrança vencida, os
+ * This factory's states are the foundation of every interest and report test that comes after.
+ * If `overdue()` lies about what an overdue billing is, the
  * testes seguintes passam medindo a coisa errada.
  *
- * O tempo é congelado em todos eles: com o relógio andando, "vencida há 30
+ * Time is frozen in all of them: with the clock running, "overdue by 30
  * dias" viraria outra coisa amanhã.
  */
 class BillingSchemaTest extends TestCase
@@ -43,8 +43,7 @@ class BillingSchemaTest extends TestCase
         $this->assertSame('2026-05-16', $billing->due_date->toDateString());
         $this->assertNull($billing->payment_date);
 
-        // Sem congelamento: cobrança não paga não tem valor gravado, ele é
-        // calculado em tempo real.
+        // No freezing: an unpaid billing has no stored amount, it is computed in real time.
         $this->assertNull($billing->paid_amount);
         $this->assertNull($billing->paid_interest_amount);
     }
@@ -70,7 +69,7 @@ class BillingSchemaTest extends TestCase
         $this->assertSame(BillingStatus::Paid, $billing->status);
         $this->assertSame('2026-05-11', $billing->due_date->toDateString());
         $this->assertSame('2026-06-10', $billing->payment_date->toDateString());
-        // Carbon 3 devolve float em diffInDays; o cast mantém o assertSame estrito.
+        // Carbon 3 returns a float from diffInDays; the cast keeps assertSame strict.
         $this->assertSame(30, (int) $billing->due_date->diffInDays($billing->payment_date));
     }
 
@@ -87,7 +86,7 @@ class BillingSchemaTest extends TestCase
     {
         $billing = Billing::factory()->create(['original_amount' => 1234.56]);
 
-        // O cast decimal devolve string de propósito: float arredondaria, e o
+        // The decimal cast returns a string on purpose: a float would round, and the
         // relatório soma milhões destas linhas.
         $this->assertSame('1234.56', $billing->fresh()->original_amount);
     }

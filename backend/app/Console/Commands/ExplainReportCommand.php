@@ -9,16 +9,16 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 /**
- * `report:explain` — o plano de execução do relatório, versionado.
+ * `report:explain` — the report's execution plan, under version control.
  *
- * As medições de índice do README foram feitas colando consultas no cliente do
- * MySQL. O trabalho não é o problema: o problema é que a consulta colada à mão
- * envelhece sem avisar, e passa a descrever um SQL que o código não gera mais.
+ * The README's index measurements were made by pasting queries into the MySQL client.
+ * The effort is not the problem: the problem is that a hand-pasted query ages without
+ * warning, and goes on to describe SQL the code no longer generates.
  *
- * Este comando não tem SQL escrito dentro dele. Ele roda o MESMO caminho que a
- * API usa — inclusive o `paginate()`, que emite uma consulta de contagem que
- * ninguém escreveu à mão —, escuta o que o Eloquent mandou para o banco, e
- * explica cada consulta capturada. Se o relatório mudar, o comando muda junto.
+ * This command has no SQL written inside it. It runs the SAME path the API uses —
+ * including `paginate()`, which emits a count query nobody wrote by hand — listens to
+ * what Eloquent sent to the database, and explains every captured query. If the report
+ * changes, the command changes with it.
  */
 final class ExplainReportCommand extends Command
 {
@@ -36,7 +36,7 @@ final class ExplainReportCommand extends Command
 
     protected $description = 'Roda EXPLAIN nas consultas do relatório de faturamento e imprime o plano';
 
-    /** Colunas do EXPLAIN que dizem algo; as outras só alargam a tabela. */
+    /** The EXPLAIN columns that say something; the others only widen the table. */
     private const COLUMNS = [
         'select_type', 'table', 'type', 'possible_keys', 'key', 'rows', 'filtered', 'Extra',
     ];
@@ -63,10 +63,10 @@ final class ExplainReportCommand extends Command
         });
 
         /*
-         * O mesmo caminho da API, com uma diferença deliberada: os totais saem
-         * de `computeTotals()`, sem passar pelo cache. O cache é justamente o
-         * que esta ferramenta não pode enxergar — senão a consulta mais cara do
-         * relatório desapareceria da ferramenta feita para olhá-la.
+         * The same path as the API, with one deliberate difference: the totals come from
+         * `computeTotals()`, bypassing the cache. The cache is precisely what this tool
+         * must not see — otherwise the report's most expensive query would vanish from
+         * the tool built to look at it.
          */
         $report->rows($filters)->paginate($this->pageSize());
         $report->computeTotals($filters);
@@ -104,8 +104,8 @@ final class ExplainReportCommand extends Command
         $this->line('  '.$query['sql']);
         $this->line(sprintf('  <fg=gray>executada em %.1f ms</>', $query['time']));
 
-        // Explicar um SELECT na tabela de cache ou de versão seria ruído: o
-        // assunto é o plano sobre as cobranças.
+        // Explaining a SELECT on the cache or version table would be noise: the subject
+        // is the plan over the billings.
         if (! str_contains($query['sql'], '`billings`')) {
             return;
         }
@@ -117,12 +117,12 @@ final class ExplainReportCommand extends Command
         }
 
         /*
-         * O mesmo SQL com os valores embutidos.
+         * The same SQL with the values inlined.
          *
-         * Existe por uma dúvida concreta: a aplicação manda as datas como
-         * parâmetro vinculado, e a medição feita à mão as mandou literais. O
-         * otimizador do MySQL enxerga o valor no segundo caso e pode escolher
-         * outro plano. Se escolher, a diferença aparece aqui lado a lado.
+         * It exists because of a concrete doubt: the application sends the dates as bound
+         * parameters, and the hand-made measurement sent them as literals. MySQL's
+         * optimiser can see the value in the second case and may choose another plan. If
+         * it does, the difference shows up here side by side.
          */
         $literal = $this->withLiterals($query['sql'], $query['bindings']);
 
@@ -160,8 +160,8 @@ final class ExplainReportCommand extends Command
     {
         $text = $value === null ? '—' : (string) $value;
 
-        // `possible_keys` lista todos os índices candidatos e estoura a
-        // largura do terminal sem acrescentar informação.
+        // `possible_keys` lists every candidate index and blows past the terminal's
+        // width without adding information.
         return mb_strlen($text) > 40 ? mb_substr($text, 0, 39).'…' : $text;
     }
 
@@ -177,7 +177,7 @@ final class ExplainReportCommand extends Command
     }
 
     /**
-     * Troca cada `?` pelo valor, escapado pelo próprio driver.
+     * Replaces each `?` with its value, escaped by the driver itself.
      *
      * @param  array<int, mixed>  $bindings
      */
@@ -191,8 +191,8 @@ final class ExplainReportCommand extends Command
                 default => DB::getPdo()->quote((string) $value),
             };
 
-            // Callback, e não string de substituição: um valor com `$` seria
-            // interpretado como referência de grupo.
+            // A callback, not a replacement string: a value containing `$` would be read
+            // as a group reference.
             $sql = (string) preg_replace_callback('/\?/', fn (): string => $literal, $sql, 1);
         }
 
@@ -205,13 +205,13 @@ final class ExplainReportCommand extends Command
     }
 
     /**
-     * Os filtros, ou nulo quando alguma opção não vale.
+     * The filters, or null when some option is not valid.
      *
-     * A recusa é em voz alta de propósito. `BillingReportFilters` descarta
-     * valor fora da allowlist e cai no default — proteção certa para a API,
-     * porque esses valores viram nome de coluna em SQL. Num diagnóstico, cair
-     * no default em silêncio faria alguém medir um recorte que não é o que
-     * pediu, e concluir a coisa errada.
+     * The refusal is loud on purpose. `BillingReportFilters` discards a value outside the
+     * allowlist and falls back to the default — the right protection for the API, because
+     * those values become column names in SQL. In a diagnostic, silently falling back to
+     * the default would have someone measure a scope that is not the one they asked for,
+     * and conclude the wrong thing.
      */
     private function filters(): ?BillingReportFilters
     {
@@ -273,12 +273,12 @@ final class ExplainReportCommand extends Command
     }
 
     /**
-     * `DateTimeImmutable` e não Carbon: o Carbon lança exceção quando o valor
-     * não casa com o formato, e aqui a data errada é entrada esperada, não
-     * acidente. É a mesma escolha da importação de CSV.
+     * `DateTimeImmutable` and not Carbon: Carbon throws when the value does not match the
+     * format, and here a wrong date is expected input, not an accident. It is the same
+     * choice as in the CSV import.
      *
-     * A volta com `format` existe porque 31/02 rola para março em vez de
-     * falhar.
+     * The round trip through `format` exists because 31/02 rolls into March instead of
+     * failing.
      */
     private function validDate(string $value): bool
     {

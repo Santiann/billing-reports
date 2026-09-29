@@ -5,11 +5,11 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Onde o resultado de uma requisição fica guardado para poder ser repetido.
+ * Where a request's result is stored so it can be replayed.
  *
- * A tabela não é um log: ela existe para responder uma pergunta só — "esta
- * chave já foi usada, e com que resultado?". Por isso a linha é apagada quando
- * vence, e por isso o índice único é o coração do desenho.
+ * The table is not a log: it exists to answer one question — "has this key been used, and
+ * with what result?". That is why the row is deleted when it expires, and why the unique
+ * index is the heart of the design.
  */
 return new class extends Migration
 {
@@ -19,32 +19,30 @@ return new class extends Migration
             $table->id();
 
             /*
-             * A chave pertence a quem a usou.
+             * The key belongs to whoever used it.
              *
-             * Sem o usuário na chave única, duas pessoas que sorteassem o mesmo
-             * UUID — ou um cliente que usasse "1" como chave — veriam a resposta
-             * uma da outra. Escopo por usuário fecha isso sem depender de o
-             * cliente escolher chaves boas.
+             * Without the user in the unique key, two people drawing the same UUID — or a
+             * client using "1" as a key — would see each other's response. Scoping per
+             * user closes that without depending on the client choosing good keys.
              */
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('key');
 
             /*
-             * A impressão digital do pedido: método, caminho e payload.
+             * The request's fingerprint: method, path and payload.
              *
-             * É o que distingue "repetiu a mesma requisição" de "reaproveitou a
-             * chave para outra coisa". Sem ela, um cliente com bug receberia o
-             * resultado de uma operação que não pediu.
+             * It is what tells "repeated the same request" from "reused the key for
+             * something else". Without it, a buggy client would receive the result of an
+             * operation it never asked for.
              */
             $table->char('fingerprint', 64);
 
             /*
-             * Nulos enquanto a requisição está em voo.
+             * Null while the request is in flight.
              *
-             * A linha é inserida ANTES de processar, justamente para que uma
-             * segunda requisição simultânea encontre a chave ocupada. O estado
-             * "reservada, sem resposta" é o que permite responder 409 em vez de
-             * deixar as duas processarem.
+             * The row is inserted BEFORE processing, precisely so a second simultaneous
+             * request finds the key taken. The "reserved, no response" state is what makes
+             * it possible to answer 409 instead of letting both process.
              */
             $table->unsignedSmallInteger('response_status')->nullable();
             $table->text('response_body')->nullable();
@@ -52,16 +50,16 @@ return new class extends Migration
             $table->timestamps();
 
             /*
-             * O índice único não é validação: é o mecanismo.
+             * The unique index is not validation: it is the mechanism.
              *
-             * A reserva da chave é um INSERT, e é o banco que arbitra quem
-             * ganha a corrida entre duas requisições concorrentes. Fazer a
-             * checagem em PHP — SELECT e depois INSERT — teria uma janela entre
-             * as duas em que as duas requisições passariam.
+             * Reserving the key is an INSERT, and the database is what arbitrates who wins
+             * the race between two concurrent requests. Doing the check in PHP — SELECT
+             * and then INSERT — would leave a window between the two in which both
+             * requests would get through.
              */
             $table->unique(['user_id', 'key']);
 
-            // Para a limpeza das vencidas varrer por range em vez da tabela.
+            // So cleaning up the expired ones scans a range instead of the table.
             $table->index('created_at');
         });
     }

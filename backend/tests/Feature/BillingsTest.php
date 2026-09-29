@@ -35,7 +35,7 @@ class BillingsTest extends TestCase
         ], $overrides);
     }
 
-    // --- proteção -----------------------------------------------------
+    // --- protection ---------------------------------------------------
 
     public function test_the_listing_requires_authentication(): void
     {
@@ -66,8 +66,8 @@ class BillingsTest extends TestCase
     {
         $this->actingAsUser();
 
-        // Dez cobranças de dez clientes diferentes: sem eager loading, montar
-        // a resposta dispararia um SELECT de cliente por linha.
+        // Ten billings from ten different customers: without eager loading, building the
+        // response would fire one customer SELECT per row.
         Billing::factory()->count(10)->create();
 
         DB::enableQueryLog();
@@ -141,8 +141,8 @@ class BillingsTest extends TestCase
     {
         $this->actingAsUser();
 
-        // Status e dados de pagamento não são aceitos do cliente: aceitar
-        // 'paid' aqui criaria uma cobrança paga sem os valores congelados.
+        // Status and payment data are not accepted from the client: accepting 'paid' here would
+        // create a paid billing without the frozen amounts.
         $response = $this->postJson('/api/billings', $this->payload([
             'status' => 'paid',
             'payment_date' => '2026-06-15',
@@ -188,7 +188,7 @@ class BillingsTest extends TestCase
             ]);
     }
 
-    // --- visualização e edição ---------------------------------------
+    // --- viewing and editing -----------------------------------------
 
     public function test_shows_a_billing_with_its_customer(): void
     {
@@ -224,8 +224,8 @@ class BillingsTest extends TestCase
         $this->actingAsUser();
         $billing = Billing::factory()->paid()->create();
 
-        // Editar valor ou taxa de uma cobrança paga invalidaria os valores
-        // congelados no pagamento, que não são recalculáveis.
+        // Editing the amount or rate of a paid billing would invalidate the amounts frozen at
+        // payment time, which are not recomputable.
         $this->putJson("/api/billings/{$billing->id}", $this->payload([
             'customer_id' => $billing->customer_id,
             'original_amount' => '1.00',

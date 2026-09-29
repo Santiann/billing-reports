@@ -13,11 +13,11 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        // O teste dispensa cadastro público de usuários, então o acesso ao
-        // sistema nasce daqui. Credenciais documentadas no README.
+        // The brief does not call for public user registration, so access to the system starts
+        // here. Credentials are documented in the README.
         //
-        // firstOrCreate em vez de factory()->create() para o seeder poder
-        // rodar duas vezes sem estourar a unique do e-mail.
+        // firstOrCreate rather than factory()->create() so the seeder can run twice without
+        // hitting the email's unique index.
         User::query()->firstOrCreate(
             ['email' => 'admin@billing.test'],
             [
@@ -28,10 +28,9 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
-        // O segundo usuário existe para o perfil de consulta poder ser visto
-        // funcionando. Sem ele, a restrição só apareceria na suíte de testes —
-        // e quem avalia o sistema teria que criar um usuário à mão para
-        // conferir que ela existe.
+        // The second user exists so the read-only role can be seen working. Without it the
+        // restriction would only show up in the test suite — and anyone looking at the system
+        // would have to create a user by hand to confirm it exists.
         User::query()->firstOrCreate(
             ['email' => 'consulta@billing.test'],
             [

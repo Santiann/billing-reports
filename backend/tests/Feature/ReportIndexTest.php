@@ -7,37 +7,36 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Os índices do relatório são decisão de projeto, não detalhe de
- * infraestrutura: sem eles o filtro por período varre a tabela inteira.
+ * The report's indexes are a design decision, not an infrastructure detail: without them the
+ * period filter scans the whole table.
  *
- * Este teste existe para que remover um índice quebre a suíte em vez de
- * degradar o relatório em silêncio — o tipo de regressão que só aparece em
- * produção, com volume, semanas depois.
+ * This test exists so that removing an index breaks the suite instead of degrading the report in
+ * silence — the kind of regression that only shows up in production, at volume, weeks later.
  */
 class ReportIndexTest extends TestCase
 {
     use RefreshDatabase;
 
     /**
-     * Cada entrada é `nome => colunas na ordem`. A ordem importa: o MySQL lê
-     * o índice composto da esquerda para a direita.
+     * Each entry is `name => columns in order`. The order matters: MySQL reads a composite index
+     * from left to right.
      *
      * @return array<string, array<int, string>>
      */
     private function expectedIndexes(): array
     {
         return [
-            // Uma por base de período: o usuário escolhe qual data recorta.
+            // One per period basis: the user chooses which date narrows.
             'billings_issue_date_index' => ['issue_date'],
             'billings_due_date_index' => ['due_date'],
             'billings_payment_date_index' => ['payment_date'],
 
-            // Igualdade antes do range.
+            // Equality before the range.
             'billings_customer_issue_date_index' => ['customer_id', 'issue_date'],
             'billings_customer_due_date_index' => ['customer_id', 'due_date'],
             'billings_customer_payment_date_index' => ['customer_id', 'payment_date'],
 
-            // Serve o filtro por status com período e o "vencida" derivado.
+            // Serves the status-plus-period filter and the derived "overdue".
             'billings_status_due_date_index' => ['status', 'due_date'],
         ];
     }
@@ -63,16 +62,14 @@ class ReportIndexTest extends TestCase
     }
 
     /**
-     * A asserção é sobre `possible_keys`, não sobre o plano escolhido.
+     * The assertion is about `possible_keys`, not about the chosen plan.
      *
-     * O otimizador escolhe varredura completa em tabela pequena porque ali ela
-     * é mais barata, e a base de testes é pequena de propósito. Afirmar
-     * `type != ALL` aqui falharia por motivo errado. `possible_keys` prova o
-     * que importa neste nível: o índice SERVE a consulta.
+     * The optimiser picks a full scan on a small table because there it is cheaper, and the test
+     * base is small on purpose. Asserting `type != ALL` here would fail for the wrong reason.
+     * `possible_keys` proves what matters at this level: the index SERVES the query.
      *
-     * A prova de que o plano realmente muda está no README, medida contra os
-     * dois milhões de linhas — type ALL com 1.989.965 linhas antes, range
-     * depois.
+     * The proof that the plan really changes is in the README, measured against the two million
+     * rows — type ALL with 1,989,965 rows before, range after.
      */
     public function test_the_period_filter_has_an_applicable_index(): void
     {

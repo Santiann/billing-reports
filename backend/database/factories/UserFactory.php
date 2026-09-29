@@ -27,18 +27,18 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             /*
-             * A factory cria ADMINISTRADOR, ao contrário do default do banco.
+             * The factory creates an ADMINISTRATOR, unlike the database's default.
              *
-             * Não é contradição: o default protege quem esquece de escolher em
-             * produção, e a factory serve a testes que quase sempre precisam
-             * escrever. Um default de consulta aqui faria dezenas de testes
-             * que nada têm a ver com perfil falharem com 403.
+             * That is not a contradiction: the default protects whoever forgets to choose in
+             * production, and the factory serves tests that almost always need to write. A
+             * read-only default here would make dozens of tests that have nothing to do with
+             * roles fail with a 403.
              */
             'role' => UserRole::Admin,
         ];
     }
 
-    /** Perfil de consulta: lê tudo, não escreve nada. */
+    /** The read-only role: reads everything, writes nothing. */
     public function viewer(): static
     {
         return $this->state(fn () => ['role' => UserRole::Viewer]);

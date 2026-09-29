@@ -7,17 +7,17 @@ use Illuminate\View\View;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * A documentação da API, montada no servidor.
+ * The API documentation, assembled on the server.
  *
- * Renderizador de spec do mercado — Redoc, Scalar, Elements — resolve isto com
- * uma linha de HTML e uma tag de script, e fica bonito. Mas todos montam a
- * página no browser, e `curl localhost:8000` devolveria `<div id="app">` e nada
- * mais. A documentação precisa existir na resposta, não depois do JavaScript:
- * é o que permite ler pelo terminal, indexar e abrir sem internet.
+ * An off-the-shelf spec renderer — Redoc, Scalar, Elements — solves this with one line of
+ * HTML and a script tag, and it looks good. But all of them build the page in the browser,
+ * and `curl localhost:8000` would return `<div id="app">` and nothing else. The
+ * documentation has to exist in the response, not after the JavaScript: that is what makes
+ * it readable from a terminal, indexable, and openable with no internet.
  *
- * O custo da escolha é este arquivo: resolver `$ref`, fundir os parâmetros do
- * path com os da operação e formatar exemplo. Em troca, a página responde a
- * `curl` e não depende de CDN nenhuma.
+ * The cost of that choice is this file: resolving `$ref`, merging the path's parameters
+ * with the operation's, and formatting examples. In return, the page answers `curl` and
+ * depends on no CDN.
  */
 class DocumentationController extends Controller
 {
@@ -32,9 +32,9 @@ class DocumentationController extends Controller
     }
 
     /**
-     * O YAML cru, para importar em Postman, Insomnia ou num gerador de cliente.
+     * The raw YAML, to import into Postman, Insomnia or a client generator.
      *
-     * A página é para ler; o arquivo é para usar.
+     * The page is for reading; the file is for using.
      */
     public function raw(): Response
     {
@@ -51,11 +51,11 @@ class DocumentationController extends Controller
     }
 
     /**
-     * Sem cache, de propósito.
+     * No cache, on purpose.
      *
-     * O parse leva poucos milissegundos e esta não é o caminho quente de nada.
-     * Em compensação, editar a spec e recarregar mostra o resultado na hora —
-     * que é o que se quer de um arquivo mantido à mão.
+     * Parsing takes a few milliseconds and this is nobody's hot path. In exchange, editing
+     * the spec and reloading shows the result immediately — which is what you want from a
+     * hand-maintained file.
      *
      * @return array<string, mixed>
      */
@@ -65,12 +65,12 @@ class DocumentationController extends Controller
     }
 
     /**
-     * Reorganiza os endpoints por tag, na ordem em que as tags aparecem.
+     * Reorganises the endpoints by tag, in the order the tags appear.
      *
-     * A spec é indexada por caminho porque o formato exige; quem lê procura por
-     * assunto. Os parâmetros declarados no nível do path são fundidos aos da
-     * operação, porque para quem lê a distinção não existe: são todos
-     * parâmetros daquela chamada.
+     * The spec is indexed by path because the format demands it; whoever reads looks by
+     * subject. Parameters declared at the path level are merged into the operation's,
+     * because for a reader the distinction does not exist: they are all parameters of that
+     * call.
      *
      * @param  array<string, mixed>  $spec
      * @return array<string, array<int, array<string, mixed>>>
@@ -99,7 +99,7 @@ class DocumentationController extends Controller
                     'ancora' => $operation['operationId'] ?? md5($method.$path),
                     'resumo' => $operation['summary'] ?? '',
                     'descricao' => $operation['description'] ?? null,
-                    // `security: []` na operação declara rota pública.
+                    // `security: []` on the operation declares a public route.
                     'publica' => ($operation['security'] ?? null) === [],
                     'parametros' => $this->parameters($spec, array_merge($doPath, $operation['parameters'] ?? [])),
                     'corpo' => $this->body($spec, $operation['requestBody'] ?? null),
@@ -175,14 +175,14 @@ class DocumentationController extends Controller
     }
 
     /**
-     * Exemplo já formatado para leitura, por tipo de conteúdo.
+     * An example already formatted for reading, per content type.
      *
-     * O exemplo do CSV é string e sai como está; os de JSON são estrutura e
-     * saem indentados. `JSON_UNESCAPED_UNICODE` porque a API responde em
-     * português e `é` no lugar de `é` não é exemplo, é charada.
+     * The CSV example is a string and comes out as is; the JSON ones are structures and come
+     * out indented. `JSON_UNESCAPED_UNICODE` because the API answers in Portuguese and
+     * `\u00e9` in place of an accented letter is not an example, it is a riddle.
      *
      * @param  array<string, mixed>  $content
-     * @return array<int, array{tipo: string, exemplo: string}>
+     * @return array<int, array{type: string, example: string}>
      */
     private function examples(array $content): array
     {
@@ -210,7 +210,7 @@ class DocumentationController extends Controller
     }
 
     /**
-     * Descreve o schema numa linha: tipo, formato e valores aceitos.
+     * Describes the schema in one line: type, format and accepted values.
      *
      * @param  array<string, mixed>  $schema
      */
@@ -231,10 +231,10 @@ class DocumentationController extends Controller
     }
 
     /**
-     * Segue um `$ref` até o objeto apontado.
+     * Follows a `$ref` to the object it points at.
      *
-     * A spec usa referência para não repetir o 401 em quinze lugares. Quem lê a
-     * página precisa ver o conteúdo, não o ponteiro.
+     * The spec uses references so the 401 is not repeated in fifteen places. Whoever reads
+     * the page needs to see the content, not the pointer.
      *
      * @param  array<string, mixed>  $spec
      * @param  array<string, mixed>  $item

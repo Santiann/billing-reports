@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Monta a consulta do relatório e a dos totalizadores.
+ * Builds the report's query and the totals' query.
  *
- * As duas partem dos MESMOS filtros. É o que garante que o rodapé do relatório
- * fale do mesmo conjunto que as linhas exibidas.
+ * Both start from the SAME filters. That is what guarantees the report's footer talks
+ * about the same set as the rows on display.
  */
 final class BillingReportQuery
 {
@@ -29,7 +29,7 @@ final class BillingReportQuery
     }
 
     /**
-     * Linhas do relatório, já paginadas pelo chamador.
+     * The report's rows, paginated by the caller.
      *
      * @return Builder<Billing>
      */
@@ -44,33 +44,32 @@ final class BillingReportQuery
             ->selectRaw("{$this->calculator->updatedAmountSql()} as updated_amount")
             ->selectRaw("{$this->calculator->interestAmountSql()} as interest_amount");
 
-        // Ordenar por `updated_amount` só é possível porque o valor existe em
-        // SQL. Com o cálculo apenas em PHP, ordenar por ele obrigaria a
-        // carregar o conjunto inteiro em memória.
+        // Sorting by `updated_amount` is only possible because the value exists in SQL.
+        // With the calculation in PHP alone, sorting by it would force loading the whole
+        // set into memory.
         $query->orderBy($filters->sort, $filters->direction);
 
-        // Desempate estável: sem isso, duas páginas podem repetir ou pular
-        // linhas quando há empate na coluna ordenada.
+        // A stable tie-break: without it, two pages can repeat or skip rows when the
+        // sorted column has ties.
         $query->orderBy('billings.id', 'asc');
 
         return $query;
     }
 
     /**
-     * Totalizadores, do cache quando ainda valem.
+     * The totals, from cache while they are still valid.
      *
-     * Uma entrada por recorte, e não uma por versão: o valor guarda a versão
-     * dos dados e a data de referência com que foi calculado, e é sobrescrito
-     * quando uma das duas muda. Assim a tabela de cache cresce com o número de
-     * recortes consultados, e não com o número de escritas — o driver de banco
-     * só apaga entrada vencida quando alguém a lê, e chave abandonada ficaria
-     * lá para sempre.
+     * One entry per scope, and not one per version: the value stores the data version and
+     * the reference date it was computed with, and is overwritten when either changes.
+     * That way the cache table grows with the number of scopes queried, and not with the
+     * number of writes — the database driver only deletes an expired entry when someone
+     * reads it, and an abandoned key would sit there forever.
      *
-     * A ordem das duas leituras é a garantia. A versão é lida ANTES de
-     * calcular, então os totais gravados foram calculados sobre dados no mínimo
-     * tão novos quanto a versão que os acompanha. Se uma escrita entrar no meio,
-     * a versão corrente sobe e a entrada simplesmente não é servida. O inverso
-     * — dado velho sob versão nova — não tem como acontecer.
+     * The order of the two reads is the guarantee. The version is read BEFORE computing,
+     * so the totals that get stored were computed over data at least as new as the version
+     * accompanying them. If a write lands in between, the current version goes up and the
+     * entry simply is not served. The reverse — stale data under a new version — cannot
+     * happen.
      *
      * @return array<string, mixed>
      */
@@ -94,14 +93,14 @@ final class BillingReportQuery
     }
 
     /**
-     * Totalizadores sobre o conjunto filtrado INTEIRO, sem passar pelo cache.
+     * Totals over the WHOLE filtered set, bypassing the cache.
      *
-     * Consulta de agregação separada, nunca a soma da página corrente: o
-     * usuário na página 3 precisa ver o total do relatório, não o da página.
+     * A separate aggregation query, never the sum of the current page: the user on page 3
+     * needs to see the report's total, not the page's.
      *
-     * Pública porque o comando `report:explain` precisa da consulta, e não do
-     * resultado: se ele chamasse `totals()`, o cache esconderia dele a
-     * agregação — a consulta mais cara do relatório, e a razão do comando.
+     * Public because the `report:explain` command needs the query, not the result: if it
+     * called `totals()`, the cache would hide the aggregation from it — the report's most
+     * expensive query, and the command's whole reason to exist.
      *
      * @return array<string, mixed>
      */
@@ -115,7 +114,7 @@ final class BillingReportQuery
         $interest = $this->calculator->interestAmountSql();
         $paid = BillingStatus::Paid->value;
 
-        // Recebido sai das colunas congeladas; pendente, do valor atualizado.
+        // Received comes from the frozen columns; pending, from the updated amount.
         $received = "CASE WHEN billings.status = '{$paid}' THEN COALESCE(billings.paid_amount, 0) ELSE 0 END";
         $pending = "CASE WHEN billings.status = '{$paid}' THEN 0 ELSE {$updated} END";
 
@@ -143,12 +142,12 @@ final class BillingReportQuery
      */
     private function applyFilters(Builder $query, BillingReportFilters $filters): void
     {
-        // O nome da coluna vem de allowlist, nunca cru da requisição.
+        // The column name comes from an allowlist, never raw from the request.
         $dateColumn = "billings.{$filters->dateField}";
 
-        // Comparação direta, não whereDate(): envolver a coluna em DATE()
-        // impede o MySQL de usar o índice, e o relatório é justamente onde
-        // isso não pode acontecer. As colunas já são do tipo DATE.
+        // A direct comparison, not whereDate(): wrapping the column in DATE() stops MySQL from
+        // using the index, and the report is precisely where that cannot happen. The columns are
+        // already of type DATE.
         if ($filters->startDate !== null) {
             $query->where($dateColumn, '>=', $filters->startDate);
         }
@@ -164,7 +163,7 @@ final class BillingReportQuery
         match ($filters->status) {
             'paid' => $query->where('billings.status', BillingStatus::Paid->value),
             'pending' => $query->where('billings.status', BillingStatus::Pending->value),
-            // Derivada, e vinda da mesma fonte da regra de juros.
+            // Derived, and coming from the same source as the interest rule.
             'overdue' => $query->whereRaw($this->calculator->overdueSql()),
             default => null,
         };

@@ -5,10 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * A trilha de auditoria das cobranças.
+ * The billings' audit trail.
  *
- * Só inserção: a linha nunca é atualizada nem apagada, e por isso não existe
- * `updated_at`. Registro errado se corrige com outro registro.
+ * Insert only: a row is never updated nor deleted, and that is why there is no `updated_at`. A
+ * wrong record is corrected with another record.
  */
 return new class extends Migration
 {
@@ -18,24 +18,24 @@ return new class extends Migration
             $table->id();
 
             /*
-             * RESTRICT, o default, nas duas chaves.
+             * RESTRICT, the default, on both keys.
              *
-             * Apagar uma cobrança ou um usuário que tem histórico falha, em vez
-             * de levar o histórico junto ou deixá-lo apontando para o nada. O
-             * sistema não apaga nenhum dos dois hoje; a chave garante que a
-             * trilha não seja a vítima do dia em que apagar.
+             * Deleting a billing or a user that has history fails, rather than taking the
+             * history along or leaving it pointing at nothing. The system deletes neither of
+             * the two today; the key guarantees the trail is not the victim of the day it
+             * does.
              *
-             * O índice que a chave estrangeira cria em `billing_id` já serve a
-             * leitura da trilha, `WHERE billing_id = ? ORDER BY id DESC`: no
-             * InnoDB o índice secundário carrega a chave primária no fim, então
-             * ele já está em ordem de id dentro de cada cobrança.
+             * The index the foreign key creates on `billing_id` already serves reading the
+             * trail, `WHERE billing_id = ? ORDER BY id DESC`: in InnoDB a secondary index
+             * carries the primary key at the end, so it is already in id order within each
+             * billing.
              */
             $table->foreignId('billing_id')->constrained();
             $table->foreignId('user_id')->nullable()->constrained();
 
             $table->string('event', 20);
 
-            // {campo: {from, to}}, só com o que mudou.
+            // {field: {from, to}}, carrying only what changed.
             $table->json('changes');
 
             $table->timestamp('created_at');

@@ -15,10 +15,10 @@ class ReversePaymentRequest extends FormRequest
     }
 
     /**
-     * O estorno não tem corpo.
+     * A reversal has no body.
      *
-     * Um motivo seria o campo óbvio, e ficou de fora de propósito — o README
-     * explica. O quem e o quando já estão na trilha.
+     * A reason would be the obvious field, and it was deliberately left out — the README
+     * explains. The who and the when are already in the trail.
      *
      * @return array<string, array<int, mixed>>
      */

@@ -5,18 +5,18 @@ namespace App\Http\Requests\Import;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * O arquivo enviado para importação.
+ * The file submitted for import.
  *
- * `mimes:csv,txt` e não só `csv`: o tipo que o browser anuncia para um CSV
- * varia com o sistema operacional e com o que está instalado — text/csv,
- * text/plain e application/vnd.ms-excel são todos possíveis para o mesmo
- * arquivo. Barrar pelo tipo anunciado recusaria arquivo bom; o que garante o
- * conteúdo é o leitor, que falha com mensagem clara se o cabeçalho não estiver
+ * `mimes:csv,txt` and not just `csv`: the type a browser announces for a CSV varies with the
+ * operating system and with what is installed — text/csv, text/plain and
+ * application/vnd.ms-excel are all possible for the same file. Barring by the announced type
+ * would refuse a good file; what guarantees the content is the reader, which fails with a
+ * clear message if the header is not
  * lá.
  */
 class ImportRequest extends FormRequest
 {
-    /** Teto do upload, em kilobytes. */
+    /** The upload cap, in kilobytes. */
     private const MAX_KB = 20_480;
 
     public function authorize(): bool
@@ -43,7 +43,7 @@ class ImportRequest extends FormRequest
         ];
     }
 
-    /** A prévia não grava: analisa o arquivo e devolve o que aconteceria. */
+    /** The preview writes nothing: it analyses the file and returns what would happen. */
     public function isPreview(): bool
     {
         return $this->boolean('preview');

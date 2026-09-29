@@ -11,7 +11,7 @@ use LogicException;
 #[Fillable(['billing_id', 'user_id', 'event', 'changes'])]
 class BillingAudit extends Model
 {
-    /** Só inserção: não há o que atualizar, então não há quando. */
+    /** Insert only: there is nothing to update, so there is no when. */
     public const UPDATED_AT = null;
 
     /**
@@ -26,20 +26,20 @@ class BillingAudit extends Model
     }
 
     /**
-     * Uma trilha que se edita não prova nada.
+     * A trail that can be edited proves nothing.
      *
-     * A recusa mora no model para valer em todo caminho que passe pelo
-     * Eloquent — tinker incluído. Consulta crua ainda passaria; fechar isso de
-     * vez pediria permissão no banco, o que o README discute.
+     * The refusal lives in the model so it holds on every path that goes through Eloquent —
+     * tinker included. A raw query would still get past; closing that for good would take
+     * database permissions, which the README discusses.
      */
     protected static function booted(): void
     {
         static::updating(fn () => throw new LogicException(
-            'A trilha de auditoria não se altera: registro errado se corrige com outro registro.',
+            'The audit trail cannot be altered: a wrong record is corrected with another record.',
         ));
 
         static::deleting(fn () => throw new LogicException(
-            'A trilha de auditoria não se apaga.',
+            'The audit trail cannot be deleted.',
         ));
     }
 

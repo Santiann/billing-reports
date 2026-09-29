@@ -14,8 +14,8 @@ class UpdateCustomerRequest extends FormRequest
     }
 
     /**
-     * Documento chega da tela com máscara e é gravado só com dígitos: guardar
-     * o que foi digitado faria a busca depender do formato.
+     * The document arrives from the screen formatted and is stored as digits only: keeping
+     * what was typed would make the search depend on the formatting.
      */
     protected function prepareForValidation(): void
     {
@@ -36,10 +36,10 @@ class UpdateCustomerRequest extends FormRequest
             'document' => [
                 'required',
                 'string',
-                // CPF tem 11 dígitos, CNPJ tem 14. Nada entre os dois.
+                // A CPF has 11 digits, a CNPJ has 14. Nothing in between.
                 'regex:/^(\d{11}|\d{14})$/',
-                // Ignora o próprio registro: sem isso ninguém salva uma
-                // edição sem antes trocar de documento.
+                // Ignores the record itself: without this nobody could save an edit without
+                // first changing the document.
                 Rule::unique('customers', 'document')->ignore($this->route('customer')),
             ],
             'email' => ['required', 'email', 'max:255'],

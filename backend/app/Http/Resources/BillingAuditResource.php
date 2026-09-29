@@ -12,10 +12,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class BillingAuditResource extends JsonResource
 {
     /**
-     * Rótulo de cada campo, na ordem em que a tela os mostra.
+     * Each field's label, in the order the screen shows them.
      *
-     * A ordem é da ficha da cobrança, não a de gravação: numa entrada de
-     * pagamento o status vem primeiro porque é ele que conta o que aconteceu.
+     * The order is the billing detail panel's, not the write order: in a payment entry the
+     * status comes first because it is what tells the story of what happened.
      */
     private const FIELDS = [
         'status' => 'Status',
@@ -49,11 +49,11 @@ class BillingAuditResource extends JsonResource
     }
 
     /**
-     * A ordem sai daqui, e não do que foi gravado.
+     * The order comes from here, and not from what was stored.
      *
-     * Coluna JSON do MySQL não guarda a ordem das chaves: ela reordena por
-     * tamanho, e `{"from", "to"}` volta do banco como `{"to", "from"}`. Espalhar
-     * o que veio do banco entregaria à API uma ordem que ninguém escolheu.
+     * A MySQL JSON column does not keep the order of its keys: it reorders by size, and
+     * `{"from", "to"}` comes back from the database as `{"to", "from"}`. Spreading what came
+     * from the database would hand the API an order nobody chose.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -69,8 +69,8 @@ class BillingAuditResource extends JsonResource
             }
         }
 
-        // Campo que ganhe coluna depois e ainda não tenha rótulo aparece com o
-        // nome da coluna, em vez de sumir da trilha.
+        // A field that gains a column later and has no label yet shows up under the column's
+        // name, rather than disappearing from the trail.
         foreach ($stored as $field => $values) {
             $changes[] = $this->change($field, $field, $values);
         }

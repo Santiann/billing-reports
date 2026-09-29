@@ -13,13 +13,13 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * O seeder de volume é o único lugar onde uma cobrança paga nasce sem passar
- * pela API, e por isso é o único lugar onde os valores congelados podem
- * divergir da regra sem ninguém perceber. Estes testes existem para impedir
+ * The volume seeder is the only place a paid billing is born without going through the API, and
+ * therefore the only place the frozen amounts can drift from the rule without anyone noticing.
+ * These tests exist to prevent
  * isso.
  *
- * Amostra pequena de propósito: o que se afirma aqui é a REGRA. A prova de
- * volume é a carga de dois milhões, medida fora da suíte.
+ * A small sample on purpose: what gets asserted here is the RULE. The proof of volume is the
+ * two-million load, measured outside the suite.
  */
 class BillingVolumeSeederTest extends TestCase
 {
@@ -30,16 +30,15 @@ class BillingVolumeSeederTest extends TestCase
     private const COBRANCAS = 600;
 
     /**
-     * Não há limpeza explícita aqui, e isso é deliberado: quem desfaz as 600
-     * cobranças é o rollback do RefreshDatabase.
+     * There is no explicit cleanup here, and that is deliberate: what undoes the 600 billings is
+     * RefreshDatabase's rollback.
      *
-     * Limpar com TRUNCATE seria o caminho óbvio e custaria caro. TRUNCATE é
-     * DDL e faz commit implícito em MySQL; o Laravel percebe que a transação
-     * do teste sumiu e marca RefreshDatabaseState::$migrated = false, o que
-     * dispara um `migrate:fresh` inteiro ANTES DE CADA TESTE SEGUINTE. Medido
-     * nesta base: ~50s por teste, contra 1,3s sem nenhum DDL.
+     * Cleaning up with TRUNCATE would be the obvious route and would cost dearly. TRUNCATE is DDL
+     * and performs an implicit commit in MySQL; Laravel notices the test's transaction is gone and
+     * marks RefreshDatabaseState::$migrated = false, which triggers a full `migrate:fresh` BEFORE
+     * EVERY FOLLOWING TEST. Measured on this base: ~50s per test, against 1.3s with no DDL at all.
      *
-     * É a mesma razão pela qual o seeder não trunca tabela já vazia.
+     * It is the same reason the seeder does not truncate an already empty table.
      */
     private function semear(): void
     {
@@ -66,12 +65,12 @@ class BillingVolumeSeederTest extends TestCase
     }
 
     /**
-     * O teste que sustenta a exigência do brief: o valor congelado tem que vir
-     * do RegisterPayment, não de uma fórmula reescrita dentro do seeder.
+     * The test that upholds the brief's requirement: the frozen amount has to come from
+     * RegisterPayment, not from a formula rewritten inside the seeder.
      *
-     * A prova é reconstruir a mesma cobrança como pendente, pagá-la pelo
-     * serviço de produção na mesma data, e exigir igualdade até o centavo. Uma
-     * segunda implementação da regra dentro do seeder cairia aqui.
+     * The proof is to rebuild the same billing as pending, pay it through the production service on
+     * the same date, and demand equality down to the cent. A second implementation of the rule
+     * inside the seeder would fail here.
      */
     public function test_the_frozen_interest_is_what_recording_the_payment_would_produce(): void
     {
@@ -123,7 +122,7 @@ class BillingVolumeSeederTest extends TestCase
         $this->assertSame(0, $emDiaComJuros);
     }
 
-    /** Pagamento com data futura não existe: ninguém pagou o que ainda não aconteceu. */
+    /** A payment with a future date does not exist: nobody paid for what has not happened yet. */
     public function test_no_payment_falls_in_the_future(): void
     {
         $this->semear();
@@ -152,8 +151,8 @@ class BillingVolumeSeederTest extends TestCase
     }
 
     /**
-     * O critério de aceite do bloco, visto de onde quem revisa vai olhar: o
-     * relatório filtrado por pagas precisa mostrar juros recebidos, não zero.
+     * The block's acceptance criterion, seen from where a reviewer will look: the report filtered
+     * by paid has to show interest received, not zero.
      */
     public function test_the_paid_report_shows_the_interest_received(): void
     {
@@ -168,13 +167,12 @@ class BillingVolumeSeederTest extends TestCase
     }
 
     /**
-     * Carga pequena não emite DDL — nem derruba índice, nem recria.
+     * A small load emits no DDL — it neither drops indexes nor recreates them.
      *
-     * É o que mantém esta classe segura dentro do RefreshDatabase: DDL faz
-     * commit implícito, encerra a transação do teste e obriga cada teste
-     * seguinte da suíte a refazer as migrations. O seeder só adia os índices a
-     * partir de um limiar, e este teste é quem avisa se o limiar um dia descer
-     * até o tamanho da amostra.
+     * That is what keeps this class safe inside RefreshDatabase: DDL performs an implicit commit,
+     * ends the test's transaction and forces every following test in the suite to redo the
+     * migrations. The seeder only defers the indexes above a threshold, and this test is what warns
+     * if that threshold ever drops to the sample's size.
      */
     public function test_a_small_load_emits_no_ddl(): void
     {

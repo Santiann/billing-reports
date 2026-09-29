@@ -25,8 +25,8 @@ class RegisterPaymentRequest extends FormRequest
             'payment_date' => [
                 'nullable',
                 'date',
-                // Não pode ser no futuro: juros são função da data, e aceitar
-                // data futura gravaria um congelamento que ainda não ocorreu.
+                // It cannot be in the future: interest is a function of the date, and
+                // accepting a future date would store a freeze that has not happened yet.
                 'before_or_equal:today',
                 ...($billing instanceof Billing
                     ? ['after_or_equal:'.$billing->issue_date->toDateString()]

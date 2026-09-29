@@ -69,7 +69,7 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* Textura de papel: ruído leve, sem imagem externa. */
+        /* Paper texture: light noise, no external image. */
         body::before {
             content: "";
             position: fixed;
@@ -223,7 +223,7 @@
         }
         .prosa th { color: var(--tinta-fraca); font-weight: 600; }
 
-        /* --- seções por assunto ---------------------------------------- */
+        /* --- sections by subject --------------------------------------- */
 
         .assunto { margin-top: 4rem; }
 
@@ -418,7 +418,7 @@
             .folha { grid-template-columns: minmax(0, 1fr); }
             .indice {
                 position: static;
-                /* Limitado e rolável: sem isto o índice inteiro ocupa a
+                /* Capped and scrollable: without this the whole index takes up
                    primeira tela e quem abre no celular não vê documentação
                    nenhuma sem rolar. */
                 max-height: 45vh;
@@ -432,7 +432,7 @@
             body { font-size: 16px; }
         }
 
-        /* --- impressão --------------------------------------------------
+        /* --- printing ---------------------------------------------------
            Um documento que se chama especificação deveria sair bem no papel. */
 
         @media print {
@@ -459,7 +459,7 @@
                     <li>
                         <a href="#{{ $endpoint['ancora'] }}">
                             <span class="verbo-mini">{{ $endpoint['metodo'] }}</span>
-                            {{-- <wbr> antes da chave: sem ele, `/customers/{customer}`
+                            {{-- <wbr> before the brace: without it, `/customers/{customer}`
                                  quebra no meio da palavra e vira "{custom er}". --}}
                             <span>{!! str_replace('{', '<wbr>{', e(Str::after($endpoint['caminho'], '/api') ?: '/')) !!}</span>
                         </a>

@@ -15,16 +15,16 @@ use Symfony\Component\Finder\Finder;
 use Tests\TestCase;
 
 /**
- * Trilha de auditoria das cobranças: quem alterou o quê, e quando.
+ * The billings' audit trail: who changed what, and when.
  *
- * Uma trilha só vale pelo que garante, e são três garantias:
+ * A trail is only worth what it guarantees, and there are three guarantees:
  *
- *   completa  -> toda alteração entra, inclusive a que chega por caminho novo
- *   atômica   -> sem registro na trilha, a alteração não acontece
- *   imutável  -> o que foi registrado não se edita nem se apaga
+ *   complete  -> every change gets in, including one arriving by a new path
+ *   atomic    -> without a record in the trail, the change does not happen
+ *   immutable -> what was recorded cannot be edited nor deleted
  *
- * A criação fica de fora de propósito — o README explica por quê. O que entra
- * é o que a especificação pede: edição, pagamento e, no commit seguinte, estorno.
+ * Creation is deliberately left out — the README explains why. What gets in is what the brief
+ * asks for: edits, payments and, in the following commit, reversals.
  */
 class BillingAuditTrailTest extends TestCase
 {
@@ -67,13 +67,13 @@ class BillingAuditTrailTest extends TestCase
     }
 
     /**
-     * Compara as mudanças gravadas sem depender da ordem das chaves.
+     * Compares the stored changes without depending on the order of the keys.
      *
-     * Coluna JSON do MySQL reordena as chaves por tamanho — `{"from", "to"}`
-     * volta como `{"to", "from"}`. A ordem que a API entrega é imposta pelo
-     * resource; o que se afirma aqui é o conteúdo. `assertEquals` resolveria a
-     * ordem, mas aceitaria `null` igual a `''`, e o `from` nulo do pagamento é
-     * justamente o que importa.
+     * A MySQL JSON column reorders keys by size — `{"from", "to"}` comes back as
+     * `{"to", "from"}`. The order the API delivers is imposed by the resource; what gets
+     * asserted here is the content. `assertEquals` would solve the ordering, but it would
+     * accept `null` as equal to `''`, and the payment's null `from` is precisely what
+     * matters.
      *
      * @param  array<string, mixed>  $esperado
      * @param  array<string, mixed>  $gravado
@@ -98,7 +98,7 @@ class BillingAuditTrailTest extends TestCase
             ->get();
     }
 
-    // --- edição -------------------------------------------------------
+    // --- edits --------------------------------------------------------
 
     public function test_an_edit_records_who_what_and_when(): void
     {
@@ -124,11 +124,10 @@ class BillingAuditTrailTest extends TestCase
     }
 
     /**
-     * Só entra o que mudou de fato.
+     * Only what actually changed gets in.
      *
-     * O valor chega como "1000" e está gravado como "1000.00": é o mesmo
-     * número, e registrá-lo como alteração encheria a trilha de ruído que
-     * esconde a alteração verdadeira.
+     * The amount arrives as "1000" and is stored as "1000.00": it is the same number, and
+     * recording it as a change would fill the trail with noise that hides the real change.
      */
     public function test_only_what_changed_enters_the_trail(): void
     {
@@ -159,11 +158,10 @@ class BillingAuditTrailTest extends TestCase
     // --- pagamento ----------------------------------------------------
 
     /**
-     * O pagamento entra com os valores congelados.
+     * The payment goes in with the frozen amounts.
      *
-     * É o que o estorno vai precisar: quando a cobrança voltar a pendente e as
-     * colunas de pagamento forem limpas, o que foi pago continua registrado
-     * aqui.
+     * That is what the reversal will need: when the billing goes back to pending and the
+     * payment columns are cleared, what was paid stays recorded here.
      */
     public function test_a_payment_enters_the_trail_with_the_frozen_amounts(): void
     {
@@ -186,7 +184,7 @@ class BillingAuditTrailTest extends TestCase
         ], $trilha[0]->changes);
     }
 
-    /** A repetição com a mesma chave não reprocessa, então não registra de novo. */
+    /** A replay with the same key does not reprocess, so it does not record again. */
     public function test_an_idempotent_replay_does_not_duplicate_the_trail(): void
     {
         $this->travelTo(self::AGORA);
@@ -201,7 +199,7 @@ class BillingAuditTrailTest extends TestCase
         $this->assertCount(1, $this->trilha($billing));
     }
 
-    // --- o que não entra ----------------------------------------------
+    // --- what does not get in -----------------------------------------
 
     public function test_a_refused_operation_does_not_enter_the_trail(): void
     {
@@ -210,16 +208,16 @@ class BillingAuditTrailTest extends TestCase
 
         $this->comoUsuario();
 
-        // A factory registra o pagamento pelo RegisterPayment de produção, e
+        // The factory records the payment through the production RegisterPayment, and
         // esse pagamento entra na trilha — legitimamente. Por isso a contagem
-        // é tomada depois da preparação, e não comparada com zero.
+        // is taken after the setup, and not compared against zero.
         $paga = Billing::factory()->paid()->create();
         $before = BillingAudit::query()->count();
 
-        // Recusada pela validação: cobrança paga não se edita.
+        // Refused by validation: a paid billing cannot be edited.
         $this->editar($paga, ['description' => 'Tentativa'])->assertUnprocessable();
 
-        // Recusada pelo perfil.
+        // Refused by the role.
         $this->comoUsuario('Leitor', UserRole::Viewer);
         $this->postJson("/api/billings/{$billing->id}/payment")->assertForbidden();
 
@@ -229,11 +227,11 @@ class BillingAuditTrailTest extends TestCase
     // --- atomicidade --------------------------------------------------
 
     /**
-     * Sem registro na trilha, a alteração não acontece.
+     * Without a record in the trail, the change does not happen.
      *
-     * A falha é simulada no evento do próprio model da trilha, e não com DDL:
-     * renomear a tabela no meio do teste encerraria a transação do
-     * RefreshDatabase por commit implícito (ver a skill de testes).
+     * The failure is simulated on the trail model's own event, and not with DDL: renaming the
+     * table mid-test would end RefreshDatabase's transaction through an implicit commit (see
+     * the testing skill).
      */
     public function test_without_the_trail_the_edit_does_not_happen(): void
     {
@@ -264,7 +262,7 @@ class BillingAuditTrailTest extends TestCase
 
     // --- imutabilidade ------------------------------------------------
 
-    /** Registro errado na trilha se corrige com outro registro, nunca reescrevendo. */
+    /** A wrong record in the trail is corrected with another record, never by rewriting. */
     public function test_the_trail_cannot_be_altered(): void
     {
         $this->travelTo(self::AGORA);
@@ -290,8 +288,8 @@ class BillingAuditTrailTest extends TestCase
     }
 
     /**
-     * Alteração fora de uma requisição — tinker, comando artisan — também
-     * entra, sem autor. Ficar de fora seria o buraco mais fácil de usar.
+     * A change made outside a request — tinker, an artisan command — gets in too, with no
+     * author. Leaving it out would be the easiest hole to walk through.
      */
     public function test_a_change_with_no_authenticated_user_is_recorded_without_an_author(): void
     {
@@ -337,17 +335,17 @@ class BillingAuditTrailTest extends TestCase
     // --- porta dos fundos ---------------------------------------------
 
     /**
-     * A trilha é gravada por evento do Eloquent, então consulta crua que
-     * altera cobrança passa por fora dela sem aviso.
+     * The trail is written by an Eloquent event, so a raw query that changes a billing slips
+     * past it without warning.
      *
      * Este teste varre `app/` atrás desse caso. Tem limite, e o limite fica
-     * dito: pega a escrita encadeada na mesma instrução — `DB::table('billings')
-     * ->update(...)`, `Billing::query()->...->update(...)` — e não pega o
-     * construtor guardado numa variável e alterado três linhas depois. Existe
-     * para o erro óbvio não passar na revisão, não para substituí-la.
+     * said: it catches the write chained in the same statement — `DB::table('billings')
+     * ->update(...)`, `Billing::query()->...->update(...)` — and it does not catch a builder
+     * held in a variable and updated three lines later. It exists so the obvious mistake does
+     * not get past review, not to replace it.
      *
-     * O seeder fica fora da varredura: está em `database/`, grava volume de
-     * teste, e dois milhões de registros de auditoria não descreveriam nada.
+     * The seeder is outside the sweep: it lives in `database/`, it writes test volume, and two
+     * million audit records would describe nothing.
      */
     public function test_no_application_code_changes_a_billing_outside_eloquent(): void
     {

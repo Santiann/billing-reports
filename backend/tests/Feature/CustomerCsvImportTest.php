@@ -10,12 +10,12 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Importação de clientes por CSV.
+ * Importing customers from a CSV.
  *
- * A regra que governa estes testes: **importação parcial é aceitável, desde que
- * o usuário saiba exatamente o que entrou e o que não entrou**. Um arquivo com
- * erro na linha 3 não pode nem abortar tudo nem entrar em silêncio — as boas
- * entram, e as ruins voltam nomeadas, com a linha e o motivo.
+ * The rule that governs these tests: **a partial import is acceptable, as long as the user knows
+ * exactly what went in and what did not**. A file with an error on line 3 must neither abort
+ * everything nor go in silently — the good ones go in, and the bad ones come back named, with
+ * the line and the reason.
  */
 class CustomerCsvImportTest extends TestCase
 {
@@ -31,7 +31,7 @@ class CustomerCsvImportTest extends TestCase
         return UploadedFile::fake()->createWithContent($nome, $content);
     }
 
-    /** Três válidas e duas inválidas — o critério de aceite do bloco. */
+    /** Three valid and two invalid — the block's acceptance criterion. */
     private function mixedFile(): UploadedFile
     {
         return $this->csv(<<<'CSV'
@@ -44,7 +44,7 @@ class CustomerCsvImportTest extends TestCase
         CSV);
     }
 
-    // --- proteção -----------------------------------------------------
+    // --- protection ---------------------------------------------------
 
     public function test_importing_requires_authentication(): void
     {
@@ -77,7 +77,7 @@ class CustomerCsvImportTest extends TestCase
             ->assertJsonPath('total_rows', 5)
             ->assertJsonPath('valid_count', 3)
             ->assertJsonPath('error_count', 2)
-            // Nada foi importado: é prévia.
+            // Nothing was imported: this is a preview.
             ->assertJsonPath('imported_count', 0);
     }
 
@@ -93,11 +93,11 @@ class CustomerCsvImportTest extends TestCase
 
         $this->assertSame('Comércio Silva LTDA', $firstOne['name']);
         $this->assertSame('12345678000190', $firstOne['document']);
-        // "ativo" do arquivo vira o valor que o banco guarda.
+        // "ativo" from the file becomes the value the database stores.
         $this->assertSame('active', $firstOne['status']);
     }
 
-    // --- importação ---------------------------------------------------
+    // --- importing ----------------------------------------------------
 
     public function test_imports_the_valid_rows_and_names_the_ones_that_failed(): void
     {
@@ -113,8 +113,8 @@ class CustomerCsvImportTest extends TestCase
 
         $errors = collect($response->json('errors'));
 
-        // A linha é a do ARQUIVO, contando o cabeçalho: quem abre no Excel
-        // precisa ir direto na linha certa.
+        // The line is the FILE's, counting the header: whoever opens it in Excel needs to go
+        // straight to the right line.
         $this->assertSame([4, 6], $errors->pluck('line')->all());
         $this->assertStringContainsString('CPF', $errors[0]['messages'][0]);
         $this->assertStringContainsString('e-mail', $errors[1]['messages'][0]);
@@ -168,7 +168,7 @@ class CustomerCsvImportTest extends TestCase
         $response->assertJsonPath('error_count', 1);
     }
 
-    // --- formato do arquivo -------------------------------------------
+    // --- the file's format --------------------------------------------
 
     public function test_accepts_a_comma_as_the_separator(): void
     {
@@ -188,7 +188,7 @@ class CustomerCsvImportTest extends TestCase
         ])->assertOk()->assertJsonPath('imported_count', 1);
     }
 
-    /** O documento pode vir com máscara: o banco guarda só dígitos. */
+    /** The document may arrive formatted: the database stores digits only. */
     public function test_a_formatted_document_is_normalized(): void
     {
         $this->actingAsUser();
@@ -221,10 +221,10 @@ class CustomerCsvImportTest extends TestCase
     }
 
     /**
-     * O arquivo é lido linha a linha, e é isso que permite importar um CSV
-     * maior que a memória do processo. Cinco mil linhas dentro de um limite
-     * apertado não provam streaming sozinhas, mas provam que o conjunto inteiro
-     * não está sendo materializado — que é o erro que se quer impedir.
+     * The file is read row by row, and that is what makes it possible to import a CSV larger
+     * than the process's memory. Five thousand rows within a tight limit do not prove streaming
+     * on their own, but they do prove the whole set is not being materialised — which is the
+     * mistake this is meant to prevent.
      */
     public function test_imports_a_large_file_without_accumulating_it_in_memory(): void
     {

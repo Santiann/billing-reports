@@ -8,26 +8,25 @@ use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
 /**
- * A spec só vale se não puder divergir do código.
+ * The spec is only worth anything if it cannot drift from the code.
  *
- * Documentação de API escrita à mão apodrece em silêncio: alguém acrescenta um
- * endpoint, esquece do arquivo, e a partir dali a spec descreve um sistema que
- * não existe mais. Este teste torna esse esquecimento impossível — ele compara
- * as duas direções.
+ * Hand-written API documentation rots in silence: someone adds an endpoint, forgets the file,
+ * and from then on the spec describes a system that no longer exists. This test makes that
+ * forgetting impossible — it compares both directions.
  *
- *   rota registrada sem entrada na spec  -> falha (documentação incompleta)
- *   entrada na spec sem rota registrada  -> falha (documentação fantasma)
+ *   a registered route with no entry in the spec  -> fails (incomplete documentation)
+ *   an entry in the spec with no registered route -> fails (phantom documentation)
  *
- * Não toca o banco: o que está sob teste é o arquivo contra o roteador.
+ * It does not touch the database: what is under test is the file against the router.
  */
 class OpenApiSpecTest extends TestCase
 {
     /**
-     * Rotas que existem e ficam FORA da spec de propósito.
+     * Routes that exist and are deliberately OUTSIDE the spec.
      *
-     * Nenhuma delas é da API de faturamento: são infraestrutura do framework
-     * ou a própria página de documentação. A lista é explícita para que uma
-     * rota nova não escape por omissão — se aparecer uma que não está aqui
+     * None of them belongs to the billing API: they are framework infrastructure or the
+     * documentation page itself. The list is explicit so a new route cannot slip through by
+     * omission — if one shows up that is not here
      * nem na spec, o teste falha e alguém precisa decidir.
      */
     private const FORA_DA_SPEC = [
@@ -40,12 +39,11 @@ class OpenApiSpecTest extends TestCase
     ];
 
     /**
-     * Os verbos que uma entrada de path pode ter.
+     * The verbs a path entry can have.
      *
-     * Um path do OpenAPI também aceita chaves que não são método — `parameters`
-     * é a que este arquivo usa, para declarar o `{id}` uma vez só em vez de
-     * repetir em cada verbo. Iterar sem esta lista trataria `parameters` como
-     * se fosse uma operação HTTP.
+     * An OpenAPI path also accepts keys that are not methods — `parameters` is the one this
+     * file uses, to declare `{id}` once instead of repeating it on every verb. Iterating
+     * without this list would treat `parameters` as if it were an HTTP operation.
      */
     private const VERBOS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
 
@@ -60,10 +58,10 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * Toda rota registrada, na forma "MÉTODO /caminho".
+     * Every registered route, in the form "METHOD /path".
      *
-     * HEAD e OPTIONS ficam de fora: o Laravel os registra sozinho junto do GET
-     * e nenhuma spec os declara.
+     * HEAD and OPTIONS are left out: Laravel registers them on its own alongside GET and no
+     * spec declares them.
      *
      * @return array<int, string>
      */
@@ -86,7 +84,7 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * Toda operação declarada na spec, na mesma forma.
+     * Every operation declared in the spec, in the same form.
      *
      * @return array<int, string>
      */
@@ -106,7 +104,7 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * Cada operação da spec, como [rótulo, corpo da operação].
+     * Each of the spec's operations, as [label, operation body].
      *
      * @return array<int, array{0: string, 1: array<string, mixed>}>
      */
@@ -162,7 +160,7 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * Endpoint sem resposta declarada é entrada de índice, não documentação.
+     * An endpoint with no declared response is an index entry, not documentation.
      */
     public function test_every_operation_declares_responses(): void
     {
@@ -177,13 +175,13 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * O 401 é a resposta mais provável de quem experimenta a API pela primeira
-     * vez, e a que mais confunde se não estiver documentada.
+     * The 401 is the most likely response for someone trying the API for the first time, and
+     * the most confusing one if it is not documented.
      */
     public function test_an_authenticated_operation_documents_the_401(): void
     {
         foreach ($this->operacoes() as [$onde, $operation]) {
-            // `security: []` declara operação pública, como o login.
+            // `security: []` declares a public operation, such as the login.
             if (($operation['security'] ?? null) === []) {
                 continue;
             }
@@ -197,9 +195,9 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * O 422 do teto do PDF é uma decisão de projeto, não um erro acidental:
-     * acima do limite a API recusa e orienta o CSV. Documentá-lo é o que
-     * impede alguém de tratar como bug.
+     * The PDF cap's 422 is a design decision, not an accidental error: above the limit the API
+     * refuses and points at the CSV. Documenting it is what stops someone treating it as a
+     * bug.
      */
     public function test_the_pdf_cap_is_documented(): void
     {
@@ -219,8 +217,8 @@ class OpenApiSpecTest extends TestCase
     }
 
     /**
-     * Exemplo é o que transforma a spec em documentação utilizável: sem ele,
-     * quem lê fica com o formato e sem a forma do dado.
+     * An example is what turns the spec into usable documentation: without one, the reader is
+     * left with the format and none of the data's shape.
      */
     public function test_the_success_responses_carry_an_example(): void
     {
@@ -231,8 +229,8 @@ class OpenApiSpecTest extends TestCase
                 }
 
                 foreach ($response['content'] as $type => $content) {
-                    // Binário não tem exemplo em JSON: o PDF declara o formato,
-                    // e é o que há para declarar.
+                    // A binary has no JSON example: the PDF declares the format, and that is
+                    // all there is to declare.
                     if (! str_contains($type, 'json')) {
                         continue;
                     }

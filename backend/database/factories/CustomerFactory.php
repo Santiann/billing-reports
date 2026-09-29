@@ -20,7 +20,7 @@ class CustomerFactory extends Factory
     {
         return [
             'name' => fake()->company(),
-            // Só dígitos: a busca por documento não deve depender de máscara.
+            // Digits only: searching by document must not depend on formatting.
             'document' => fake()->unique()->numerify('###########'),
             'email' => fake()->unique()->companyEmail(),
             'status' => CustomerStatus::Active,

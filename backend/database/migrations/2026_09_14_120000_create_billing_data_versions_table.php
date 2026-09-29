@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * O relógio de invalidação do cache dos totalizadores.
+ * The invalidation clock for the totals cache.
  *
- * Uma linha só, com um número que sobe a cada escrita em `billings` — dentro
- * da mesma transação da escrita. O README conta por que é uma linha gravada e
- * não um número derivado dos dados, como `MAX(id)`: o derivado tinha uma
+ * A single row, with a number that goes up on every write to `billings` — inside the write's
+ * own transaction. The README explains why it is a stored row and not a number derived from the
+ * data, such as `MAX(id)`: the derived one had a
  * corrida.
  */
 return new class extends Migration

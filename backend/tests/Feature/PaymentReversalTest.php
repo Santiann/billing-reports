@@ -12,23 +12,23 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Estorno de pagamento.
+ * Payment reversal.
  *
- * O estorno desfaz um pagamento que não se sustentou — cheque devolvido,
- * transferência revertida, baixa lançada na cobrança errada. Três regras:
+ * A reversal undoes a payment that did not hold up — a bounced cheque, a reversed transfer, a
+ * settlement posted against the wrong billing. Three rules:
  *
- *   a cobrança volta a pendente, sem os valores de pagamento
- *   os valores congelados do pagamento estornado ficam na trilha
+ *   the billing goes back to pending, without the payment amounts
+ *   the reversed payment's frozen amounts stay in the trail
  *   os juros voltam a correr desde o vencimento ORIGINAL
  */
 class PaymentReversalTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Quatro dias depois do vencimento: 1000 * 1.02^(4/30) = 1.002,64. */
+    /** Four days after the due date: 1000 * 1.02^(4/30) = 1,002.64. */
     private const PAGAMENTO = '2026-05-20 10:00:00';
 
-    /** Trinta dias depois do vencimento: 1000 * 1.02 = 1.020,00. */
+    /** Thirty days after the due date: 1000 * 1.02 = 1,020.00. */
     private const HOJE = '2026-06-15 09:30:00';
 
     private function comoAdmin(): User
@@ -49,7 +49,7 @@ class PaymentReversalTest extends TestCase
         ]);
     }
 
-    /** Paga em 20/05 pelo serviço de produção, e volta o relógio para hoje. */
+    /** Paid on 20/05 through the production service, then the clock returns to today. */
     private function paidBilling(): Billing
     {
         $this->travelTo(self::PAGAMENTO);
@@ -61,12 +61,12 @@ class PaymentReversalTest extends TestCase
     }
 
     /**
-     * Cabeçalho por requisição, e não `withHeaders()`.
+     * The header per request, and not `withHeaders()`.
      *
-     * `withHeaders()` guarda o cabeçalho para TODAS as requisições seguintes do
-     * teste. Aqui isso é fatal: a chave do primeiro pagamento vazava para o
-     * estorno, que tem outro caminho, e o middleware respondia 422 de chave
-     * reaproveitada — a requisição "sem chave" levava a chave de outra.
+     * `withHeaders()` keeps the header for ALL of the test's following requests. Here that is
+     * fatal: the first payment's key leaked into the reversal, which has a different path, and
+     * the middleware answered 422 for a reused key — the "keyless" request was carrying
+     * another one's key.
      *
      * @param  array<string, string>  $headers
      */
@@ -81,7 +81,7 @@ class PaymentReversalTest extends TestCase
         return $this->postJson("/api/billings/{$billing->id}/payment", [], $headers);
     }
 
-    // --- a cobrança volta a pendente ----------------------------------
+    // --- the billing goes back to pending -----------------------------
 
     public function test_a_reversal_returns_the_billing_to_pending(): void
     {
@@ -109,12 +109,11 @@ class PaymentReversalTest extends TestCase
             ->assertJsonValidationErrors('status');
     }
 
-    // --- os valores congelados não somem ------------------------------
+    // --- the frozen amounts do not disappear --------------------------
 
     /**
-     * As colunas de pagamento são limpas, e o que foi pago continua escrito
-     * na trilha: é o `from` da entrada de estorno. A entrada do pagamento
-     * original também fica, intacta.
+     * The payment columns are cleared, and what was paid stays written in the trail: it is
+     * the reversal entry's `from`. The original payment's entry stays too, untouched.
      */
     public function test_the_reversed_payment_amounts_stay_in_the_trail(): void
     {
@@ -143,16 +142,16 @@ class PaymentReversalTest extends TestCase
     // --- os juros voltam a correr -------------------------------------
 
     /**
-     * Desde o vencimento original, e não de outra data.
+     * From the original due date, and not from some other date.
      *
-     * Havia três candidatas, e os números mostram a diferença em 15/06:
+     * There were three candidates, and the numbers show the difference on 15/06:
      *
      *   desde o vencimento (16/05), 30 dias   -> 1.020,00   <- a regra
      *   desde o pagamento  (20/05), 26 dias   -> 1.017,31
      *   desde o estorno    (15/06),  0 dias   -> 1.000,00
      *
-     * O pagamento que não se sustentou não aconteceu para o devedor: ele
-     * continua devendo desde o vencimento, e o estorno não pode virar desconto.
+     * A payment that did not hold up did not happen as far as the debtor is concerned: they
+     * still owe from the due date, and a reversal must not turn into a discount.
      */
     public function test_a_reversed_billing_accrues_interest_again_from_the_original_due_date(): void
     {
@@ -168,7 +167,7 @@ class PaymentReversalTest extends TestCase
             ->assertJsonPath('data.updated_amount', '1020.00');
     }
 
-    /** A face SQL tem que concordar: a listagem e o relatório calculam no SELECT. */
+    /** The SQL face has to agree: the listing and the report compute in the SELECT. */
     public function test_after_a_reversal_the_three_screens_agree(): void
     {
         $billing = $this->paidBilling();
@@ -208,16 +207,16 @@ class PaymentReversalTest extends TestCase
     // --- estorno e idempotência ---------------------------------------
 
     /**
-     * A chave do pagamento continua valendo depois do estorno, e isso é o
+     * The payment's key stays valid after the reversal, and that is the
      * certo.
      *
-     * Ela descreve a OPERAÇÃO de pagar, que aconteceu. Um retry atrasado dessa
-     * requisição — chegando depois do estorno — recebe o resultado original em
-     * vez de pagar de novo. Invalidar a chave no estorno transformaria esse
-     * retry exatamente no pagamento em dobro que a chave existe para impedir.
+     * It describes the ACT of paying, which happened. A late retry of that request — arriving
+     * after the reversal — receives the original result instead of paying again. Invalidating
+     * the key on reversal would turn that retry into exactly the double payment the key exists
+     * to prevent.
      *
-     * Tudo acontece no mesmo dia: a chave vale 24 horas, e viajar de maio a
-     * junho a venceria — o teste passaria pelo motivo errado.
+     * Everything happens on the same day: the key is valid for 24 hours, and travelling from
+     * May to June would expire it — the test would pass for the wrong reason.
      */
     public function test_replaying_the_payment_key_after_a_reversal_does_not_pay_again(): void
     {
@@ -241,9 +240,9 @@ class PaymentReversalTest extends TestCase
     }
 
     /**
-     * O estorno também é idempotente, e o caso que justifica é concreto:
-     * pagou, estornou, pagou de novo — e o retry atrasado do estorno chega.
-     * Sem a chave, ele estornaria o SEGUNDO pagamento, que ninguém pediu para
+     * The reversal is idempotent too, and the case that justifies it is concrete: paid,
+     * reversed, paid again — and then the reversal's late retry arrives. Without the key, it
+     * would reverse the SECOND payment, which nobody asked to
      * estornar.
      */
     public function test_a_late_reversal_retry_does_not_reverse_the_next_payment(): void

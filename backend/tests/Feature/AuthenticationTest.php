@@ -70,8 +70,8 @@ class AuthenticationTest extends TestCase
             ->assertJsonValidationErrors(['email', 'password']);
     }
 
-    // Os dois testes abaixo são um par. O 401 sozinho não prova que a rota
-    // funciona — provaria o mesmo se ela estivesse quebrada.
+    // The two tests below are a pair. The 401 on its own does not prove the route works — it
+    // would prove the same if the route were broken.
 
     public function test_a_protected_route_without_a_token_responds_401(): void
     {
@@ -98,13 +98,13 @@ class AuthenticationTest extends TestCase
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
 
-        // Em produção cada request é um processo novo; dentro de um teste o
-        // guard mantém o usuário já resolvido em memória. Sem esvaziar, a
-        // asserção abaixo passaria mesmo com o logout quebrado.
+        // In production each request is a fresh process; inside a test the guard keeps the
+        // already-resolved user in memory. Without flushing, the assertion below would pass even
+        // with logout broken.
         $this->app['auth']->forgetGuards();
 
-        // O mesmo token não pode mais abrir uma rota protegida: sem esta
-        // segunda asserção o teste provaria só que o endpoint responde 200.
+        // The same token must no longer open a protected route: without this second assertion the
+        // test would only prove the endpoint answers 200.
         $this->withToken($token)->getJson('/api/auth/me')->assertUnauthorized();
     }
 

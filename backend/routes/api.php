@@ -13,11 +13,10 @@ use App\Http\Controllers\Api\HealthController;
 use Illuminate\Support\Facades\Route;
 
 /*
- * Health para monitoramento: pública, porque sonda não faz login.
+ * Health for monitoring: public, because a probe does not log in.
  *
- * Fora de qualquer grupo autenticado de propósito. O `/up` do Laravel continua
- * existindo e responde só "o PHP subiu"; esta rota responde se as dependências
- * respondem.
+ * Outside any authenticated group on purpose. Laravel's `/up` still exists and only answers
+ * "PHP came up"; this route answers whether the dependencies answer.
  */
 Route::get('health', HealthController::class)->name('health');
 
@@ -31,11 +30,10 @@ Route::prefix('auth')->group(function () {
 });
 
 /*
- * Leitura: todo perfil autenticado.
+ * Reading: every authenticated role.
  *
- * Exportar está aqui de propósito — o arquivo é o mesmo relatório em outro
- * formato, e recusá-lo a quem pode ver a tela seria proteger o dado do lugar
- * errado.
+ * Exporting is here on purpose — the file is the same report in another format, and refusing
+ * it to someone who can see the screen would be protecting the data from the wrong place.
  */
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
@@ -60,11 +58,11 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 /*
- * Escrita: só o perfil de administrador.
+ * Writing: the administrator role only.
  *
- * O grupo existe para a lista de rotas que escrevem caber numa olhada. Rota
- * nova fora daqui salta aos olhos na revisão — e, se escapar, RoleAccessTest
- * não a cobre, que é o sinal seguinte.
+ * The group exists so the list of routes that write fits in one glance. A new route outside
+ * it jumps out in review — and, if it slips through, RoleAccessTest does not cover it, which
+ * is the next signal.
  */
 Route::middleware(['auth:sanctum', 'can.write'])->group(function () {
     Route::apiResource('customers', CustomerController::class)
@@ -80,14 +78,13 @@ Route::middleware(['auth:sanctum', 'can.write'])->group(function () {
         ->name('billings.import');
 
     /*
-     * As duas rotas idempotentes, e são as que precisam ser.
+     * The two idempotent routes, and they are the ones that need to be.
      *
-     * Nelas, repetir muda dinheiro de lugar: duplo clique no pagamento cobra
-     * duas vezes, e um retry atrasado do estorno — depois de a cobrança ter
-     * sido paga de novo — desfaz um pagamento que ninguém pediu para desfazer.
-     * Nas outras, o estrago de repetir é menor ou inexistente: criar dois
-     * clientes com o mesmo documento esbarra no índice único, e a importação
-     * de CSV já responde o relatório do que gravou.
+     * On these, repeating moves money around: a double click on the payment charges twice,
+     * and a late reversal retry — after the billing has been paid again — undoes a payment
+     * nobody asked to undo. On the others the damage from repeating is smaller or
+     * non-existent: creating two customers with the same document hits the unique index, and
+     * the CSV import already answers with a report of what it wrote.
      */
     Route::post('billings/{billing}/payment', [BillingController::class, 'pay'])
         ->middleware('idempotent')

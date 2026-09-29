@@ -17,10 +17,9 @@ class AuthController extends Controller
     public function login(LoginRequest $request, LoginThrottle $throttle): JsonResponse
     {
         /*
-         * O limite é verificado depois da validação, e isso é deliberado:
-         * requisição sem e-mail nem senha não é tentativa de autenticação, e
-         * contá-la deixaria um cliente com bug de formulário trancar o próprio
-         * usuário.
+         * The limit is checked after validation, and that is deliberate: a request with
+         * neither email nor password is not an authentication attempt, and counting it would
+         * let a client with a broken form lock out its own user.
          */
         $seconds = $throttle->blockedFor($request);
 
@@ -37,15 +36,15 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->validated('email'))->first();
 
-        // 401 e não 422: o payload é válido, o que falhou foi a autenticação.
-        // Mensagem única para e-mail inexistente e senha errada, para não
+        // 401 and not 422: the payload is valid, what failed was the authentication.
+        // A single message for an unknown email and a wrong password, so as not to
         // revelar quais e-mails existem.
         if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
             $throttle->record($request);
 
-            // O e-mail tentado vai para o log: sem ele não há como distinguir
-            // uma pessoa que errou a senha de uma varredura de contas, que é a
-            // pergunta que se faz ao investigar.
+            // The attempted email goes to the log: without it there is no way to tell someone
+            // who mistyped their password from a sweep across accounts, which is the question
+            // you ask when investigating.
             Log::warning('login.failed', ['email' => $request->validated('email')]);
 
             return response()->json(['message' => 'Credenciais inválidas.'], 401);
@@ -63,7 +62,7 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        // Revoga só o token desta sessão, não todos os do usuário.
+        // Revokes only this session's token, not all of the user's.
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Sessão encerrada.']);

@@ -32,10 +32,10 @@ class Billing extends Model
     use HasFactory;
 
     /**
-     * O default de `status` existe na migration, mas o banco só o aplica no
-     * INSERT: a instância recém-criada em memória ficaria com status nulo até
-     * ser relida, e serializá-la quebraria. Declarar aqui mantém o model
-     * consistente com o schema sem custo de round-trip.
+     * `status`'s default exists in the migration, but the database only applies it on the
+     * INSERT: a freshly created in-memory instance would have a null status until it was read
+     * back, and serialising it would break. Declaring it here keeps the model consistent with
+     * the schema at no round-trip cost.
      *
      * @var array<string, mixed>
      */
@@ -44,8 +44,8 @@ class Billing extends Model
     ];
 
     /**
-     * Os casts de dinheiro são `decimal`, que devolve string. É proposital:
-     * float perderia centavo, e o relatório soma milhões de linhas.
+     * The money casts are `decimal`, which returns a string. That is intentional: a float
+     * would lose cents, and the report sums millions of rows.
      *
      * @return array<string, mixed>
      */
@@ -64,9 +64,9 @@ class Billing extends Model
     }
 
     /**
-     * Vencida é condição derivada, não estado gravado: pendente com
-     * vencimento no passado. Este é o lado PHP da regra; o relatório precisa
-     * do mesmo em SQL para poder filtrar e ordenar no banco.
+     * Overdue is a derived condition, not a stored state: pending with the due date in the
+     * past. This is the PHP side of the rule; the report needs the same in SQL to be able to
+     * filter and sort in the database.
      */
     public function isOverdue(): bool
     {

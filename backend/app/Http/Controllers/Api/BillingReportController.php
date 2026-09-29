@@ -22,16 +22,16 @@ class BillingReportController extends Controller
             ->paginate($request->validated('per_page') ?? 25)
             ->withQueryString();
 
-        // Agregação separada, sobre o conjunto filtrado inteiro.
+        // A separate aggregation, over the whole filtered set.
         $totals = $report->totals($filters);
 
         return BillingResource::collection($billings)->additional([
             'totals' => $totals,
-            // Eco dos filtros: a tela reexibe e as exportações imprimem no
-            // cabeçalho do arquivo, a partir da mesma fonte.
+            // An echo of the filters: the screen re-displays them and the exports print them in
+            // the file's header, all from the same source.
             'filters' => $filters->toArray(),
-            // O teto do PDF desce junto para a tela poder avisar ANTES do
-            // clique, em vez de mandar o usuário para um 422.
+            // The PDF cap comes down too so the screen can warn BEFORE the click, instead of
+            // sending the user into a 422.
             'export' => [
                 'pdf_max_rows' => $pdf->maxRows(),
                 'pdf_available' => ! $pdf->exceedsLimit($totals['count']),

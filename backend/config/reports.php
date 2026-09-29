@@ -2,28 +2,28 @@
 
 return [
     /*
-     * Teto de linhas da exportação em PDF.
+     * The row cap for the PDF export.
      *
-     * PDF é limitado por natureza: o documento precisa ser paginado e montado
-     * inteiro antes de ser entregue, então não existe versão em streaming como
-     * a do CSV. Um relatório de centenas de milhares de linhas consumiria
-     * memória proporcional ao tamanho e produziria um arquivo que ninguém lê.
+     * PDF is limited by nature: the document has to be paginated and assembled whole before it
+     * can be delivered, so there is no streaming version like the CSV's. A report of hundreds
+     * of thousands of rows would consume memory proportional to its size and produce a file
+     * nobody reads.
      *
-     * Acima deste teto a API responde 422 orientando o uso do CSV, que não tem
-     * limite. É decisão de projeto documentada no README, não falha escondida.
+     * Above this cap the API answers 422 pointing at the CSV, which has no limit. It is a
+     * design decision documented in the README, not a hidden failure.
      *
-     * O valor saiu de medição, não de estimativa. Consumo do dompdf neste
-     * relatório, com nove colunas:
+     * The value came from measurement, not estimation. dompdf's consumption on this report,
+     * with nine columns:
      *
-     *     500 linhas ->   184 MB,   9,6s
-     *   1.000 linhas ->   420 MB,  17,9s
-     *   2.000 linhas -> 1.164 MB,  56,5s
-     *   3.500 linhas -> 2.965 MB, 210,0s
-     *   5.000 linhas -> estourou 3 GB
+     *     500 rows ->   184 MB,   9.6s
+     *   1,000 rows ->   420 MB,  17.9s
+     *   2,000 rows -> 1,164 MB,  56.5s
+     *   3,500 rows -> 2,965 MB, 210.0s
+     *   5,000 rows -> blew past 3 GB
      *
-     * O crescimento é superlinear: dobrar as linhas quase triplica a memória.
-     * Com memory_limit de 512M (ver docker/php/app.ini), mil linhas é o maior
-     * valor que cabe com folga.
+     * The growth is superlinear: doubling the rows almost triples the memory. With a
+     * memory_limit of 512M (see docker/php/app.ini), a thousand rows is the largest value that
+     * fits comfortably.
      */
     'pdf_max_rows' => (int) env('REPORT_PDF_MAX_ROWS', 1000),
 ];

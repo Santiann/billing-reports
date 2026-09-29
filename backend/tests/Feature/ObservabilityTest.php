@@ -11,18 +11,17 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Log estruturado e endpoint de health.
+ * Structured logging and the health endpoint.
  *
- * As duas coisas existem para a mesma pergunta: "o que aconteceu nesta
- * requisição?", feita depois, por quem não estava olhando. O log em JSON com um
- * identificador por requisição é o que permite responder; o health é o que o
- * monitoramento pergunta antes de alguém reclamar.
+ * Both exist for the same question: "what happened in this request?", asked afterwards, by
+ * someone who was not watching. The JSON log with one identifier per request is what makes an
+ * answer possible; health is what the monitoring asks before anyone complains.
  */
 class ObservabilityTest extends TestCase
 {
     use RefreshDatabase;
 
-    // --- identificador de requisição ----------------------------------
+    // --- the request identifier ---------------------------------------
 
     public function test_the_response_carries_a_request_identifier(): void
     {
@@ -34,10 +33,10 @@ class ObservabilityTest extends TestCase
     }
 
     /**
-     * Identificador vindo de fora é preservado.
+     * An identifier coming from outside is preserved.
      *
-     * Quem correlaciona é quem está na borda: o nginx já põe o seu no log de
-     * acesso, e gerar outro aqui quebraria a ligação entre as duas pontas.
+     * Whoever correlates is whoever sits at the edge: nginx already puts its own in the access
+     * log, and generating another here would break the link between the two ends.
      */
     public function test_an_identifier_from_outside_is_preserved(): void
     {
@@ -47,14 +46,14 @@ class ObservabilityTest extends TestCase
             ->assertHeader('X-Request-Id', 'id-da-borda-123');
     }
 
-    // --- o log em JSON ------------------------------------------------
+    // --- the JSON log -------------------------------------------------
 
     /**
-     * Uma linha de log é um objeto JSON, e traz o identificador e o usuário.
+     * A log line is a JSON object, and it carries the identifier and the user.
      *
-     * O teste redireciona o canal para um arquivo temporário e lê o que saiu.
-     * Afirmar sobre o formato exige olhar o formato — um mock do logger
-     * provaria que alguém chamou `Log::warning`, não que a linha é parseável.
+     * The test redirects the channel to a temporary file and reads what came out. Asserting about
+     * the format requires looking at the format — a mocked logger would prove someone called
+     * `Log::warning`, not that the line is parseable.
      */
     public function test_the_log_line_is_json_with_the_identifier_and_the_user(): void
     {
@@ -88,7 +87,7 @@ class ObservabilityTest extends TestCase
         $this->assertSame('api/billings', $ultima['context']['path']);
     }
 
-    /** Tentativa de login falha entra no log: é o rastro de força bruta. */
+    /** A failed login attempt goes into the log: it is the trail of brute force. */
     public function test_a_failed_login_attempt_is_logged(): void
     {
         $file = tempnam(sys_get_temp_dir(), 'log-json-');
@@ -123,17 +122,17 @@ class ObservabilityTest extends TestCase
             ->assertJsonPath('checks.cache.ok', true);
     }
 
-    /** Sem token: o monitoramento não faz login. */
+    /** No token: the monitoring does not log in. */
     public function test_health_is_public(): void
     {
         $this->getJson('/api/health')->assertOk();
     }
 
     /**
-     * Banco fora do ar responde 503, e não 200 com uma mentira.
+     * A database that is down answers 503, and not 200 with a lie.
      *
-     * Um health que responde 200 sempre é pior que nenhum: o monitoramento
-     * confia nele e para de avisar.
+     * A health check that always answers 200 is worse than none: the monitoring trusts it and
+     * stops warning.
      */
     public function test_health_responds_503_when_the_database_does_not_answer(): void
     {

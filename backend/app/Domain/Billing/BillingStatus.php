@@ -3,11 +3,10 @@
 namespace App\Domain\Billing;
 
 /**
- * Status armazenado de uma cobrança.
+ * A billing's stored status.
  *
- * "Vencida" não está aqui de propósito: é uma condição derivável
- * (`Pending` + vencimento no passado), não um estado gravado. Ver o comentário
- * na migration de billings.
+ * "Overdue" is deliberately absent: it is a derivable condition (`Pending` + due date in the
+ * past), not a stored state. See the comment in the billings migration.
  */
 enum BillingStatus: string
 {

@@ -3,22 +3,21 @@
 namespace Database\Seeders;
 
 /**
- * Os índices secundários de `billings`, com as colunas na ordem.
+ * `billings`'s secondary indexes, with their columns in order.
  *
- * Existe para o seeder de volume conseguir derrubá-los antes da carga e
- * recriá-los depois — e recriá-los CERTO mesmo quando uma execução anterior
- * morreu no meio. Ler as definições do banco na hora não serviria: se a carga
- * anterior foi interrompida com os índices derrubados, o banco já não sabe
- * mais quais eram.
+ * It exists so the volume seeder can drop them before the load and recreate them afterwards —
+ * and recreate them CORRECTLY even when a previous run died halfway. Reading the definitions
+ * from the database at that moment would not work: if the previous load was interrupted with
+ * the indexes dropped, the database no longer knows what they were.
  *
- * É uma cópia das migrations, e a cópia é vigiada: um teste compara esta lista
- * com o que as migrations criam de fato, e falha se as duas divergirem.
+ * It is a copy of the migrations, and the copy is watched: a test compares this list against
+ * what the migrations actually create, and fails if the two drift apart.
  */
 final class ReportIndexes
 {
     /**
-     * `nome => colunas na ordem`. A ordem importa: o MySQL lê o índice
-     * composto da esquerda para a direita.
+     * `name => columns in order`. The order matters: MySQL reads a composite index from left
+     * to right.
      *
      * @var array<string, array<int, string>>
      */
@@ -34,12 +33,11 @@ final class ReportIndexes
     ];
 
     /**
-     * Índice provisório que sustenta a chave estrangeira durante a carga.
+     * A temporary index that holds the foreign key up during the load.
      *
-     * `billings.customer_id` referencia `customers` e não tem índice próprio:
-     * o MySQL se apoia nos três índices que começam por `customer_id`.
-     * Derrubar os três faz o `DROP INDEX` ser recusado. O mesmo nome e o mesmo
-     * recurso que o `down()` da migration de índices usa.
+     * `billings.customer_id` references `customers` and has no index of its own: MySQL leans on
+     * the three indexes starting with `customer_id`. Dropping all three makes the `DROP INDEX`
+     * be refused. The same name and the same device the index migration's `down()` uses.
      */
     public const FOREIGN_KEY_SUPPORT = 'billings_customer_id_foreign';
 }

@@ -3,12 +3,12 @@
 namespace App\Domain\User;
 
 /**
- * Os dois perfis do sistema.
+ * The system's two roles.
  *
- * Dois, e não uma tabela de permissões: o que a especificação pede é a distinção entre
- * quem opera e quem consulta, e uma matriz de permissão por recurso seria
- * estrutura para um problema que este sistema não tem. Se um terceiro perfil
- * aparecer com regra própria, aí sim.
+ * Two, and not a permissions table: what the brief asks for is the distinction between whoever
+ * operates and whoever only looks, and a per-resource permission matrix would be structure for
+ * a problem this system does not have. If a third role shows up with rules of its own, then
+ * yes.
  */
 enum UserRole: string
 {

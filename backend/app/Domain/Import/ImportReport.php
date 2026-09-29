@@ -3,11 +3,11 @@
 namespace App\Domain\Import;
 
 /**
- * O que aconteceu com o arquivo.
+ * What happened to the file.
  *
- * Existe porque importação parcial é aceitável, e importação parcial só é
- * aceitável se o usuário souber exatamente o que entrou e o que não entrou.
- * Um contador de sucesso sozinho esconde a metade que importa.
+ * It exists because a partial import is acceptable, and a partial import is only acceptable if
+ * the user knows exactly what went in and what did not. A success counter on its own hides the
+ * half that matters.
  */
 final class ImportReport
 {
@@ -24,16 +24,15 @@ final class ImportReport
     public array $sample = [];
 
     /**
-     * Teto de erros guardados.
+     * The cap on stored errors.
      *
-     * Um arquivo com cabeçalho errado gera um erro por linha, e devolver cem
-     * mil deles não ajuda ninguém — nem o usuário, que não vai ler, nem o
-     * processo, que teria que segurar tudo em memória. A contagem continua
-     * exata; o que para de crescer é a lista.
+     * A file with the wrong header produces one error per row, and returning a hundred thousand
+     * of them helps nobody — not the user, who will not read them, nor the process, which would
+     * have to hold them all in memory. The count stays exact; what stops growing is the list.
      */
     public const MAX_ERRORS = 50;
 
-    /** Linhas mostradas na prévia. */
+    /** Rows shown in the preview. */
     public const MAX_SAMPLE = 10;
 
     /**

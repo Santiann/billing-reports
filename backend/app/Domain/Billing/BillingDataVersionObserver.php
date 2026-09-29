@@ -5,13 +5,13 @@ namespace App\Domain\Billing;
 use App\Models\Billing;
 
 /**
- * Sobe a versão dos dados a cada escrita de cobrança pelo Eloquent.
+ * Bumps the data version on every write to a billing through Eloquent.
  *
- * `updated`, e não `saved`: o `saved` dispara mesmo quando nada mudou, e uma
- * edição que não altera nada invalidaria o cache à toa.
+ * `updated`, and not `saved`: `saved` fires even when nothing changed, and an edit that
+ * alters nothing would invalidate the cache for no reason.
  *
- * O que não passa pelo Eloquent — a importação, que grava em lote, e o seeder
- * de volume — sobe a versão por conta própria.
+ * What does not go through Eloquent — the import, which writes in batches, and the volume
+ * seeder — bumps the version on its own.
  */
 final class BillingDataVersionObserver
 {

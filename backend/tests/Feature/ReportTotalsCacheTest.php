@@ -13,15 +13,15 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Cache dos totalizadores do relatório.
+ * The report's totals cache.
  *
- * Um cache de totais financeiros só é aceitável se nunca servir número velho.
- * Por isso a maior parte destes testes não é sobre o cache acertar — é sobre
- * ele ERRAR na hora certa: toda operação que muda uma cobrança tem que fazer
+ * A cache of financial totals is only acceptable if it never serves a stale number. That is why
+ * most of these tests are not about the cache being right — they are about it being WRONG at the
+ * right moment: every operation that changes a billing has to make
  * a consulta seguinte recalcular.
  *
- * A contagem que importa é a da consulta de agregação, reconhecida pelo alias
- * `total_count`: zero quando o cache serve, uma quando recalcula.
+ * The count that matters is the aggregation query's, recognised by the `total_count` alias: zero
+ * when the cache serves, one when it recomputes.
  */
 class ReportTotalsCacheTest extends TestCase
 {
@@ -63,7 +63,7 @@ class ReportTotalsCacheTest extends TestCase
     }
 
     /**
-     * Totais do relatório, e quantas agregações a chamada disparou.
+     * The report's totals, and how many aggregations the call fired.
      *
      * @param  array<string, mixed>  $filters
      * @return array{0: array<string, mixed>, 1: int}
@@ -94,9 +94,8 @@ class ReportTotalsCacheTest extends TestCase
     }
 
     /**
-     * Ordenação e página mudam as linhas, não o conjunto: os totais são os
-     * mesmos, e recalculá-los a cada clique de ordenação desperdiçaria o cache
-     * justamente no uso mais comum da tela.
+     * Sorting and paging change the rows, not the set: the totals are the same, and recomputing
+     * them on every sort click would waste the cache on the screen's most common use.
      */
     public function test_sorting_and_paginating_reuse_the_totals(): void
     {
@@ -124,7 +123,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame(2, $totaisB['count']);
     }
 
-    /** O que sai do cache é exatamente o que a consulta calcularia. */
+    /** What comes out of the cache is exactly what the query would compute. */
     public function test_the_cached_totals_match_the_queried_ones(): void
     {
         $this->billing();
@@ -192,7 +191,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame('2000.00', $after['original_amount']);
     }
 
-    /** Alteração fora de requisição também invalida: ela passa pela trilha. */
+    /** A change outside a request invalidates too: it goes through the trail. */
     public function test_a_change_from_the_console_invalidates_the_totals(): void
     {
         $billing = $this->billing();
@@ -226,7 +225,7 @@ class ReportTotalsCacheTest extends TestCase
         $this->assertSame(2, $after['count']);
     }
 
-    /** A importação grava por insert em lote, sem passar pelo Eloquent. */
+    /** The import writes through batch inserts, without going through Eloquent. */
     public function test_an_import_invalidates_the_totals(): void
     {
         $cliente = $this->customer('33333333000133');
@@ -250,10 +249,10 @@ class ReportTotalsCacheTest extends TestCase
     }
 
     /**
-     * Os juros mudam com o dia, sem nenhuma escrita.
+     * The interest changes with the day, with no write at all.
      *
-     * Nenhuma invalidação por evento pega isto — não houve evento. É a data de
-     * referência dentro da chave que faz o total de amanhã ser outro.
+     * No event-based invalidation catches this — there was no event. It is the reference date
+     * inside the key that makes tomorrow's total a different one.
      */
     public function test_the_day_rolling_over_recomputes_the_interest(): void
     {
@@ -271,7 +270,7 @@ class ReportTotalsCacheTest extends TestCase
 
     // --- os outros consumidores ---------------------------------------
 
-    /** O CSV imprime os totais no rodapé, e aproveita os que a tela já calculou. */
+    /** The CSV prints the totals in the footer, reusing the ones the screen already computed. */
     public function test_the_csv_export_reuses_the_totals_from_the_screen(): void
     {
         $this->billing();

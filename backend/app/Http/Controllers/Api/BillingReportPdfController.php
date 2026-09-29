@@ -18,10 +18,9 @@ class BillingReportPdfController extends Controller
     ): StreamedResponse|JsonResponse {
         $filters = $request->filters();
 
-        // Os totais vêm primeiro porque a contagem deles é o que decide se o
-        // PDF pode ser gerado — e são reaproveitados no rodapé, sem consulta
-        // extra. Contar assim evita carregar linha nenhuma para descobrir que
-        // são linhas demais.
+        // The totals come first because their count is what decides whether the PDF can be
+        // generated — and they are reused in the footer, with no extra query. Counting this way
+        // avoids loading a single row only to discover there are too many.
         $totals = $report->totals($filters);
 
         if ($export->exceedsLimit($totals['count'])) {

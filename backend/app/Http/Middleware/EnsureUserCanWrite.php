@@ -7,23 +7,22 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Barra a escrita para quem tem perfil de consulta.
+ * Blocks writing for whoever holds the read-only role.
  *
- * Middleware e não Policy, e a escolha tem motivo: Policy resolve autorização
- * POR REGISTRO — "este usuário pode editar ESTA cobrança". A regra aqui é por
- * PERFIL e vale para todo registro, então amarrá-la ao grupo de rotas deixa a
- * lista de endpoints protegidos visível num arquivo só, em vez de espalhada
- * por uma classe de política para cada model.
+ * Middleware and not a Policy, and the choice has a reason: a Policy resolves authorisation PER
+ * RECORD — "this user may edit THIS billing". The rule here is per ROLE and holds for every
+ * record, so tying it to the route group keeps the list of protected endpoints visible in a
+ * single file, instead of scattered across one policy class per model.
  *
- * O ganho prático é o `routes/api.php`: dá para ler quais rotas escrevem
- * olhando o arquivo, e uma rota nova fora do grupo salta aos olhos.
+ * The practical gain is `routes/api.php`: you can read which routes write by looking at the
+ * file, and a new route outside the group jumps out.
  */
 class EnsureUserCanWrite
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // A ausência de usuário é problema do `auth:sanctum`, que roda antes e
-        // responde 401. Chegar aqui sem usuário significaria middleware fora de
+        // The absence of a user is `auth:sanctum`'s problem, which runs before and answers 401.
+        // Arriving here with no user would mean middleware out of
         // ordem, e responder 403 esconderia esse erro.
         $user = $request->user();
 

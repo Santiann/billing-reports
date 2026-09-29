@@ -10,16 +10,16 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * `report:explain` — o plano de execução do relatório como ferramenta.
+ * `report:explain` — the report's execution plan as a tool.
  *
- * As medições de índice do README foram feitas na mão, colando consultas no
- * cliente do MySQL. O problema não é o trabalho: é que a consulta colada à mão
- * pode não ser mais a que o código roda. Este comando pega as consultas do
- * MESMO caminho que a API usa — inclusive a paginação — e explica cada uma.
+ * The README's index measurements were made by hand, pasting queries into the MySQL client. The
+ * problem is not the effort: it is that the hand-pasted query may no longer be the one the code
+ * runs. This command takes the queries from the SAME path the API uses — pagination included —
+ * and explains each one.
  *
- * O que os testes afirmam é o contrato do comando: quais consultas ele
- * encontra, que ele não é enganado pelo cache dos totalizadores, e que recusa
- * opção inválida em vez de silenciosamente cair no default.
+ * What the tests assert is the command's contract: which queries it finds, that it is not fooled
+ * by the totals cache, and that it refuses an invalid option instead of silently falling back to
+ * the default.
  */
 class ReportExplainCommandTest extends TestCase
 {
@@ -30,7 +30,7 @@ class ReportExplainCommandTest extends TestCase
         Billing::factory()->count($quantidade)->create();
     }
 
-    // --- o que ele encontra -------------------------------------------
+    // --- what it finds ------------------------------------------------
 
     public function test_explains_the_report_queries(): void
     {
@@ -43,16 +43,16 @@ class ReportExplainCommandTest extends TestCase
             ->expectsOutputToContain('Totalizadores');
     }
 
-    /** O SQL vai impresso: é o que permite conferir se é o que se pensava. */
+    /** The SQL gets printed: it is what lets you check whether it is what you thought. */
     public function test_prints_the_sql_and_the_plan_of_each_query(): void
     {
         $this->billings();
 
         $this->artisan('report:explain')
             ->assertExitCode(0)
-            // A agregação dos totalizadores, reconhecível pelo alias.
+            // The totals' aggregation, recognisable by its alias.
             ->expectsOutputToContain('total_count')
-            // Colunas do EXPLAIN do MySQL.
+            // MySQL EXPLAIN columns.
             ->expectsOutputToContain('possible_keys');
     }
 
@@ -75,15 +75,14 @@ class ReportExplainCommandTest extends TestCase
     }
 
     /**
-     * O comando explica a CONSULTA, então não pode ser servido pelo cache dos
-     * totalizadores — senão a agregação desapareceria justamente da ferramenta
-     * feita para olhá-la.
+     * The command explains the QUERY, so it cannot be served from the totals cache — otherwise
+     * the aggregation would vanish from the very tool built to look at it.
      */
     public function test_the_totals_cache_does_not_hide_the_aggregation(): void
     {
         $this->billings();
 
-        // Aquece o cache pelo mesmo caminho da API.
+        // Warms the cache through the same path as the API.
         app(BillingReportQuery::class)->totals(new BillingReportFilters());
 
         $this->artisan('report:explain')
@@ -93,7 +92,7 @@ class ReportExplainCommandTest extends TestCase
 
     // --- EXPLAIN ANALYZE ----------------------------------------------
 
-    /** Com `--analyze`, o MySQL executa e devolve o tempo real por operação. */
+    /** With `--analyze`, MySQL executes and returns the actual time per operation. */
     public function test_analyze_brings_the_actual_time_of_each_operation(): void
     {
         $this->billings();
@@ -104,11 +103,11 @@ class ReportExplainCommandTest extends TestCase
     }
 
     /**
-     * Com `--literals`, o mesmo SQL é explicado com os valores embutidos.
+     * With `--literals`, the same SQL is explained with the values inlined.
      *
-     * Serve a uma pergunta concreta que a medição do cache deixou aberta: a
-     * aplicação manda as datas como parâmetro vinculado, e a medição à mão as
-     * mandou literais. Se o plano mudar, é aqui que aparece.
+     * It serves a concrete question the cache measurement left open: the application sends the
+     * dates as bound parameters, and the hand-made measurement sent them as literals. If the
+     * plan changes, this is where it shows.
      */
     public function test_literals_also_explains_with_the_values_inlined(): void
     {
@@ -127,12 +126,12 @@ class ReportExplainCommandTest extends TestCase
     // --- recusas ------------------------------------------------------
 
     /**
-     * Opção inválida falha em voz alta.
+     * An invalid option fails loudly.
      *
-     * O objeto de filtros descarta valor fora da allowlist e cai no default —
-     * proteção certa para a API, porque o valor vira nome de coluna em SQL. Num
-     * comando de diagnóstico, cair no default em silêncio faria alguém medir o
-     * recorte errado e não descobrir.
+     * The filters object discards a value outside the allowlist and falls back to the default —
+     * the right protection for the API, because the value becomes a column name in SQL. In a
+     * diagnostic command, silently falling back to the default would have someone measure the
+     * wrong scope and never find out.
      */
     public function test_an_invalid_date_basis_is_refused(): void
     {

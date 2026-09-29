@@ -9,28 +9,28 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * Importa clientes de um CSV.
+ * Imports customers from a CSV.
  *
- * Três decisões governam esta classe:
+ * Three decisions govern this class:
  *
- * **Linha inválida não aborta o arquivo.** As boas entram, as ruins voltam
- * nomeadas com a linha e o motivo. Abortar tudo por causa de um e-mail errado
- * na linha 47 obrigaria o usuário a corrigir e reenviar o arquivo inteiro.
+ * **An invalid row does not abort the file.** The good ones go in, the bad ones come back
+ * named with the line and the reason. Aborting everything because of a wrong email on line
+ * 47 would force the user to fix and resend the whole file.
  *
- * **A validação é a mesma da tela.** As regras vêm daqui em vez de do
- * FormRequest porque o import não tem requisição por linha, mas são as mesmas
- * regras — documento de 11 ou 14 dígitos, e-mail válido, documento único.
- * Duas listas de regras divergiriam no primeiro ajuste.
+ * **The validation is the same as the screen's.** The rules come from here rather than from
+ * the FormRequest because the import has no request per row, but they are the same rules —
+ * a document of 11 or 14 digits, a valid email, a unique document. Two lists of rules would
+ * drift apart at the first adjustment.
  *
- * **Insert em lote, com a unicidade checada antes.** Uma consulta por linha
- * seria lenta, e um insert em lote sem checar estouraria a unique do banco e
- * derrubaria o bloco inteiro por causa de uma linha. O lote checa os documentos
- * do bloco contra o banco numa consulta só, e contra si mesmo num conjunto em
- * memória — que guarda documentos, não linhas.
+ * **Batch inserts, with uniqueness checked beforehand.** One query per row would be slow,
+ * and a batch insert without checking would hit the database's unique index and bring the
+ * whole block down because of one row. The batch checks the block's documents against the
+ * database in a single query, and against itself in an in-memory set — which holds
+ * documents, not rows.
  */
 final class CustomerCsvImport
 {
-    /** Linhas por INSERT, e por consulta de unicidade. */
+    /** Rows per INSERT, and per uniqueness query. */
     private const BATCH = 500;
 
     private const COLUMNS = [
@@ -40,7 +40,7 @@ final class CustomerCsvImport
         'status' => ['status', 'situacao'],
     ];
 
-    /** Status aceito nos dois idiomas, porque o arquivo pode vir de qualquer lado. */
+    /** Status accepted in both languages, because the file can come from anywhere. */
     private const STATUS = [
         'ativo' => 'active',
         'active' => 'active',
@@ -64,7 +64,7 @@ final class CustomerCsvImport
         $reader = new CsvReader(self::COLUMNS, ['name', 'document', 'email']);
         $report = new ImportReport();
 
-        /** @var array<string, int> documento => linha em que apareceu */
+        /** @var array<string, int> document => the line it appeared on */
         $seen = [];
         $batch = [];
         $now = now();
@@ -108,12 +108,12 @@ final class CustomerCsvImport
     }
 
     /**
-     * Fecha um lote: tira os que já existem no banco e grava o resto.
+     * Closes a batch: drops the ones that already exist in the database and writes the rest.
      *
-     * A checagem acontece aqui, e não linha a linha, porque uma consulta por
-     * linha transformaria um arquivo de dez mil clientes em dez mil consultas.
+     * The check happens here, and not row by row, because one query per row would turn a
+     * ten-thousand-customer file into ten thousand queries.
      *
-     * @param  array<int, array<string, mixed>>  $batch  linha => valores
+     * @param  array<int, array<string, mixed>>  $batch  line => values
      */
     private function flush(array $batch, ImportReport $report, bool $store): void
     {
@@ -157,8 +157,8 @@ final class CustomerCsvImport
 
         return [
             'name' => trim($values['name'] ?? ''),
-            // Só dígitos, como na tela: a busca não pode depender da máscara
-            // que veio na planilha.
+            // Digits only, as on the screen: the search cannot depend on whatever
+            // formatting came in the spreadsheet.
             'document' => preg_replace('/\D/', '', $values['document'] ?? '') ?? '',
             'email' => mb_strtolower(trim($values['email'] ?? '')),
             'status' => self::STATUS[$status] ?? $status,

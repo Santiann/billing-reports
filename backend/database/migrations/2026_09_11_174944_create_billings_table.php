@@ -11,48 +11,48 @@ return new class extends Migration
         Schema::create('billings', function (Blueprint $table) {
             $table->id();
 
-            // restrictOnDelete: cobrança é registro financeiro. Apagar um
-            // cliente não pode evaporar o histórico de faturamento dele.
+            // restrictOnDelete: a billing is a financial record. Deleting a customer
+            // must not evaporate their billing history.
             $table->foreignId('customer_id')->constrained()->restrictOnDelete();
 
             $table->string('description');
 
-            // DECIMAL, nunca FLOAT. Dinheiro em ponto flutuante acumula erro
-            // de centavo, e o relatório soma milhões de linhas.
+            // DECIMAL, never FLOAT. Money in floating point accumulates cent-level
+            // error, and the report sums millions of rows.
             $table->decimal('original_amount', 12, 2);
 
-            // Taxa mensal como fração: 0.0200 = 2% ao mês.
+            // The monthly rate as a fraction: 0.0200 = 2% a month.
             $table->decimal('monthly_interest_rate', 6, 4)->default(0);
 
-            // As três datas que o usuário pode escolher como base do período.
+            // The three dates the user can choose as the period's basis.
             $table->date('issue_date');
             $table->date('due_date');
             $table->date('payment_date')->nullable();
 
-            // "Vencida" NÃO é status armazenado: é derivável de
-            // status = 'pending' AND due_date < a data de referência.
-            // Guardá-la exigiria um job diário virando linhas de pendente
-            // para vencida, e entre duas execuções a coluna estaria mentindo.
-            // Derivar é sempre correto e não custa escrita.
+            // "Overdue" is NOT a stored status: it is derivable from
+            // status = 'pending' AND due_date < the reference date.
+            // Storing it would require a daily job flipping rows from pending to
+            // overdue, and between two runs the column would be lying. Deriving is
+            // always correct and costs no writes.
             //
-            // A data de referência desce do PHP, e não de CURDATE(): o relógio
-            // do MySQL não se move com travelTo(), e o teste de consistência
-            // nunca fecharia. Ver InterestCalculator::overdueSql().
+            // The reference date comes down from PHP, not from CURDATE(): MySQL's clock
+            // does not move with travelTo(), and the consistency test would never close.
+            // See InterestCalculator::overdueSql().
             $table->string('status', 20)->default('pending');
 
-            // Congelamento no ato do pagamento.
+            // Freezing at the moment of payment.
             //
-            // Cobrança paga não acumula juros: o valor exibido vem daqui e
-            // nunca de recálculo. Sem estas colunas, uma cobrança paga com
-            // atraso mudaria de valor a cada dia que passasse.
+            // A paid billing accrues no interest: the displayed amount comes from here and
+            // never from a recompute. Without these columns, a billing paid late would
+            // change value with every day that passed.
             $table->decimal('paid_amount', 12, 2)->nullable();
             $table->decimal('paid_interest_amount', 12, 2)->nullable();
 
             $table->timestamps();
 
-            // Índices compostos do relatório entram na etapa própria
-            // (feat: add report indexes), junto da query que cada um serve.
-            // Aqui fica só o que a integridade do schema já exige.
+            // The report's composite indexes come in their own step
+            // (feat: add report indexes), each alongside the query it serves. Only what
+            // the schema's integrity already requires stays here.
         });
     }
 

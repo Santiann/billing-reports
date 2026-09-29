@@ -22,13 +22,13 @@ class BillingController extends Controller
 {
     public function index(IndexBillingRequest $request): AnonymousResourceCollection
     {
-        // Eager loading do cliente: a listagem exibe o nome, e sem isto seria
-        // um SELECT por linha ao serializar.
+        // Eager loading the customer: the listing shows the name, and without this it would
+        // be one SELECT per row while serialising.
         $query = Billing::query()->with('customer');
 
-        // Face SQL do cálculo de juros. O valor atualizado sai do próprio
-        // SELECT, e é isso que vai permitir ORDENAR por ele e SOMÁ-LO sobre o
-        // conjunto filtrado inteiro sem carregar nada em memória.
+        // The SQL face of the interest calculation. The updated amount comes out of the SELECT
+        // itself, and that is what will make it possible to SORT by it and SUM it over the whole
+        // filtered set without loading anything into memory.
         $calculator = new InterestCalculator();
 
         $query->select('billings.*')
@@ -47,9 +47,8 @@ class BillingController extends Controller
             $query->where('description', 'like', "%{$search}%");
         }
 
-        // Default por `id desc`: é a chave primária, então ordenar por ela não
-        // custa filesort. As outras colunas de ordenação ganham índice na
-        // etapa de índices do relatório.
+        // Defaults to `id desc`: it is the primary key, so sorting by it costs no filesort. The
+        // other sortable columns get their index in the report indexes step.
         $query->orderBy(
             $request->validated('sort') ?? 'id',
             $request->validated('direction') ?? 'desc',
@@ -62,8 +61,8 @@ class BillingController extends Controller
 
     public function store(StoreBillingRequest $request): JsonResponse
     {
-        // Em transação: a versão dos dados sobe junto com o INSERT, e o cache
-        // dos totalizadores nunca enxerga a cobrança nova sem a versão nova.
+        // In a transaction: the data version goes up along with the INSERT, and the totals cache
+        // never sees the new billing without the new version.
         $billing = DB::transaction(fn () => Billing::create($request->validated()));
 
         return BillingResource::make($billing->load('customer'))
@@ -78,15 +77,15 @@ class BillingController extends Controller
 
     public function update(UpdateBillingRequest $request, Billing $billing): BillingResource
     {
-        // `updateOrFail` abre transação: a trilha é gravada dentro dela, e sem
-        // trilha a edição não fica.
+        // `updateOrFail` opens a transaction: the trail is written inside it, and without the
+        // trail the edit does not stick.
         $billing->updateOrFail($request->validated());
 
         return BillingResource::make($billing->load('customer'));
     }
 
     /**
-     * Estorna o pagamento: pendente de novo, juros desde o vencimento original.
+     * Reverses the payment: pending again, interest from the original due date.
      */
     public function reverse(
         ReversePaymentRequest $request,
@@ -99,7 +98,7 @@ class BillingController extends Controller
     }
 
     /**
-     * A trilha de auditoria, da alteração mais recente para a mais antiga.
+     * The audit trail, newest change first.
      */
     public function audit(Billing $billing): AnonymousResourceCollection
     {
@@ -109,7 +108,7 @@ class BillingController extends Controller
     }
 
     /**
-     * Registra o pagamento e congela os juros na data informada.
+     * Records the payment and freezes the interest at the given date.
      */
     public function pay(
         RegisterPaymentRequest $request,

@@ -13,17 +13,17 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Importação de cobranças por CSV.
+ * Importing billings from a CSV.
  *
- * Mesma estrutura da importação de clientes, com duas regras a mais que são o
+ * The same structure as the customer import, with two extra rules that are the
  * assunto destes testes:
  *
- *   O cliente é resolvido por DOCUMENTO. O arquivo vem de fora e não conhece o
- *   id interno; documento é a identidade de negócio que as duas pontas têm.
+ *   The customer is resolved by DOCUMENT. The file comes from outside and does not know the
+ *   internal id; the document is the business identity both ends have.
  *
- *   Cobrança importada NASCE PENDENTE, como a cadastrada pela tela. Status e
- *   valores de pagamento não são aceitos do arquivo — quem faz essa transição é
- *   o registro de pagamento, que grava os valores congelados junto.
+ *   An imported billing IS BORN PENDING, like one created through the screen. Status and payment
+ *   amounts are not accepted from the file — what makes that transition is recording a payment,
+ *   which writes the frozen amounts along with it.
  */
 class BillingCsvImportTest extends TestCase
 {
@@ -44,7 +44,7 @@ class BillingCsvImportTest extends TestCase
         return Customer::factory()->create(['document' => $documento]);
     }
 
-    // --- proteção -----------------------------------------------------
+    // --- protection ---------------------------------------------------
 
     public function test_importing_requires_authentication(): void
     {
@@ -68,7 +68,7 @@ class BillingCsvImportTest extends TestCase
         $this->assertSame(0, Billing::query()->count());
     }
 
-    // --- resolução do cliente -----------------------------------------
+    // --- resolving the customer ---------------------------------------
 
     public function test_the_customer_is_resolved_by_document(): void
     {
@@ -85,7 +85,7 @@ class BillingCsvImportTest extends TestCase
         $this->assertSame($cliente->id, Billing::query()->value('customer_id'));
     }
 
-    /** O documento pode vir com máscara, como na importação de clientes. */
+    /** The document may arrive formatted, as in the customer import. */
     public function test_a_formatted_document_still_finds_the_customer(): void
     {
         $this->actingAsUser();
@@ -123,7 +123,7 @@ class BillingCsvImportTest extends TestCase
         );
     }
 
-    // --- a cobrança nasce pendente ------------------------------------
+    // --- the billing is born pending ----------------------------------
 
     public function test_an_imported_billing_is_born_pending(): void
     {
@@ -146,9 +146,9 @@ class BillingCsvImportTest extends TestCase
     }
 
     /**
-     * Coluna de status ou de pagamento no arquivo é IGNORADA, não aceita.
-     * Aceitar criaria cobrança paga sem os valores congelados — o mesmo motivo
-     * pelo qual o formulário de cadastro não tem esses campos.
+     * A status or payment column in the file is IGNORED, not accepted. Accepting it would create
+     * a paid billing without the frozen amounts — the same reason the create form does not have
+     * those fields.
      */
     public function test_status_and_payment_coming_from_the_file_are_ignored(): void
     {
@@ -168,7 +168,7 @@ class BillingCsvImportTest extends TestCase
         $this->assertNull($billing->paid_amount);
     }
 
-    // --- formatos que vêm de planilha ---------------------------------
+    // --- formats that come out of spreadsheets ------------------------
 
     public function test_accepts_an_amount_in_brazilian_format(): void
     {
@@ -232,9 +232,8 @@ class BillingCsvImportTest extends TestCase
     }
 
     /**
-     * A mesma cobrança pode ser importada duas vezes: cobrança não tem chave
-     * natural. Duas mensalidades do mesmo cliente, mesmo valor e mesmo
-     * vencimento, são duas cobranças legítimas.
+     * The same billing can be imported twice: a billing has no natural key. Two monthly charges
+     * for the same customer, the same amount and the same due date, are two legitimate billings.
      */
     public function test_identical_rows_create_two_billings(): void
     {
@@ -253,9 +252,9 @@ class BillingCsvImportTest extends TestCase
     }
 
     /**
-     * Mil cobranças espalhadas por cem clientes: o que se afirma é que a
-     * resolução do cliente NÃO vira uma consulta por linha. Sem o lote, este
-     * arquivo dispararia mil consultas.
+     * A thousand billings spread across a hundred customers: what gets asserted is that
+     * resolving the customer does NOT become one query per row. Without batching, this file would
+     * fire a thousand queries.
      */
     public function test_imports_a_large_file_without_a_query_per_row(): void
     {
@@ -286,8 +285,8 @@ class BillingCsvImportTest extends TestCase
         DB::disableQueryLog();
 
         $this->assertSame(1_000, Billing::query()->count());
-        // Dois lotes de 500: uma consulta de clientes e um insert por lote,
-        // mais o token da sessão. Longe das mil que uma consulta por linha daria.
+        // Two batches of 500: one customer query and one insert per batch, plus the session's
+        // token. A long way from the thousand one query per row would give.
         $this->assertLessThan(20, $consultas, "Foram {$consultas} consultas.");
     }
 }
