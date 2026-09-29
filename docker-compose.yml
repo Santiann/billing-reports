@@ -23,8 +23,8 @@ services:
       - --innodb-buffer-pool-size=1G
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: faturamento
-      MYSQL_USER: faturamento
+      MYSQL_DATABASE: billing
+      MYSQL_USER: billing
       MYSQL_PASSWORD: secret
     volumes:
       - mysql_data:/var/lib/mysql

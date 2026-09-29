@@ -42,8 +42,8 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: faturamento_test
-          MYSQL_USER: faturamento
+          MYSQL_DATABASE: billing_test
+          MYSQL_USER: billing
           MYSQL_PASSWORD: secret
         # O job roda no runner, não dentro de um container, então a porta
         # precisa ser publicada: o rótulo `mysql` só resolve entre containers

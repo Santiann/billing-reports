@@ -330,7 +330,7 @@ publicá-la é a forma mais fácil de colidir com um MySQL já rodando na máqui
 de quem avalia. Para inspecionar o banco:
 
 ```bash
-docker compose exec mysql mysql -u faturamento -psecret faturamento
+docker compose exec mysql mysql -u billing -psecret billing
 ```
 
 **Tailwind CSS no frontend.** Veio no scaffold padrão do `create-next-app`. A

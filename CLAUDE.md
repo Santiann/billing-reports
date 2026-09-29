@@ -124,7 +124,7 @@ asserção sobre PDF).
 **A suíte roda em MySQL, não em SQLite.** O skeleton do Laravel vem apontado
 para `sqlite/:memory:`, e isso inviabilizaria o teste de consistência: em
 SQLite a face SQL validaria outro motor — `POW()` nem existe por padrão. O
-banco é o `faturamento_test`, criado pelo init do container, e a consequência é
+banco é o `billing_test`, criado pelo init do container, e a consequência é
 que a suíte roda dentro dele:
 
 ```

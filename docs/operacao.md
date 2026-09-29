@@ -335,7 +335,7 @@ os minutos da suíte para falhar.
 | Frontend | Node 22, `npm ci`, `next typegen`, `tsc --noEmit`, `eslint` |
 
 As versões e as extensões não foram escolhidas de novo: são as dos Dockerfiles,
-e o banco da suíte é o `faturamento_test` com as credenciais que o
+e o banco da suíte é o `billing_test` com as credenciais que o
 `phpunit.xml` espera. O `MYSQL_DATABASE` do serviço cria o banco no primeiro
 boot, o que dispensa no CI o script de init que o Compose usa.
 

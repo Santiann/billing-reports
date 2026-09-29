@@ -1,16 +1,16 @@
--- Banco separado para a suíte de testes.
+-- Separate database for the test suite.
 --
--- Os testes PRECISAM rodar em MySQL, não em SQLite: a regra central deste
--- projeto é que o valor atualizado de uma cobrança seja calculável em SQL, e o
--- teste de consistência compara a face SQL do InterestCalculator com a face
--- PHP. Em SQLite esse teste validaria um motor que não é o de produção —
--- POW(), DATEDIFF() e a precisão de DECIMAL se comportam de outro jeito.
+-- The tests MUST run on MySQL, not SQLite: the central rule of this project is
+-- that a billing's updated value is computable in SQL, and the consistency test
+-- compares the SQL face of InterestCalculator against the PHP face. On SQLite
+-- that test would be validating an engine that is not the production one —
+-- POW(), DATEDIFF() and DECIMAL precision all behave differently.
 --
--- Banco à parte do de desenvolvimento porque RefreshDatabase derruba e recria
--- o schema a cada execução.
-CREATE DATABASE IF NOT EXISTS faturamento_test
+-- Kept apart from the development database because RefreshDatabase drops and
+-- recreates the schema on every run.
+CREATE DATABASE IF NOT EXISTS billing_test
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
-GRANT ALL PRIVILEGES ON faturamento_test.* TO 'faturamento'@'%';
+GRANT ALL PRIVILEGES ON billing_test.* TO 'billing'@'%';
 FLUSH PRIVILEGES;

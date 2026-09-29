@@ -115,7 +115,7 @@ tabela vazia, o `TRUNCATE` só teria o custo.
 
 ### Banco de testes
 
-O banco da suíte é o `faturamento_test`, separado do de desenvolvimento porque
+O banco da suíte é o `billing_test`, separado do de desenvolvimento porque
 `RefreshDatabase` derruba e recria o schema a cada execução. Ele é criado no
 first-init do MySQL por `docker/mysql/init/01-create-test-database.sql`. Em um
 volume que já existe, o init script não roda — aplique o arquivo à mão:

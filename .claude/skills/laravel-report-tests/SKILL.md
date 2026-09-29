@@ -136,7 +136,7 @@ $this->postJson($uri, $corpo, ['Idempotency-Key' => $chave]);
   fica em `tests/Unit` mas toca o banco, porque a face SQL só existe dentro do
   MySQL; e `ReportIndexTest` fica em `tests/Feature` sem passar por HTTP,
   porque o que ele verifica é o schema.
-- A suíte roda em **MySQL**, no banco `faturamento_test`. Em SQLite a face SQL
+- A suíte roda em **MySQL**, no banco `billing_test`. Em SQLite a face SQL
   do calculador validaria outro motor — `POW()` nem existe por padrão.
 - `RefreshDatabase`, e factories com states nomeados (`overdue()`, `paid()`,
   `paidLate()`) em vez de montar datas na mão dentro de cada teste.

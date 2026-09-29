@@ -33,8 +33,8 @@
         <env name="DB_CONNECTION" value="mysql"/>
         <env name="DB_HOST" value="mysql"/>
         <env name="DB_PORT" value="3306"/>
-        <env name="DB_DATABASE" value="faturamento_test"/>
-        <env name="DB_USERNAME" value="faturamento"/>
+        <env name="DB_DATABASE" value="billing_test"/>
+        <env name="DB_USERNAME" value="billing"/>
         <env name="DB_PASSWORD" value="secret"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
