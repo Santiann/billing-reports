@@ -170,7 +170,7 @@ de virar código. As três estão contadas em
 | [docs/testes.md](docs/testes.md) | Suíte, cobertura nomeada linha a linha e testes de ponta a ponta |
 | [docs/ia.md](docs/ia.md) | Uso de IA: as skills, o que elas evitaram e onde as instruções estavam erradas |
 | [docs/producao.md](docs/producao.md) | O que ficaria para produção, com número ao lado |
-| [docs/requisitos.md](docs/requisitos.md) | A especificação funcional e técnica que o projeto responde, na íntegra |
+| [docs/requisitos.md](docs/requisitos.md) | O escopo que o projeto responde, resumido |
 
 ## Uso de inteligência artificial
 
