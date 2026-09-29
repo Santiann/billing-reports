@@ -1,60 +1,59 @@
-# Operação: executar, observar, proteger
+# Operations: running it, watching it, protecting it
 
 [← README](../README.md)
 
-- [Como executar](#como-executar)
-- [Documentação da API](#documentação-da-api)
-- [Integração contínua](#integração-contínua)
-- [Log estruturado](#log-estruturado)
+- [Running it](#running-it)
+- [API documentation](#api-documentation)
+- [Continuous integration](#continuous-integration)
+- [Structured logging](#structured-logging)
 - [Health check](#health-check)
-- [Rate limit no login](#rate-limit-no-login)
-- [Revisão de segurança](#revisão-de-segurança)
+- [Login rate limiting](#login-rate-limiting)
+- [Security review](#security-review)
 
-## Como executar
+## Running it
 
-Pré-requisito único: **Docker com Compose v2**. Não é preciso ter PHP, Node ou
-MySQL instalados.
+The only prerequisite is **Docker with Compose v2**. You do not need PHP, Node or
+MySQL installed.
 
 ```bash
 git clone https://github.com/Santiann/billing-reports.git
 cd billing-reports
-git checkout joao-santian
 make install
 ```
 
-`make install` é o comando único: sobe os quatro serviços, **espera as
-migrations do entrypoint terminarem** e cria o usuário de acesso. No fim ele
-imprime as URLs e as credenciais.
+`make install` is the single command: it starts the four services, **waits for the
+entrypoint's migrations to finish** and creates the access user. At the end it
+prints the URLs and the credentials.
 
-Sem `make`, são dois comandos — e o segundo só funciona depois que as
-migrations terminam, o que na primeira subida
-[demora](#quanto-demora-a-subida-do-zero):
+Without `make` it is two commands — and the second only works once the migrations
+have finished, which on the first start [takes a while](#how-long-a-clean-start-takes):
 
 ```bash
 docker compose up -d
 docker compose exec php php artisan db:seed
 ```
 
-Não há `.env` para copiar nem `composer install` para rodar à mão: o entrypoint
-do backend resolve os dois (ver [Bootstrap automático](arquitetura.md#bootstrap-automático-do-backend)).
+There is no `.env` to copy and no `composer install` to run by hand: the backend's
+entrypoint handles both (see
+[automatic bootstrap](arquitetura.md#the-backends-automatic-bootstrap)).
 
-| Perfil | E-mail | Senha |
+| Role | Email | Password |
 |---|---|---|
-| Administrador | `admin@billing.test` | `password` |
-| Consulta | `consulta@billing.test` | `password` |
+| Administrator | `admin@billing.test` | `password` |
+| Read-only | `consulta@billing.test` | `password` |
 
-O segundo usuário existe para o perfil de consulta poder ser visto funcionando
-(ver [Perfis de acesso](modulos.md#perfis-de-acesso)).
+The second user exists so the read-only role can be seen working (see
+[access roles](modulos.md#access-roles)).
 
-### Os alvos do Makefile
+### The Makefile's targets
 
-`make` sem argumento lista tudo. Nenhum alvo esconde o `docker compose`: a
-coluna da direita é o que cada um executa, para quem não tem `make` instalado
-ou prefere digitar à mão.
+`make` with no argument lists everything. No target hides its `docker compose`: the
+right-hand column is what each one runs, for whoever does not have `make`
+installed or would rather type it out.
 
-| Alvo | Equivalente |
+| Target | Equivalent |
 |---|---|
-| `make install` | `docker compose up -d` + espera + `db:seed` |
+| `make install` | `docker compose up -d` + wait + `db:seed` |
 | `make up` | `docker compose up -d` |
 | `make down` | `docker compose down` |
 | `make logs` | `docker compose logs -f` |
@@ -64,41 +63,39 @@ ou prefere digitar à mão.
 | `make seed` | `docker compose exec php php artisan db:seed` |
 | `make seed-volume` | `docker compose exec php php artisan db:seed --class=BillingVolumeSeeder` |
 | `make fresh` | `docker compose exec php php artisan migrate:fresh --seed` |
-| `make lint` | `pint --test` no backend, `next typegen`, `tsc --noEmit` e `eslint` no frontend |
-| `make e2e` | `docker compose --profile e2e run --rm e2e` — Playwright contra a stack em execução |
-| `make explain` | `docker compose exec php php artisan report:explain` — passe opções com `ARGS="--analyze"` |
+| `make lint` | `pint --test` on the backend, `next typegen`, `tsc --noEmit` and `eslint` on the frontend |
+| `make e2e` | `docker compose --profile e2e run --rm e2e` — Playwright against the running stack |
+| `make explain` | `docker compose exec php php artisan report:explain` — pass options with `ARGS="--analyze"` |
 
-Duas decisões que o arquivo registra:
+Two decisions the file records:
 
-**`install` usa `up -d`, não `up -d --build`.** Numa máquina limpa não há
-imagem e o compose constrói de qualquer jeito, então o `--build` não
-acrescenta nada além de um caminho a mais para dar errado: ele precisa
-resolver `docker/dockerfile:1` no registry, o que passa pelo helper de
-credenciais do Docker. No WSL com Docker Desktop esse helper é um `.exe`, e
-quando o interop não está disponível ele falha com `exec format error` — com a
-stack inteira funcionando. Para reconstruir de propósito depois de mexer num
-Dockerfile: `docker compose up -d --build`.
+**`install` uses `up -d`, not `up -d --build`.** On a clean machine there is no
+image and Compose builds anyway, so `--build` adds nothing but one more way to go
+wrong: it has to resolve `docker/dockerfile:1` from the registry, which goes
+through Docker's credential helper. On WSL with Docker Desktop that helper is an
+`.exe`, and when interop is unavailable it fails with `exec format error` — with
+the whole stack working. To rebuild deliberately after touching a Dockerfile:
+`docker compose up -d --build`.
 
-**`install` espera as migrations antes de semear.** `up -d` devolve o controle
-quando os containers sobem, mas o entrypoint do php roda as migrations depois
-disso. Semear sem esperar falha com *table users doesn't exist* — e falha
-exatamente na primeira subida, que é a única em que `make install` importa.
-Medido aqui: a espera durou 35 segundos com o datadir do MySQL já criado, e
-perto de 1min45s numa instalação do zero, em que o entrypoint ainda roda o
-`composer install` antes das migrations.
+**`install` waits for the migrations before seeding.** `up -d` hands control back
+when the containers start, but php's entrypoint runs the migrations after that.
+Seeding without waiting fails with *table users doesn't exist* — and it fails
+precisely on the first start, which is the only one where `make install` matters.
+Measured here: the wait took 35 seconds with MySQL's datadir already created, and
+close to 1min45s on a start from scratch, where the entrypoint still runs
+`composer install` before the migrations.
 
-**O `lint` precisou de um `pint.json`.** O preset `laravel` do Pint remove os
-parênteses de `new` sem argumento — `new InterestCalculator` em vez de
-`new InterestCalculator()` — e o projeto inteiro usa a forma com parênteses.
-Duas saídas eram possíveis: reescrever o código para o preset, ou registrar a
-escolha. Optei pela segunda, porque `new X()` é a forma que o PHP 8.4 passou a
-aceitar encadeada (`new X()->metodo()`) e a que deixa a chamada parecida com
-qualquer outra.
+**`lint` needed a `pint.json`.** Pint's `laravel` preset removes the parentheses
+from an argument-less `new` — `new InterestCalculator` instead of
+`new InterestCalculator()` — and the whole project uses the parenthesised form. Two
+ways out were possible: rewrite the code for the preset, or record the choice. I
+took the second, because `new X()` is the form PHP 8.4 started accepting chained
+(`new X()->method()`) and the one that makes the call look like any other.
 
-A regra não pode ser simplesmente ligada, e essa é a parte não óbvia:
-`"new_with_parentheses": true` também exigiria parênteses em **classe
-anônima**, e reescreveria as quatro migrations, que usam
-`return new class extends Migration`. A configuração separa os dois casos:
+The rule cannot simply be switched on, and that is the non-obvious part:
+`"new_with_parentheses": true` would also require parentheses on an **anonymous
+class**, and would rewrite the four migrations, which use
+`return new class extends Migration`. The configuration separates the two cases:
 
 ```json
 {
@@ -109,19 +106,19 @@ anônima**, e reescreveria as quatro migrations, que usam
 }
 ```
 
-Com isso `make lint` passa limpo. As outras três divergências que o Pint
-apontou eram defeito de verdade e foram corrigidas, não silenciadas: três
-arquivos de teste usavam classe totalmente qualificada no meio do código
-(`\App\Models\Billing::factory()`) em vez de `use` no topo.
+With that, `make lint` passes clean. The other three divergences Pint reported were
+real defects and were fixed, not silenced: three test files used a fully qualified
+class name mid-code (`\App\Models\Billing::factory()`) instead of a `use` at the
+top.
 
-Com os quatro serviços de pé:
+With the four services up:
 
 | | URL |
 |---|---|
 | API (Laravel, via nginx) | <http://localhost:8000> |
-| Aplicação (Next.js) | <http://localhost:3000> |
+| Application (Next.js) | <http://localhost:3000> |
 
-Conferindo:
+Checking:
 
 ```bash
 curl -s -o /dev/null -w 'laravel: %{http_code}\n' http://localhost:8000
@@ -129,278 +126,279 @@ curl -s -o /dev/null -w 'next:    %{http_code}\n' http://localhost:3000
 docker compose ps
 ```
 
-Derrubar preservando o banco:
+Bringing it down while preserving the database:
 
 ```bash
 docker compose down
 ```
 
-Derrubar apagando o banco (volume nomeado `mysql_data`):
+Bringing it down and deleting the database (the named volume `mysql_data`):
 
 ```bash
 docker compose down -v
 ```
+### How long a clean start takes
 
-### Quanto demora a subida do zero
+Measured on this machine (WSL2 with Docker Desktop) from a fresh clone of the
+branch — no `vendor/`, no `.env`, no `node_modules`, no project image and no
+database volume. Each phase was timed separately.
 
-Medido nesta máquina (WSL2 com Docker Desktop) a partir de um clone novo da
-branch — sem `vendor/`, sem `.env`, sem `node_modules`, sem imagem do projeto
-e sem o volume do banco. Cada fase foi cronometrada separada.
-
-| Fase | Tempo |
+| Phase | Time |
 |---|---|
 | `git clone --depth 1` | 5 s |
-| Download das imagens base `php`, `node` e `nginx` | 25 s |
-| Build das imagens `php` e `frontend` | 4min36s |
-| Download da imagem `mysql:8.0` | 51 s |
+| Downloading the `php`, `node` and `nginx` base images | 25 s |
+| Building the `php` and `frontend` images | 4min36s |
+| Downloading the `mysql:8.0` image | 51 s |
 | `make install` | **7min09s** |
-| Primeira tela: `/login` compilado sob demanda pelo Next | 19 s |
-| **Até a tela de login** | **13min25s** |
-| `make seed-volume` — 2.000.000 de cobranças | 49min16s |
-| **Até a base de medição carregada** | **1h02min42s** |
+| The first screen: `/login` compiled on demand by Next | 19 s |
+| **To the login screen** | **13min25s** |
+| `make seed-volume` — 2,000,000 billings | 49min16s |
+| **To the measurement base loaded** | **1h02min42s** |
 
-A carga de volume se divide em 2,9 s para derrubar os índices, cerca de 32
-minutos de inserção e **16min27s** para recriá-los. Na medição do commit que
-adiou os índices, a mesma estratégia levou 45min55s — esta saiu 7% mais lenta,
-e as duas estão em [Índices adiados na carga](performance.md#índices-adiados-na-carga).
+The volume load breaks down into 2.9 s to drop the indexes, around 32 minutes of
+inserting and **16min27s** to recreate them. In the measurement from the commit
+that deferred the indexes, the same strategy took 45min55s — this run came out 7%
+slower, and both are in
+[indexes deferred during the load](performance.md#indexes-deferred-during-the-load).
 
-Dentro do `make install`, pelos horários dos logs de cada container:
+Inside `make install`, by the timestamps in each container's logs:
 
-| Etapa | Tempo |
+| Step | Time |
 |---|---|
-| Rede, volume e os quatro containers criados, até o MySQL iniciar | 1min13s |
-| MySQL: criação do datadir | 2min59s |
-| MySQL: scripts de init — banco de teste e usuário da aplicação | 47 s |
-| MySQL: reinício na porta 3306 até o healthcheck passar | 16 s |
-| Entrypoint do php: `composer install`, 119 pacotes | 36 s |
-| Entrypoint do php: `.env`, `APP_KEY` e as 12 migrations | 1min13s |
-| Última sonda do `wait-migrations` e seeder base | 5 s |
+| Network, volume and the four containers created, up to MySQL starting | 1min13s |
+| MySQL: creating the datadir | 2min59s |
+| MySQL: init scripts — the test database and the application's user | 47 s |
+| MySQL: restarting on port 3306 until the healthcheck passes | 16 s |
+| php's entrypoint: `composer install`, 119 packages | 36 s |
+| php's entrypoint: `.env`, `APP_KEY` and the 12 migrations | 1min13s |
+| The last `wait-migrations` probe and the base seeder | 5 s |
 
-Quem já tem a stack e roda `docker compose down -v && make install` na mesma
-árvore pula o build e os downloads, e o entrypoint pula o `composer install`
-porque `vendor/` já existe: pela tabela, algo perto de **7 minutos** até a
-tela de login. Esse número é derivado, não medido separado.
+Whoever already has the stack and runs `docker compose down -v && make install` in
+the same tree skips the build and the downloads, and the entrypoint skips
+`composer install` because `vendor/` already exists: by the table, somewhere near
+**7 minutes** to the login screen. That number is derived, not measured
+separately.
 
-**O que a medição não cobriu diretamente.** As imagens base não saíram do
-cache, e por dois motivos diferentes. `php:8.3-fpm-alpine` e `node:22-alpine`
-moram no cache do BuildKit, e `build --no-cache` ignora o cache de camadas,
-não a imagem base — não baixa de novo. `nginx:1.27-alpine` está em uso por um
-container de outro projeto nesta máquina e não foi apagada. Os 25 s vêm de uma
-medição à parte: as camadas comprimidas das três (107 MB) baixadas direto do
-registry, uma depois da outra, sem extração. Para comparar, o `mysql:8.0` são
-222,8 MB comprimidos e levou 51 s já com a extração. Download é banda: aqui
-variou de 3 a 7 MB/s.
+**What the measurement did not cover directly.** The base images did not come from
+the cache, and for two different reasons. `php:8.3-fpm-alpine` and `node:22-alpine`
+live in BuildKit's cache, and `build --no-cache` ignores the layer cache, not the
+base image — it does not re-download it. `nginx:1.27-alpine` is in use by another
+project's container on this machine and was not deleted. The 25 s come from a
+separate measurement: the three images' compressed layers (107 MB) downloaded
+straight from the registry, one after another, without extraction. For comparison,
+`mysql:8.0` is 222.8 MB compressed and took 51 s with extraction included.
+Downloading is bandwidth: here it varied from 3 to 7 MB/s.
 
-**A fase que varia é a do MySQL.** A primeira medição do first-init, na etapa
-1, levou **10min20s** entre `Initializing database files` e `ready for
-connections` na porta 3306. Esta levou **3min52s** — mesma máquina, mesma
-configuração do Compose. A imagem baixada agora é a 8.0.46; a versão da
-primeira medição não ficou registrada, e não medi a causa da diferença. Nesse
-intervalo o backend fica parado esperando o healthcheck, e é o comportamento
-correto.
+**The phase that varies is MySQL's.** The first measurement of the first-init took
+**10min20s** between `Initializing database files` and `ready for connections` on
+port 3306. This one took **3min52s** — same machine, same Compose configuration.
+The image downloaded now is 8.0.46; the version from the first measurement was not
+recorded, and I did not measure the cause of the difference. During that interval
+the backend sits waiting for the healthcheck, and that is the correct behaviour.
 
-Por isso o healthcheck tem `start_period` de 900s. O primeiro valor que tentei,
-600s, falhou por 20 segundos e derrubou a subida inteira com
+That is why the healthcheck has a `start_period` of 900s. The first value I tried,
+600s, failed by 20 seconds and brought the whole start-up down with
 `dependency failed to start: container mysql is unhealthy`.
 
-Falhas dentro do `start_period` não consomem retries, então a janela larga não
-custa nada nos boots seguintes: com o volume já populado, o healthcheck passa
-na primeira sonda e a stack sobe em segundos.
+Failures inside the `start_period` do not consume retries, so the wide window
+costs nothing on subsequent boots: with the volume already populated, the
+healthcheck passes on the first probe and the stack comes up in seconds.
 
-A sonda é por TCP (`mysqladmin ping -h 127.0.0.1`) de propósito. Durante o init
-o MySQL levanta um servidor temporário com `port: 0`, sem rede — uma sonda por
-socket Unix reportaria "pronto" enquanto o banco ainda não aceita conexão
-nenhuma, e o backend tentaria migrar contra um servidor sem o usuário da
-aplicação.
+The probe goes over TCP (`mysqladmin ping -h 127.0.0.1`) on purpose. During the
+init MySQL brings up a temporary server with `port: 0`, with no networking — a
+probe over the Unix socket would report "ready" while the database still accepts no
+connection at all, and the backend would try to migrate against a server without
+the application's user.
 
-Se quiser acompanhar: `docker compose logs -f mysql`.
+To follow along: `docker compose logs -f mysql`.
 
 ---
+## API documentation
 
-## Documentação da API
+The specification lives in
+[`backend/resources/openapi.yaml`](backend/resources/openapi.yaml) — **OpenAPI
+3.1**, written by hand, covering the 15 endpoints with their parameters, responses,
+examples and error codes.
 
-A especificação vive em [`backend/resources/openapi.yaml`](backend/resources/openapi.yaml)
-— **OpenAPI 3.1**, escrita à mão, cobrindo os 15 endpoints com parâmetros,
-respostas, exemplos e os códigos de erro.
+### What stops the spec from rotting
 
-### O que impede a spec de apodrecer
+Hand-written API documentation rots in silence: someone adds an endpoint, forgets
+the file, and from then on the spec describes a system that no longer exists.
+Nobody notices, because nothing breaks.
 
-Documentação de API escrita à mão apodrece em silêncio: alguém acrescenta um
-endpoint, esquece do arquivo, e a partir dali a spec descreve um sistema que não
-existe mais. Ninguém percebe, porque nada quebra.
+`OpenApiSpecTest` removes that silence by comparing the spec against Laravel's
+router **in both directions**:
 
-`OpenApiSpecTest` remove esse silêncio comparando a spec com o roteador do
-Laravel **nas duas direções**:
-
-| Situação | Resultado |
+| Situation | Result |
 |---|---|
-| Rota registrada sem entrada na spec | falha — documentação incompleta |
-| Entrada na spec sem rota registrada | falha — documentação fantasma |
+| A registered route with no entry in the spec | fails — incomplete documentation |
+| An entry in the spec with no registered route | fails — phantom documentation |
 
-As rotas que ficam de fora de propósito — `/up`, `sanctum/csrf-cookie`, o
-servidor de arquivos do disco público e a raiz — estão numa lista explícita, com
-o motivo de cada uma. A lista existe justamente para que uma rota nova não
-escape por omissão: se aparecer uma que não está nem na spec nem na lista, o
-teste falha e alguém precisa decidir.
+The routes deliberately left out — `/up`, `sanctum/csrf-cookie`, the public disk's
+file server and the root — are in an explicit list, each with its reason. The list
+exists precisely so a new route cannot slip through by omission: if one shows up
+that is neither in the spec nor in the list, the test fails and someone has to
+decide.
 
-O teste ainda cobra quatro coisas que separam documentação de índice:
+The test demands four more things that separate documentation from an index:
 
-- toda operação tem `summary`, `tags` e respostas declaradas;
-- toda operação autenticada documenta o **401** — é a resposta mais provável de
-  quem experimenta a API pela primeira vez, e a que mais confunde sem
-  explicação;
-- toda resposta de sucesso em JSON traz **exemplo**;
-- o **422 do teto do PDF** está documentado, e o limite do exemplo é comparado
-  com `config/reports.php` — se o teto mudar e a spec não, o teste acusa.
+- every operation has a `summary`, `tags` and declared responses;
+- every authenticated operation documents the **401** — it is the most likely
+  response for someone trying the API for the first time, and the most confusing
+  one without an explanation;
+- every JSON success response carries an **example**;
+- the **PDF cap's 422** is documented, and the example's limit is compared against
+  `config/reports.php` — if the cap changes and the spec does not, the test says so.
 
-### A raiz do backend é a documentação
+### The backend's root is the documentation
 
 ```bash
-curl localhost:8000          # a documentação inteira, em HTML
-curl localhost:8000/openapi.yaml   # a spec crua, para importar
+curl localhost:8000          # the whole documentation, in HTML
+curl localhost:8000/openapi.yaml   # the raw spec, for importing
 ```
 
-`http://localhost:8000` deixou de ser a welcome do Laravel. Quem abre esse
-endereço está procurando a API, e entregar a página de boas-vindas do framework
-desperdiça a única URL que a pessoa já sabe de cor.
+`http://localhost:8000` is no longer Laravel's welcome page. Whoever opens that
+address is looking for the API, and serving the framework's welcome page wastes the
+one URL the person already knows by heart.
 
-**A página é montada no servidor, e essa foi a decisão que custou mais.** O
-caminho fácil era Redoc, Scalar ou Stoplight Elements: uma linha de HTML, uma
-tag de `<script>` de CDN, e um resultado bonito de graça. Todos os três montam
-a página no browser — `curl localhost:8000` devolveria `<div id="app">` e mais
-nada.
+**The page is assembled on the server, and that was the decision that cost the
+most.** The easy route was Redoc, Scalar or Stoplight Elements: one line of HTML,
+one CDN `<script>` tag, and a good-looking result for free. All three assemble the
+page in the browser — `curl localhost:8000` would return `<div id="app">` and
+nothing more.
 
-Documentação que só existe depois do JavaScript não se lê pelo terminal, não se
-indexa, não abre sem internet e não sobrevive a uma CDN fora do ar. O critério
-"`curl` responde a documentação" não é capricho: é o que separa documentação de
-página de documentação.
+Documentation that only exists after the JavaScript cannot be read from a terminal,
+cannot be indexed, does not open without internet and does not survive a CDN going
+down. The criterion "`curl` answers with the documentation" is not a whim: it is
+what separates documentation from a documentation page.
 
-O custo da escolha é um controller de 200 linhas e uma view — resolver `$ref`,
-fundir os parâmetros declarados no path com os da operação, formatar exemplo. O
-que se ganha:
+The cost of the choice is a 200-line controller and a view — resolving `$ref`,
+merging the parameters declared at the path level with the operation's, formatting
+examples. What it buys:
 
-| | Renderizador de CDN | Esta página |
+| | A CDN renderer | This page |
 |---|---|---|
-| `curl` devolve a documentação | não | **sim** |
-| Funciona sem internet | não | **sim** |
-| Dependência de terceiro em runtime | sim | **nenhuma** |
-| JavaScript | obrigatório | **zero** |
+| `curl` returns the documentation | no | **yes** |
+| Works without internet | no | **yes** |
+| A third-party dependency at runtime | yes | **none** |
+| JavaScript | required | **zero** |
 
-O visual é de especificação impressa — papel, tinta, fio de régua e numeração de
-seção (`3.6 Registra o pagamento e congela os juros`). Sem fonte externa, pelo
-mesmo motivo de não ter CDN: a página abre offline com as famílias que a máquina
-já tem. Há folha de estilo de impressão, porque um documento que se chama
-especificação deveria sair bem no papel.
+The look is a printed specification's — paper, ink, a ruled line and section
+numbering (`3.6 Records the payment and freezes the interest`). No external font,
+for the same reason as no CDN: the page opens offline with the families the machine
+already has. There is a print stylesheet, because a document that calls itself a
+specification ought to come out well on paper.
 
-O parse do YAML não é cacheado de propósito: leva poucos milissegundos, e editar
-a spec e recarregar mostra o resultado na hora — que é o que se quer de um
-arquivo mantido à mão.
+The YAML is deliberately not parsed from a cache: it takes a few milliseconds, and
+editing the spec and reloading shows the result immediately — which is what you
+want from a hand-maintained file.
 
-### Decisões
+### Decisions
 
-**YAML e não JSON**, com `symfony/yaml` para o teste conseguir ler. JSON não
-precisaria de dependência nenhuma, mas a spec é um documento que alguém vai
-abrir e ler: YAML aceita comentário, e o arquivo começa explicando por que ele é
-verificado por teste. A dependência é pequena, é da Symfony e já convive com o
+**YAML and not JSON**, with `symfony/yaml` so the test can read it. JSON would need
+no dependency at all, but the spec is a document someone is going to open and read:
+YAML accepts comments, and the file opens by explaining why it is verified by a
+test. The dependency is small, it is Symfony's and it already lives alongside
 Laravel.
 
-**Escrita à mão e não gerada do código.** Um gerador por anotação (Scramble,
-L5-Swagger) produziria a spec a partir dos controllers, e ela nunca divergiria —
-mas também nunca diria mais do que o código já diz. A parte útil desta
-documentação é a que o código não tem: por que cobrança paga é imutável, por que
-o dinheiro trafega como string, por que o PDF tem teto e o CSV não. O teste
-cobre a divergência; o texto cobre o resto.
+**Written by hand and not generated from the code.** An annotation-based generator
+(Scramble, L5-Swagger) would produce the spec from the controllers, and it would
+never diverge — but it would also never say more than the code already says. The
+useful part of this documentation is what the code does not have: why a paid
+billing is immutable, why money travels as a string, why the PDF has a cap and the
+CSV does not. The test covers divergence; the prose covers the rest.
 
-**Exemplos tirados de chamadas reais.** Todo exemplo da spec saiu de uma
-resposta de verdade da API, com os valores de juros conferidos contra o
-`InterestCalculator` — R$ 1.500,00 a 2% ao mês com 30 dias de atraso dá
-`1500 * 1,02 = 1530,00`. Exemplo inventado é a primeira coisa que fica errada.
+**Examples taken from real calls.** Every example in the spec came from a real API
+response, with the interest values checked against `InterestCalculator` — R$
+1,500.00 at 2% a month with 30 days late gives `1500 * 1.02 = 1530.00`. An invented
+example is the first thing to go wrong.
 
-A spec foi validada com `npx @redocly/cli lint`: **válida**, com dois avisos
-aceitos de propósito — não declarar licença, e apontar o servidor para
-`localhost`, que neste projeto é o servidor certo.
+The spec was validated with `npx @redocly/cli lint`: **valid**, with two warnings
+accepted on purpose — not declaring a licence, and pointing the server at
+`localhost`, which in this project is the right server.
 
 ---
 
-## Integração contínua
+## Continuous integration
 
-`.github/workflows/ci.yml` roda a cada push a mesma verificação que `make test`
-e `make lint` fazem na máquina, em **dois jobs paralelos** — backend e frontend
-não dependem um do outro para serem verificados, e assim o typecheck não espera
-os minutos da suíte para falhar.
+`.github/workflows/ci.yml` runs, on every push, the same checks `make test` and
+`make lint` run locally, in **two parallel jobs** — the backend and the frontend do
+not depend on each other to be checked, and this way the typecheck does not wait
+out the suite's minutes to fail.
 
-| Job | O que roda |
+| Job | What it runs |
 |---|---|
-| Backend | MySQL 8 como serviço, PHP 8.3 com `pdo_mysql` e `bcmath`, `pint --test`, `php artisan test` |
+| Backend | MySQL 8 as a service, PHP 8.3 with `pdo_mysql` and `bcmath`, `pint --test`, `php artisan test` |
 | Frontend | Node 22, `npm ci`, `next typegen`, `tsc --noEmit`, `eslint` |
 
-As versões e as extensões não foram escolhidas de novo: são as dos Dockerfiles,
-e o banco da suíte é o `billing_test` com as credenciais que o
-`phpunit.xml` espera. O `MYSQL_DATABASE` do serviço cria o banco no primeiro
-boot, o que dispensa no CI o script de init que o Compose usa.
+The versions and the extensions were not chosen again: they are the Dockerfiles',
+and the suite's database is `billing_test` with the credentials `phpunit.xml`
+expects. The service's `MYSQL_DATABASE` creates the database on first boot, which
+removes the need in CI for the init script Compose uses.
 
-### O job roda no runner, e não dentro de um container
+### The job runs on the runner, not inside a container
 
-A [documentação de containers de
-serviço](https://docs.github.com/en/actions/tutorials/communicating-with-docker-service-containers)
-é explícita sobre a diferença, e ela decide o desenho: job **dentro de um
-container** alcança o serviço pelo rótulo (`mysql`), sem publicar porta; job no
-**runner** alcança por `localhost`, e a porta precisa ser publicada.
+The [service containers
+documentation](https://docs.github.com/en/actions/tutorials/communicating-with-docker-service-containers)
+is explicit about the difference, and it decides the design: a job **inside a
+container** reaches the service by its label (`mysql`), with no port published; a
+job on the **runner** reaches it through `localhost`, and the port has to be
+published.
 
-O caminho do container era tentador, porque o rótulo `mysql` é exatamente o
-`DB_HOST` que o `phpunit.xml` fixa — zero variável de ambiente a mais. Ficou de
-fora porque dentro de um `php:8.3-cli` seria preciso compilar as extensões e
-instalar o Composer à mão, enquanto no runner o `setup-php` entrega os três.
+The container route was tempting, because the `mysql` label is exactly the
+`DB_HOST` `phpunit.xml` pins — zero extra environment variables. It was left out
+because inside a `php:8.3-cli` you would have to compile the extensions and install
+Composer by hand, while on the runner `setup-php` delivers all three.
 
-O preço é uma variável: `DB_HOST: 127.0.0.1`. E ela funciona por um detalhe do
-PHPUnit que eu **conferi antes de escrever o workflow**, em vez de assumir: o
-`<env>` do `phpunit.xml` não sobrescreve variável de ambiente que já existe, só
-com `force="true"`. Rodando a suíte com a variável presente, o erro de conexão
-nomeou o host — `Host: 127.0.0.1` —, provando quem vence. O `phpunit.xml`
-continua sendo a fonte da verdade para o ambiente documentado, o do Compose.
+The price is one variable: `DB_HOST: 127.0.0.1`. And it works because of a PHPUnit
+detail I **checked before writing the workflow**, rather than assuming:
+`phpunit.xml`'s `<env>` does not overwrite an environment variable that already
+exists, only with `force="true"`. Running the suite with the variable present, the
+connection error named the host — `Host: 127.0.0.1` — proving which one wins.
+`phpunit.xml` remains the source of truth for the documented environment,
+Compose's.
 
-### O CI achou um problema no primeiro push
+### CI found a problem on the first push
 
-A primeira execução **falhou** — e não no workflow, no projeto. O backend
-passou em 56s; o frontend quebrou com `Cannot find name 'LayoutProps'`.
+The first run **failed** — and not in the workflow, in the project. The backend
+passed in 56s; the frontend broke with `Cannot find name 'LayoutProps'`.
 
-`LayoutProps` e `PageProps` são tipos **gerados** pelo Next em `.next/types`, e
-o `tsconfig.json` os inclui. Na máquina eles já existiam, criados pelo servidor
-de desenvolvimento — então `make lint` passava. Num checkout limpo ninguém os
-criou, e o `tsc` não os encontra. O alvo local tinha o mesmo furo e ninguém
-notaria até alguém clonar o repositório e rodar a verificação antes de subir a
-aplicação.
+`LayoutProps` and `PageProps` are types **generated** by Next into `.next/types`,
+and `tsconfig.json` includes them. Locally they already existed, created by the
+development server — so `make lint` passed. On a clean checkout nobody created
+them, and `tsc` cannot find them. The local target had the same hole and nobody
+would have noticed until someone cloned the repository and ran the check before
+starting the application.
 
-A correção é um passo, `next typegen`, que gera só as definições sem o build
-inteiro, e foi aplicada **nos dois lugares** — no CI e no `make lint` —, porque
-o problema era dos dois. É o primeiro retorno concreto do pipeline: ele não
-serviu para confirmar o que já se sabia, serviu para mostrar o que a máquina de
-desenvolvimento escondia.
+The fix is one step, `next typegen`, which produces only the definitions without
+the whole build, and it was applied in **both places** — in CI and in `make lint` —
+because the problem belonged to both. It is the pipeline's first concrete return: it
+did not serve to confirm what was already known, it served to show what the
+development machine was hiding.
 
-Na mesma execução vieram avisos de que `actions/checkout@v4`, `setup-node@v4` e
-`cache@v4` rodam sobre Node 20, descontinuado. As versões correntes foram
-conferidas pela API do GitHub, não pela memória — `checkout v7`, `setup-node
-v7`, `cache v6` — e o workflow subiu para elas.
+The same run brought warnings that `actions/checkout@v4`, `setup-node@v4` and
+`cache@v4` run on Node 20, which is deprecated. The current versions were checked
+through GitHub's API rather than from memory — `checkout v7`, `setup-node v7`,
+`cache v6` — and the workflow moved up to them.
 
-### Três ajustes que valem o comentário
+### Three adjustments worth the comment
 
-- **Pint antes da suíte.** Ele leva segundos e a suíte leva minutos; descobrir
-  formatação errada depois de esperar a suíte é desperdício.
-- **`concurrency` com `cancel-in-progress`.** Push novo no mesmo ref cancela a
-  execução anterior, cujo resultado já não descreve o código atual.
-- **`permissions: contents: read`.** Nada aqui escreve no repositório, e um
-  token com escrita seria superfície que este workflow não precisa.
+- **Pint before the suite.** It takes seconds and the suite takes minutes;
+  discovering wrong formatting after waiting out the suite is waste.
+- **`concurrency` with `cancel-in-progress`.** A new push on the same ref cancels
+  the previous run, whose result no longer describes the current code.
+- **`permissions: contents: read`.** Nothing here writes to the repository, and a
+  token with write access would be surface this workflow does not need.
 
-Cobertura fica de fora do CI: o `pcov` instrumenta o código e o relatório é
-coisa de `make coverage`, rodado quando se quer olhar. E a suíte roda em MySQL
-no CI pelo mesmo motivo que roda no Compose — [em SQLite ela validaria outro
-motor](testes.md#banco-de-testes).
+Coverage stays out of CI: `pcov` instruments the code and the report belongs to
+`make coverage`, run when you want to look at it. And the suite runs on MySQL in CI
+for the same reason it runs on it in Compose — [on SQLite it would be validating a
+different engine](testes.md#the-test-database).
 
 ---
+## Structured logging
 
-## Log estruturado
-
-Uma linha de log é um objeto JSON, em `stderr`:
+A log line is a JSON object, on `stderr`:
 
 ```json
 {"message":"login.failed","level_name":"WARNING","context":{
@@ -409,59 +407,58 @@ Uma linha de log é um objeto JSON, em `stderr`:
   "email":"descartavel@billing.test"}}
 ```
 
-`stderr` e não arquivo porque é onde `docker compose logs` procura — e porque a
-imagem oficial do php-fpm já liga `catch_workers_output` e aponta o `error_log`
-para o descritor 2, então a linha escrita pelo worker chega ao log do container.
-Conferido antes de escolher: arquivo dentro do container só serve a quem já está
-dentro dele.
+`stderr` and not a file because that is where `docker compose logs` looks — and
+because the official php-fpm image already turns on `catch_workers_output` and
+points `error_log` at descriptor 2, so the line written by the worker reaches the
+container's log. Checked before choosing: a file inside the container only serves
+whoever is already inside it.
 
-### O identificador atravessa a borda
+### The identifier crosses the edge
 
-Quem gera o identificador é o **nginx**, com `$request_id`, e a aplicação o
-recebe, devolve no cabeçalho da resposta e o repete em toda linha de log. Se o
-cliente já mandou um `X-Request-Id`, ele é preservado: quem correlaciona
-chamadas entre serviços é quem está mais acima na cadeia, e sobrescrever
-quebraria a ligação.
+What generates the identifier is **nginx**, with `$request_id`, and the application
+receives it, returns it in the response header and repeats it on every log line. If
+the client already sent an `X-Request-Id`, it is preserved: whoever correlates calls
+across services is whoever sits further up the chain, and overwriting it would break
+the link.
 
-O log de acesso do nginx imprime o mesmo id, e é isso que faz as duas pontas se
-encontrarem:
+nginx's access log prints the same id, and that is what makes the two ends meet:
 
 ```
 nginx   req_id=caf4414de833cec75d085738f392eab2 rt=0.024
 laravel {"message":"login.blocked", …, "request_id":"caf4414de833cec75d085738f392eab2", "retry_after":56}
 ```
 
-### Um processador, e não `Log::withContext()`
+### A processor, and not `Log::withContext()`
 
-O contexto é montado por um processador do Monolog, avaliado no momento em que
-cada linha é escrita. A alternativa óbvia era um middleware chamando
-`Log::withContext()`, e ela tem um defeito que só apareceria em produção:
-**middleware de grupo roda antes do `auth:sanctum`**, então ali o usuário ainda
-não existe e o `user_id` sairia nulo — enquanto no teste, onde `actingAs`
-resolve o usuário mais cedo, pareceria funcionar. Teste verde pelo motivo
-errado.
+The context is assembled by a Monolog processor, evaluated at the moment each line
+is written. The obvious alternative was a middleware calling `Log::withContext()`,
+and it has a defect that would only have shown up in production: **group middleware
+runs before `auth:sanctum`**, so there the user does not exist yet and `user_id`
+would come out null — while in the tests, where `actingAs` resolves the user
+earlier, it would appear to work. A green test for the wrong reason.
 
-O processador também pergunta `hasUser()` antes de `id()`: pedir o id resolveria
-o guard a partir do logger, invertendo a ordem das coisas. Linha escrita antes da
-autenticação — uma tentativa de login falha — sai sem usuário, que é a verdade.
+The processor also asks `hasUser()` before `id()`: asking for the id would resolve
+the guard from the logger, inverting the order of things. A line written before
+authentication — a failed login attempt — comes out with no user, which is the
+truth.
 
-E houve um segundo engano no caminho, pego pelo próprio teste: a guarda dos
-campos de requisição era `runningInConsole()`. Parece a pergunta certa e não é —
-**a suíte roda pelo artisan**, ou seja, em console, então o teste jamais veria o
-contexto que a produção vê. A guarda passou a ser a presença do cabeçalho de
-identificador, que só existe quando o middleware passou.
+And there was a second mistake along the way, caught by the test itself: the guard
+around the request fields was `runningInConsole()`. It looks like the right question
+and is not — **the suite runs through artisan**, that is, in console, so the tests
+would never see the context production sees. The guard became the presence of the
+identifier header, which only exists once the middleware has run.
 
-### O que vai para o log, e o que não vai
+### What goes into the log, and what does not
 
-O log responde "o que aconteceu nesta requisição". O que aconteceu com o **dado**
-é a [trilha de auditoria](modulos.md#trilha-de-auditoria), que é tabela e não texto.
+The log answers "what happened in this request". What happened to the **data** is
+the [audit trail](modulos.md#audit-trail), which is a table and not text.
 
-Do login vão as três transições que interessam a quem investiga: `login.failed`,
-`login.blocked` e `login.ok`. As duas primeiras levam o **e-mail tentado** —
-sem ele não há como distinguir alguém que errou a senha de uma varredura de
-contas, que é exatamente a pergunta que se faz. É dado pessoal num log, e a
-troca fica registrada aqui: o benefício é investigar tentativa de invasão em
-massa, o custo é o e-mail no log de operação.
+From the login go the three transitions that matter to an investigator:
+`login.failed`, `login.blocked` and `login.ok`. The first two carry the **attempted
+email** — without it there is no way to tell someone who mistyped their password
+from a sweep across accounts, which is exactly the question being asked. It is
+personal data in a log, and the trade is recorded here: the benefit is investigating
+a mass intrusion attempt, the cost is the email in an operations log.
 
 ---
 
@@ -474,177 +471,175 @@ GET /api/health
                          "cache":{"ok":true,"duration_ms":6.06}}}
 ```
 
-Pública, porque sonda de monitoramento não faz login. Responde **503** com
-`status: degraded` quando alguma dependência falha, dizendo qual e com a
-mensagem do erro. Um health que responde 200 sempre é pior que nenhum: o
-monitoramento passa a confiar nele e para de avisar.
+Public, because a monitoring probe does not log in. It answers **503** with
+`status: degraded` when a dependency fails, naming which one and carrying the
+error's message. A health check that always answers 200 is worse than none: the
+monitoring starts trusting it and stops warning.
 
-A checagem do cache é de **leitura**. Escrever provaria mais e custaria um commit
-por sonda — com o driver de banco, cada gravação vai ao disco, e um monitoramento
-de dez em dez segundos escreveria 8.640 vezes por dia para responder uma pergunta
-que a leitura já responde: o driver está acessível.
+The cache check is a **read**. Writing would prove more and would cost one commit
+per probe — with the database driver, every write goes to disk, and monitoring every
+ten seconds would write 8,640 times a day to answer a question the read already
+answers: the driver is reachable.
 
-O `/up` do Laravel continua existindo e responde outra pergunta — se o PHP subiu.
-Esta rota responde se as dependências respondem.
+Laravel's `/up` still exists and answers a different question — whether PHP came up.
+This route answers whether the dependencies answer.
 
-Um detalhe da documentação: o linter da spec avisa que a operação não declara
-nenhum 4xx. Não declara porque não há — a rota é pública e não recebe entrada.
-Inventar um 4xx para calar o aviso seria documentar o que não existe, então o
-aviso fica.
-
----
-
-## Rate limit no login
-
-Era a única pendência da etapa 1 com uma desculpa em vez de um número:
-*"escolher um limite que não deixe a própria suíte intermitente exige
-cuidado"*. O cuidado está aqui, e são **duas contagens por minuto**, porque são
-dois ataques diferentes e uma contagem só deixaria um passar:
-
-| Contagem | Limite | Pega |
-|---|---|---|
-| e-mail + IP | 5 | força bruta contra uma conta |
-| IP | 20 | varredura de e-mails, uma tentativa em cada |
-
-O limite por credencial inclui o IP **de propósito**. Contar só por e-mail
-deixaria qualquer pessoa trancar a conta de outra de fora, errando a senha cinco
-vezes: negação de serviço disfarçada de segurança. O limite por IP é folgado em
-relação ao outro pelo motivo oposto — escritório com IP único faz login legítimo
-de várias pessoas, e o que se quer pegar ali passa das dezenas.
-
-Três detalhes que o teste fixa:
-
-- **Requisição sem e-mail nem senha não conta.** O limite é verificado depois da
-  validação: payload incompleto não é tentativa de autenticação, e contá-lo
-  deixaria um formulário com bug trancar o próprio usuário.
-- **Login correto zera a contagem da conta, não a do IP.** Acertar a senha prova
-  que aquela conta não está sob força bruta; não prova nada sobre o IP, porque
-  quem varre e-mails pode ter acertado o próprio.
-- **O 429 diz quanto falta**, no corpo e no cabeçalho `Retry-After`.
-
-Medido contra a aplicação rodando: cinco tentativas erradas respondem 401, a
-sexta responde `429` com `Retry-After: 56`.
-
-### Por que não o middleware `throttle`
-
-O `throttle` do Laravel resolve o caso comum, e este tem um pedaço a mais: o
-login correto precisa **zerar** a contagem. Zerar exige a mesma chave que o
-middleware usa, e essa chave é derivada do nome do limitador por dentro do
-framework — depender dela é depender de detalhe de implementação. O limitador
-próprio tem as três operações (perguntar, contar, zerar) num arquivo de
-cinquenta linhas, e a mensagem em português sai de graça.
-
-### E a suíte não ficou intermitente
-
-Três coisas garantem isso, e vale dizer porque era a razão da pendência: o
-limite é **por credencial**, então um teste que erra a senha de um usuário não
-atrapalha os outros; o cache da suíte é o de memória, então cada teste começa
-com a contagem limpa; e nenhum teste faz mais de duas tentativas seguidas na
-mesma conta — os que testam o limite usam e-mails próprios.
+One documentation detail: the spec's linter warns that the operation declares no
+4xx. It does not declare one because there is none — the route is public and takes
+no input. Inventing a 4xx to silence the warning would be documenting something that
+does not exist, so the warning stays.
 
 ---
 
-## Revisão de segurança
+## Login rate limiting
 
-Feita com a skill `vulnerability-scanner`, na ordem que ela propõe:
-reconhecimento, descoberta, análise, relato. O que segue é o resultado completo
-— o que foi corrigido **e** o que foi avaliado e descartado, com o motivo.
+This was the one pending item with an excuse instead of a number: *"choosing a limit
+that does not make the suite itself flaky takes care"*. The care is here, and it is
+**two counts per minute**, because these are two different attacks and a single
+count would let one through:
 
-### Corrigido
-
-| Achado | Por que importa | Correção |
+| Count | Limit | Catches |
 |---|---|---|
-| **CORS aberto** — o default do framework é `allowed_origins: ['*']` | A API aceita token no cabeçalho; origem `*` é superfície que este desenho não usa, porque o browser nunca chama a API direto | `config/cors.php` restrito ao frontend, com lista explícita de cabeçalhos aceitos e expostos |
-| **Token Sanctum sem expiração** (`expiration => null`) | O cookie de sessão dura 8h, mas o token continuava válido para sempre — vazamento sem prazo de validade | 480 minutos, o mesmo prazo do cookie |
-| **Nenhum cabeçalho de segurança** | Clickjacking, sniffing de tipo, vazamento de referrer | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` nas duas origens, mais CSP completo na API |
-| **`X-Powered-By: PHP/8.3.33`** | Dizer a versão poupa a quem sonda o trabalho de descobrir qual CVE tentar | `expose_php = Off` |
-| **Health vazava a mensagem do driver** | A rota é pública, e o erro do PDO nomeia host, porta e driver | Mensagem genérica na resposta, detalhe no log estruturado |
-| **API sem teto de requisições** | O motivo aqui não é força bruta, é custo: uma consulta sem cache no recorte de um ano leva 12s de banco, e um laço derruba o serviço com credencial legítima | `throttle:api`, 180/min, contados **por usuário** |
-| **`Str::markdown` renderizando HTML cru** | XSS teórico na página de documentação, cujo conteúdo vem da spec | `html_input => escape` |
+| email + IP | 5 | brute force against one account |
+| IP | 20 | sweeping emails, one attempt at each |
 
-O limite da API é contado por usuário, e não por IP, por um detalhe deste
-desenho: o frontend chama a API pelo servidor do Next, então **todas** as
-requisições da aplicação chegam do mesmo endereço. Contar por IP faria um
-usuário ativo limitar todos os outros.
+The per-credential limit includes the IP **on purpose**. Counting by email alone
+would let anyone lock someone else's account from outside by getting the password
+wrong five times: denial of service dressed up as security. The per-IP limit is
+loose relative to the other for the opposite reason — an office behind a single IP
+has several people logging in legitimately, and what you want to catch there runs
+into the dozens.
 
-O CSP da API é o mais restritivo possível — `script-src 'none'` — e isso só é
-viável porque a [página de documentação](#a-raiz-do-backend-é-a-documentação) é
-montada no servidor e não tem um único `<script>`. A escolha de não usar
-renderizador de spec do mercado, feita por outro motivo, pagou aqui também.
+Three details the tests pin down:
 
-### Avaliado e descartado
+- **A request with neither email nor password does not count.** The limit is checked
+  after validation: an incomplete payload is not an authentication attempt, and
+  counting it would let a buggy form lock out its own user.
+- **A successful login clears the account's count, not the IP's.** Getting the
+  password right proves that account is not under brute force; it proves nothing
+  about the IP, because whoever is sweeping emails may have hit their own.
+- **The 429 says how long is left**, in the body and in the `Retry-After` header.
 
-**CSP na aplicação Next.** O servidor de desenvolvimento precisa de
-`unsafe-eval` e estilo inline; uma política que valesse só em produção iria ao
-ar sem nunca ter sido exercitada, e CSP que ninguém testou quebra a aplicação no
-pior momento. Ficam os quatro cabeçalhos que valem nos dois ambientes.
+Measured against the running application: five wrong attempts answer 401, the sixth
+answers `429` with `Retry-After: 56`.
 
-**Dependências.** `composer audit` e `npm audit`: nenhum advisory. Os dois
-lockfiles são versionados e o CI usa `npm ci`, que instala exatamente o
-lockfile e falha se ele divergir do manifesto.
+### Why not the `throttle` middleware
 
-**Injeção de SQL.** Todo SQL cru do projeto vem de dois lugares: o
-`InterestCalculator`, que gera a expressão com a data de referência vinda do
-PHP, e as agregações do dashboard, que usam parâmetro vinculado. Coluna de
-ordenação e base de data passam por **duas** allowlists — o `FormRequest` e o
-objeto de filtros — justamente porque viram nome de coluna.
+Laravel's `throttle` solves the common case, and this one has one more piece: a
+successful login has to **clear** the count. Clearing requires the same key the
+middleware uses, and that key is derived from the limiter's name inside the
+framework — depending on it means depending on an implementation detail. The custom
+limiter has all three operations (ask, count, clear) in a fifty-line file, and the
+Portuguese message comes for free.
 
-**Upload de CSV.** Validado em tipo e tamanho (20 MB), e o caminho lido é o do
-arquivo temporário que o PHP criou, não um valor da requisição. O leitor é
-streaming e falha com mensagem clara quando o cabeçalho não bate.
+### And the suite did not become flaky
 
-**Geração de PDF.** O dompdf vem com `enable_remote` e `enable_php`
-desligados: sem SSRF por imagem remota e sem execução de PHP dentro do
-template.
+Three things guarantee that, and it is worth saying because it was the reason the
+item stayed pending: the limit is **per credential**, so a test that gets one user's
+password wrong does not disturb the others; the suite's cache is the in-memory one,
+so each test starts with a clean count; and no test makes more than two consecutive
+attempts on the same account — the ones that test the limit use emails of their own.
 
-**Acesso a registro de outro usuário.** Qualquer usuário autenticado vê
-qualquer cobrança. Não há conceito de cliente-dono nem de organização na
-especificação, e inventá-lo seria escopo extra; o que existe é o [perfil de
-consulta](modulos.md#perfis-de-acesso), que separa leitura de escrita. Fica registrado
-como limite conhecido, não como descuido.
+---
 
-**`APP_DEBUG=true` e senhas de exemplo.** São o ambiente local que a especificação pede
-— `docker compose up -d` tem que entregar a aplicação usável, com credenciais
-documentadas. Em produção, `APP_DEBUG=false`, `APP_ENV=production` e segredos
-fora do repositório são pré-requisito, não ajuste.
+## Security review
 
-**Fixar as ações do CI por SHA em vez de major.** `actions/checkout@v7` confia
-na tag, que é móvel. Fixar por SHA protege contra a tag ser reapontada, e é
-prática de organização com requisito de assurance alto; para este projeto o
-custo de manutenção não se paga.
+Done with the `vulnerability-scanner` skill, in the order it proposes:
+reconnaissance, discovery, analysis, reporting. What follows is the complete result
+— what was fixed **and** what was assessed and discarded, with the reason.
 
-### Sobre o número que o scanner reportou
+### Fixed
 
-O script da skill acusou **224 padrões perigosos, 23 críticos** — e nenhum é
-nosso. Ele varre o diretório inteiro, e os achados estão em
-`backend/vendor/phpunit/.../billboard.pkgd.min.js` e companhia: concatenação de
-string em código minificado de terceiros. Rodado sobre o nosso código, o
-resultado é outro:
+| Finding | Why it matters | Fix |
+|---|---|---|
+| **Open CORS** — the framework's default is `allowed_origins: ['*']` | The API accepts a token in the header; origin `*` is surface this design does not use, because the browser never calls the API directly | `config/cors.php` restricted to the frontend, with explicit lists of accepted and exposed headers |
+| **Sanctum token with no expiry** (`expiration => null`) | The session cookie lasts 8h, but the token stayed valid forever — a leak with no expiry date | 480 minutes, the same lifetime as the cookie |
+| **No security headers** | Clickjacking, type sniffing, referrer leakage | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` on both origins, plus a full CSP on the API |
+| **`X-Powered-By: PHP/8.3.33`** | Stating the version saves whoever is probing the work of finding out which CVE to try | `expose_php = Off` |
+| **Health leaked the driver's message** | The route is public, and PDO's error names the host, the port and the driver | A generic message in the response, the detail in the structured log |
+| **No request cap on the API** | The reason here is not brute force, it is cost: an uncached query over a one-year scope takes 12s of database time, and a loop takes the service down with legitimate credentials | `throttle:api`, 180/min, counted **per user** |
+| **`Str::markdown` rendering raw HTML** | A theoretical XSS on the documentation page, whose content comes from the spec | `html_input => escape` |
+
+The API's limit is counted per user, and not per IP, because of a detail of this
+design: the frontend calls the API through Next's server, so **every** one of the
+application's requests arrives from the same address. Counting by IP would have one
+active user limit all the others.
+
+The API's CSP is as restrictive as possible — `script-src 'none'` — and that is only
+feasible because the [documentation page](#the-backends-root-is-the-documentation)
+is assembled on the server and has not a single `<script>`. The choice not to use an
+off-the-shelf spec renderer, made for another reason, paid off here too.
+
+### Assessed and discarded
+
+**A CSP on the Next application.** The development server needs `unsafe-eval` and
+inline styles; a policy that only applied in production would go live having never
+been exercised, and a CSP nobody tested breaks the application at the worst moment.
+What stays are the four headers that hold in both environments.
+
+**Dependencies.** `composer audit` and `npm audit`: no advisories. Both lockfiles
+are under version control and CI uses `npm ci`, which installs exactly the lockfile
+and fails if it diverges from the manifest.
+
+**SQL injection.** All of the project's raw SQL comes from two places:
+`InterestCalculator`, which builds the expression with the reference date coming from
+PHP, and the dashboard's aggregations, which use bound parameters. The sort column
+and the date basis pass through **two** allowlists — the `FormRequest` and the
+filters object — precisely because they become column names.
+
+**CSV upload.** Validated on type and size (20 MB), and the path read is the
+temporary file's, the one PHP created, not a value from the request. The reader
+streams and fails with a clear message when the header does not match.
+
+**PDF generation.** dompdf ships with `enable_remote` and `enable_php` off: no SSRF
+through a remote image and no PHP execution inside the template.
+
+**Access to another user's record.** Any authenticated user sees any billing. There
+is no concept of an owning customer nor of an organisation in the brief, and
+inventing one would be extra scope; what exists is the
+[read-only role](modulos.md#access-roles), which separates reading from writing. It is
+recorded as a known limit, not as an oversight.
+
+**`APP_DEBUG=true` and example passwords.** They are the local environment the brief
+asks for — `docker compose up -d` has to deliver a usable application, with
+documented credentials. In production, `APP_DEBUG=false`, `APP_ENV=production` and
+secrets outside the repository are prerequisites, not adjustments.
+
+**Pinning the CI actions by SHA rather than by major.** `actions/checkout@v7` trusts
+the tag, which is movable. Pinning by SHA protects against the tag being repointed,
+and is the practice for an organisation with high assurance requirements; for this
+project the maintenance cost does not pay for itself.
+
+### About the number the scanner reported
+
+The skill's script reported **224 dangerous patterns, 23 critical** — and not one is
+ours. It scans the whole directory, and the findings are in
+`backend/vendor/phpunit/.../billboard.pkgd.min.js` and friends: string concatenation
+in third-party minified code. Run over our code, the result is different:
 
 ```
-backend/app         0 crítico, 0 alto
-backend/routes      0 crítico, 0 alto
-backend/config      0 crítico, 0 alto
-frontend/app        0 crítico, 0 alto
-frontend/components 0 crítico, 0 alto
-frontend/lib        0 crítico, 0 alto
+backend/app         0 critical, 0 high
+backend/routes      0 critical, 0 high
+backend/config      0 critical, 0 high
+frontend/app        0 critical, 0 high
+frontend/components 0 critical, 0 high
+frontend/lib        0 critical, 0 high
 ```
 
-Registrar isso importa porque a leitura preguiçosa do relatório levaria à
-conclusão oposta. Ferramenta que varre `vendor/` mede a internet, não o
-projeto — e o achado de configuração dela, o dos cabeçalhos ausentes, era
-verdadeiro e virou correção.
+Recording that matters because reading the report lazily would lead to the opposite
+conclusion. A tool that scans `vendor/` measures the internet, not the project — and
+its configuration finding, the one about missing headers, was true and became a fix.
 
-### Falhar fechado
+### Failing closed
 
-A última categoria da OWASP 2025 é condição excepcional, e vale listar o que o
-projeto faz quando algo dá errado:
+OWASP 2025's last category is exceptional conditions, and it is worth listing what
+the project does when something goes wrong:
 
-- **Chave de idempotência em erro de servidor:** devolvida, não guardada — um
-  500 não é resultado, e repetir é o certo.
-- **Health com dependência fora:** 503, nunca 200 otimista.
-- **Logout com a API fora do ar:** o cookie é apagado de qualquer forma. Deixar
-  o usuário preso numa sessão que ele pediu para encerrar é pior que um token
-  órfão, que agora expira sozinho.
-- **Sem trilha de auditoria, sem alteração:** a gravação da cobrança e a da
-  trilha estão na mesma transação.
+- **An idempotency key on a server error:** given back, not stored — a 500 is not a
+  result, and retrying is the right move.
+- **Health with a dependency down:** 503, never an optimistic 200.
+- **Logout with the API down:** the cookie is deleted either way. Leaving the user
+  stuck in a session they asked to end is worse than an orphaned token, which now
+  expires on its own.
+- **Without the audit trail, no change:** writing the billing and writing the trail
+  are in the same transaction.

@@ -1,163 +1,161 @@
-# Gerador de relatórios de faturamento
+# Billing report generator
 
-Aplicação de faturamento com autenticação e relatório de cobranças projetado para
-tabelas na casa dos milhões de registros.
+A billing application with authentication and a charges report, designed for
+tables in the millions of rows.
 
-Este arquivo orienta os agentes de IA usados no desenvolvimento. Está
-versionado junto do código de propósito: as instruções que produziram o
-projeto fazem parte dele, e mudaram quando a medição contrariou o que diziam.
+This file steers the AI agents used in development. It is deliberately under
+version control alongside the code: the instructions that produced the project are
+part of it, and they changed when measurement contradicted what they said.
 
 ---
 
-## Stack — fixa
+## Stack — fixed
 
-- **Backend:** PHP 8.3 + Laravel, API REST, Sanctum (token bearer)
+- **Backend:** PHP 8.3 + Laravel, REST API, Sanctum (bearer token)
 - **Frontend:** Next.js (App Router) + TypeScript
-- **Banco:** MySQL 8
-- **Infra:** Docker + Docker Compose (mysql, php-fpm, nginx, frontend)
+- **Database:** MySQL 8
+- **Infrastructure:** Docker + Docker Compose (mysql, php-fpm, nginx, frontend)
 
-Nenhum item acima é substituível. São exigências do teste, não preferências.
-
----
-
-## A regra que governa a arquitetura
-
-**O valor atualizado de uma cobrança vencida tem que ser calculável em SQL.**
-
-O relatório precisa ordenar por valor atualizado e somar o total de juros sobre o
-conjunto filtrado inteiro. Se o cálculo existir apenas em PHP, qualquer uma
-dessas duas operações obriga a carregar o resultado inteiro em memória — o que o
-teste proíbe explicitamente.
-
-Consequências, e elas são obrigatórias:
-
-- `App\Domain\Billing\InterestCalculator` é a única fonte da regra e tem duas
-  faces: `updatedAmountSql()` e `interestAmountSql()`, usadas em `selectRaw` na
-  listagem e nas agregações, e `for(Billing $billing)`, usada para exibir uma
-  cobrança isolada. `overdueSql()` mora junto porque "vencida" é a mesma regra
-  vista de outro ângulo.
-- A data de referência **desce do PHP**, nunca `CURDATE()`. `travelTo()` move o
-  relógio do PHP e não o do MySQL: com `CURDATE()` embutido, o teste de
-  consistência compararia tempo congelado contra tempo real e nunca fecharia.
-  É também o que permite calcular juros na data do pagamento.
-- Existe um teste que roda a mesma matriz de casos pelas duas faces e afirma
-  igualdade até o centavo. **Sem esse teste a entrega está incompleta** — ele é o
-  que sustenta a exigência de "resultado consistente em todas as telas e
-  relatórios".
-- Juros compostos: `valor_original * POW(1 + taxa_mensal, dias_atraso / 30)`.
-- Cobrança paga não acumula juros. Os juros congelam na data do pagamento e o
-  valor exibido vem das colunas gravadas no ato do pagamento, nunca de recálculo.
+Nothing above is substitutable. These are the brief's requirements, not
+preferences.
 
 ---
 
-## Next.js — duas origens de API
+## The rule that governs the architecture
 
-Dentro do Compose existem dois contextos de fetch e eles **não** usam a mesma URL:
+**The updated value of an overdue billing has to be computable in SQL.**
 
-| Contexto | Base | Variável |
+The report needs to sort by updated value and sum the total interest over the
+entire filtered set. If the calculation existed only in PHP, either of those two
+operations would force loading the whole result into memory — which the brief
+explicitly rules out.
+
+The consequences, and they are mandatory:
+
+- `App\Domain\Billing\InterestCalculator` is the rule's only source and has two
+  faces: `updatedAmountSql()` and `interestAmountSql()`, used in `selectRaw` in the
+  listing and in the aggregations, and `for(Billing $billing)`, used to display a
+  single billing. `overdueSql()` lives alongside them because "overdue" is the same
+  rule seen from another angle.
+- The reference date **comes down from PHP**, never `CURDATE()`. `travelTo()` moves
+  PHP's clock and not MySQL's: with `CURDATE()` embedded, the consistency test
+  would compare frozen time against real time and would never close. It is also
+  what makes it possible to compute interest at the payment date.
+- There is a test that runs the same matrix of cases through both faces and asserts
+  equality down to the cent. **Without that test the work is incomplete** — it is
+  what upholds the requirement of "a consistent result across every screen and
+  report".
+- Compound interest: `original_amount * POW(1 + monthly_rate, days_late / 30)`.
+- A paid billing accrues no interest. The interest freezes at the payment date and
+  the displayed value comes from the columns written at the moment of payment,
+  never from a recompute.
+
+---
+
+## Next.js — two API origins
+
+Inside Compose there are two fetch contexts and they do **not** use the same URL:
+
+| Context | Base | Variable |
 |---|---|---|
 | Server Components, Route Handlers | `http://backend` | `API_URL_INTERNAL` |
-| Código executando no browser | `http://localhost:8000` | `NEXT_PUBLIC_API_URL` |
+| Code running in the browser | `http://localhost:8000` | `NEXT_PUBLIC_API_URL` |
 
-Usar a variável errada é o bug mais provável deste projeto e ele só se manifesta
-dentro do Docker. Todo fetch passa por `lib/api.ts`, que resolve a base pelo
-contexto. Nenhum `fetch` com URL literal espalhado por componente.
+Using the wrong variable is this project's most likely bug and it only shows up
+inside Docker. Every fetch goes through `lib/api.ts`, which resolves the base from
+the context. No `fetch` with a literal URL scattered across components.
 
-No Compose, `backend` é o serviço **nginx** — é ele que responde HTTP. O
-php-fpm se chama `php`, porque fala FastCGI e não HTTP. Não renomear: o
-`http://backend` da tabela acima depende dessa escolha.
-
----
-
-## Autenticação
-
-Token Sanctum em cookie **httpOnly**, nunca em `localStorage`.
-
-- `POST /api/auth/login` é um Route Handler do Next: chama o Laravel, recebe o
-  token, grava o cookie httpOnly e não devolve o token ao browser.
-- `middleware.ts` protege as rotas do app pela presença do cookie.
-- Server Components leem o cookie e enviam `Authorization: Bearer` ao Laravel.
-- **Downloads de PDF e CSV passam por Route Handler**, que anexa o token e faz
-  stream da resposta do Laravel. O browser não tem o token, então não pode
-  chamar o endpoint de exportação diretamente. O corpo é repassado sem ser
-  lido: consumir o stream para reenviar guardaria o arquivo em memória.
-- **Mutações usam Server Action**, não Route Handler. Mesma razão — quem fala
-  com o Laravel é o servidor — mas a Action devolve os erros de validação campo
-  a campo para o formulário, em vez de uma mensagem genérica. Route Handler
-  fica para o que o browser precisa navegar ou baixar.
+In Compose, `backend` is the **nginx** service — it is what answers HTTP. php-fpm
+is called `php`, because it speaks FastCGI and not HTTP. Do not rename them: the
+`http://backend` in the table above depends on that choice.
 
 ---
 
-## Performance — não negociável
+## Authentication
 
-- Paginação, filtros e ordenação sempre no banco. Nenhum `->get()` seguido de
-  filtro ou ordenação em coleção.
-- Exportação CSV com `lazy()` + `StreamedResponse`, escrevendo linha a linha.
-  Nunca montar o conjunto completo em array.
-- Exportação PDF é limitada por natureza: o documento é montado inteiro antes
-  de existir, então não há streaming. Teto de linhas com 422 acima dele,
-  orientando o CSV. Decisão a documentar em `docs/performance.md`, não falha a
-  esconder.
-- **O teto é 1.000, não 5.000.** O valor original era estimativa e não
-  sobreviveu à medição: o dompdf consome 420 MB para mil linhas, 1.164 MB para
-  duas mil e estoura 3 GB em cinco mil — o crescimento é superlinear porque ele
-  monta a árvore de frames da tabela toda antes de paginar. Vive em
-  `config/reports.php` com a curva medida registrada ao lado.
-- Totalizadores em query de agregação separada, sobre o conjunto filtrado
-  inteiro. Nunca somar a página corrente.
-- **Índices:** coluna de igualdade antes da coluna de range. Como o usuário
-  escolhe qual das três datas define o período, cada uma precisa do seu próprio
-  índice, e a variante com `customer_id` à frente cobre o caso de filtro por
-  cliente. Cada índice criado vai para `docs/performance.md` junto da query que
-  ele serve.
-- Seeder gera volume real (2M+ cobranças) por insert em lote com chunk, não por
-  factory registro a registro.
+The Sanctum token in an **httpOnly** cookie, never in `localStorage`.
+
+- `POST /api/auth/login` is a Next Route Handler: it calls Laravel, receives the
+  token, writes the httpOnly cookie and does not return the token to the browser.
+- `middleware.ts` protects the app's routes by the cookie's presence.
+- Server Components read the cookie and send `Authorization: Bearer` to Laravel.
+- **PDF and CSV downloads go through a Route Handler**, which attaches the token
+  and streams Laravel's response. The browser does not have the token, so it cannot
+  call the export endpoint directly. The body is passed through unread: consuming
+  the stream to resend it would hold the file in memory.
+- **Mutations use a Server Action**, not a Route Handler. Same reason — the server
+  is what talks to Laravel — but the Action returns the validation errors field by
+  field to the form, rather than a generic message. Route Handlers are for what the
+  browser needs to navigate to or download.
 
 ---
 
-## Testes
+## Performance — non-negotiable
 
-Ver `.claude/skills/laravel-report-tests/SKILL.md` para as convenções e as
-armadilhas específicas deste projeto (tempo congelado, resposta em stream,
-asserção sobre PDF).
+- Pagination, filtering and sorting always in the database. No `->get()` followed
+  by filtering or sorting a collection.
+- CSV export with `lazy()` + `StreamedResponse`, writing row by row. Never assemble
+  the complete set in an array.
+- PDF export is limited by nature: the document is assembled whole before it
+  exists, so there is no streaming. A row cap with a 422 above it, pointing at the
+  CSV. A decision to document in `docs/performance.md`, not a failure to hide.
+- **The cap is 1,000, not 5,000.** The original value was an estimate and did not
+  survive measurement: dompdf consumes 420 MB for a thousand rows, 1,164 MB for two
+  thousand and blows past 3 GB at five thousand — the growth is superlinear because
+  it assembles the whole table's frame tree before paginating. It lives in
+  `config/reports.php` with the measured curve recorded beside it.
+- Totals in a separate aggregation query, over the entire filtered set. Never sum
+  the current page.
+- **Indexes:** the equality column before the range column. Since the user chooses
+  which of the three dates defines the period, each one needs its own index, and the
+  variant with `customer_id` in front covers filtering by customer. Every index
+  created goes into `docs/performance.md` alongside the query it serves.
+- The seeder generates real volume (2M+ billings) through batch inserts with
+  chunking, not a factory record by record.
 
-**A suíte roda em MySQL, não em SQLite.** O skeleton do Laravel vem apontado
-para `sqlite/:memory:`, e isso inviabilizaria o teste de consistência: em
-SQLite a face SQL validaria outro motor — `POW()` nem existe por padrão. O
-banco é o `billing_test`, criado pelo init do container, e a consequência é
-que a suíte roda dentro dele:
+---
+
+## Tests
+
+See `.claude/skills/laravel-report-tests/SKILL.md` for the conventions and this
+project's specific traps (frozen time, streamed responses, asserting about a PDF).
+
+**The suite runs on MySQL, not SQLite.** Laravel's skeleton arrives pointed at
+`sqlite/:memory:`, and that would make the consistency test impossible: on SQLite
+the SQL face would be validating a different engine — `POW()` does not even exist
+by default. The database is `billing_test`, created by the container's init, and
+the consequence is that the suite runs inside it:
 
 ```
 docker compose exec php php artisan test
 ```
 
-Regra geral: antes de escrever código de regra de negócio, escrever o teste que
-ela precisa passar.
+General rule: before writing business rule code, write the test it has to pass.
 
-**Ponta a ponta com Playwright**, contra a stack em execução:
+**End to end with Playwright**, against the running stack:
 
 ```
 make e2e
 ```
 
-Serviço próprio no Compose, com perfil `e2e` para não subir junto do resto.
-Roda contra a aplicação como ela é entregue — Next falando com o nginx pelo
-nome do serviço, sessão em cookie, MySQL de verdade —, e não contra um servidor
-que o Playwright levante. Fica fora do CI de propósito: exigiria subir a stack
-inteira no runner.
+Its own Compose service, behind the `e2e` profile so it does not start with the
+rest. It runs against the application as it is delivered — Next talking to nginx by
+service name, the session in a cookie, a real MySQL — and not against a server
+Playwright brings up. It stays out of CI on purpose: that would require bringing
+the whole stack up on the runner.
 
-**CI em `.github/workflows/ci.yml`**: dois jobs paralelos rodando o que
-`make test` e `make lint` fazem aqui. Um push que quebra o typecheck ou a suíte
-aparece vermelho no PR.
+**CI in `.github/workflows/ci.yml`**: two parallel jobs running what `make test`
+and `make lint` do locally. A push that breaks the typecheck or the suite shows up
+red on the PR.
 
 ---
 
 ## Commits
 
-Pequenos, semânticos, um por responsabilidade — o histórico faz parte da
-avaliação. Um commit por vez, e o projeto sobe depois de cada um.
+Small, semantic, one per responsibility — the history is part of the work. One
+commit at a time, and the project goes up after each one.
 
-### Etapa 1 — entregue
+### Stage 1 — delivered
 
 ```
 chore: scaffold laravel and next apps
@@ -176,40 +174,41 @@ test: add billing interest tests
 docs: update project instructions
 ```
 
-### Etapa 2 — diferenciais e acabamento
+### Stage 2 — extras and polish
 
-Três decisões valem para a etapa inteira e não se reabrem a cada commit:
+Three decisions hold for the whole stage and are not reopened at each commit:
 
-- **Mesma branch.** Tudo vai para `main`. Não se abre branch por bloco: a
-  etapa cresce em cima do que já está entregue.
-- **Histórico preservado.** Os 14 commits da etapa 1 não são reescritos:
-  mantêm o trailer `Co-Authored-By`, e os novos seguem com ele. Nada de
-  rebase, squash ou amend sobre o que já foi empurrado.
-- **A etapa 1 é a base, não rascunho.** O que já está entregue só muda quando
-  o commit desta etapa pede — e aí a mudança é o assunto do commit.
+- **The same branch.** Everything goes to `main`. No branch per block: the stage
+  grows on top of what is already delivered.
+- **History preserved.** Stage 1's 14 commits are not rewritten: they keep the
+  `Co-Authored-By` trailer, and the new ones carry it too. No rebase, squash or
+  amend over what has already been pushed.
+- **Stage 1 is the foundation, not a draft.** What is already delivered only
+  changes when this stage's commit calls for it — and then the change is the
+  commit's subject.
 
-Ordem em blocos. Um bloco não emenda no outro: cada commit para, mostra o diff
-e espera.
+Order in blocks. One block does not run into the next: each commit stops, shows the
+diff and waits.
 
-**Blocos A a F — entregues.** A lista abaixo é o que aconteceu, não o que foi
-planejado: quatro commits não estavam no plano e nasceram de achado durante a
-etapa, e estão marcados.
+**Blocks A to F — delivered.** The list below is what happened, not what was
+planned: four commits were not in the plan and came out of findings during the
+stage, and they are marked.
 
 ```
-A — fundação
+A — foundation
 docs: plan stage two
 chore: add project skills
 fix: seed paid billings with frozen interest
-fix: agree on the half cent in both faces          <- achado: 1 divergência em 13.654
+fix: agree on the half cent in both faces          <- finding: 1 divergence in 13,654
 feat: add global error and loading boundaries
 chore: add makefile
 refactor: trim excessive comments
 
-B — documentação da API
+B — API documentation
 feat: add openapi specification
 feat: serve api documentation at root
 
-C — repaginação visual
+C — visual rework
 feat: add design system foundation
 refactor: restyle authentication and app shell
 refactor: restyle customers and billings
@@ -217,12 +216,12 @@ refactor: restyle billing report
 feat: add dashboard
 chore: add readme and skill discovery skills
 
-D — importação e landing page
+D — importing and the landing page
 feat: add customer csv import
 feat: add billing csv import
 feat: add public landing page
 
-E — diferenciais técnicos
+E — technical extras
 feat: add role based access control
 feat: add payment idempotency
 feat: add billing audit trail
@@ -231,25 +230,25 @@ feat: cache report totals
 feat: add report explain command
 feat: add rate limiting and structured logging
 ci: add continuous integration pipeline
-fix: generate next route types before the typecheck <- achado: o CI pegou o que
-                                                      passava na máquina
+fix: generate next route types before the typecheck <- finding: CI caught what
+                                                      passed locally
 
-F — qualidade
+F — quality
 test: add end to end frontend tests
-fix: make payment and reversal work outside localhost <- achado: o E2E pegou
+fix: make payment and reversal work outside localhost <- finding: the E2E caught
                                                         crypto.randomUUID
 chore: apply security review
 docs: update project documentation
 ```
 
-**Blocos G e H — restantes.**
+**Blocks G and H — remaining.**
 
 ```
-G — subida do zero, cronometrada
+G — a timed start from scratch
 perf: build report indexes after bulk seed
 docs: document clean install timing
 
-H — zerar a lista de pendências (docs/producao.md)
+H — empty the pending list (docs/producao.md)
 perf: size the innodb buffer pool
 perf: add fulltext index for billing description
 perf: export csv from raw rows
@@ -260,55 +259,55 @@ feat: add read replica for report queries
 docs: empty the pending list
 ```
 
-O bloco H fecha o `docs/producao.md`. Uma
-pendência morre de dois jeitos, e os dois valem: implementada, ou medida e
-descartada com o número que embasou o descarte. O que não vale é continuar
-listada como intenção.
+Block H closes `docs/producao.md`. A pending item dies in one of two ways, and both
+count: implemented, or measured and discarded with the number that justified
+discarding it. What does not count is staying listed as an intention.
 
 ---
 
-## Como trabalhar neste repositório
+## How to work in this repository
 
-- Uma etapa por vez, na ordem acima. Não adiantar etapas nem encadear módulos.
-- Ao terminar uma etapa, parar e apresentar o diff antes de seguir.
-- Nenhuma decisão técnica fica só no código: se existe alternativa razoável, a
-  escolha e o porquê vão para a documentação. O README é a porta de entrada e
-  fica curto — o detalhe vive em `docs/`, por tema. Decisão nova entra no
-  documento do tema, e só sobe para o README se mudar o que quem revisa precisa
-  saber nos primeiros três minutos.
-- Não implementar nada além do que a especificação pede. Escopo extra não pontua e
-  aumenta a superfície de erro. Na etapa 2 o "que a especificação pede" inclui a lista
-  de diferenciais da especificação — e nada fora do commit da vez.
-- Não trocar biblioteca ou padrão sem registrar a decisão em `docs/`.
-- **Medir contra a base real, não contra a suíte.** O teto do PDF passou em
-  todos os testes com um valor uma ordem de grandeza acima do possível, porque
-  teste usa poucas linhas. Decisão sobre volume, limite ou performance exige
-  medição fora da suíte, com os 2 milhões de registros carregados.
-- **O que passa nesta máquina pode falhar em clone limpo.** O `make lint`
-  passava com tipos de rota que o servidor de desenvolvimento havia gerado e que
-  não existem num checkout novo. Quem pegou foi o CI. Verificação que depende de
-  artefato gerado precisa gerá-lo.
-- **Antes de teorizar, ler o log do container.** A hidratação não concluía nos
-  testes de ponta a ponta, e o log do Next nomeava a opção que faltava. Foram
-  duas execuções perdidas por não ter lido.
-- **Ferramenta que varre `vendor/` mede a internet, não o projeto.** O scanner
-  de vulnerabilidade acusou 23 achados críticos, todos em código minificado de
-  terceiros. Relatório de ferramenta entra na documentação com o recorte
-  explícito do que foi varrido.
-- **Contexto seguro no browser.** `crypto.randomUUID()` e a família
-  `crypto.subtle` só existem em HTTPS ou `localhost`. Código de cliente que
-  dependa delas quebra em qualquer outro host servido por HTTP — e quebra
-  silenciosamente, dentro do handler.
-- **`--no-cache` não é "do zero".** `docker compose build --no-cache` ignora o
-  cache de camadas, mas não baixa de novo a imagem base que já está no cache
-  do BuildKit. Medição de instalação limpa precisa cronometrar esse download à
-  parte, ou o número sai otimista sem aviso nenhum.
-- **Número medido tem cópias.** Quando uma medição muda, procurar o número
-  antigo em todo o repositório. A carga dos 2 milhões caiu de 51 para 46
-  minutos no README e em `docs/performance.md`, e `docs/producao.md` seguiu
-  dizendo 51 por um commit inteiro.
-- **Ajuste que acelera a leitura pode atrasar a escrita.** O buffer pool de
-  1 GB deixou as consultas do relatório 1,5 a 2 vezes mais rápidas e a carga
-  dos 2 milhões 34% mais lenta nesta máquina. Mediu o ganho de um lado, medir o
-  outro — e, quando o número estranho aparecer, rodar um controle na
-  configuração antiga antes de culpar a máquina ou o ajuste.
+- One stage at a time, in the order above. Do not run ahead of the stages and do
+  not chain modules together.
+- When a stage is finished, stop and present the diff before moving on.
+- No technical decision lives only in the code: if a reasonable alternative exists,
+  the choice and the reason go into the documentation. The README is the front door
+  and stays short — the detail lives in `docs/`, by subject. A new decision goes
+  into its subject's document, and only moves up to the README if it changes what a
+  reader needs to know in the first three minutes.
+- Do not build anything beyond what the brief asks for. Extra scope widens the
+  surface for mistakes. In stage 2, "what the brief asks for" includes the brief's
+  list of extras — and nothing outside the commit at hand.
+- Do not swap a library or a pattern without recording the decision in `docs/`.
+- **Measure against the real base, not against the suite.** The PDF cap passed
+  every test with a value an order of magnitude above what was possible, because
+  tests use few rows. A decision about volume, limits or performance requires
+  measurement outside the suite, with the 2 million records loaded.
+- **What passes on this machine can fail on a clean clone.** `make lint` passed
+  with route types the development server had generated and that do not exist in a
+  fresh checkout. CI is what caught it. A check that depends on a generated artefact
+  has to generate it.
+- **Before theorising, read the container's log.** Hydration was not completing in
+  the end-to-end tests, and Next's log named the missing option. Two runs were lost
+  to not having read it.
+- **A tool that scans `vendor/` measures the internet, not the project.** The
+  vulnerability scanner reported 23 critical findings, all of them in third-party
+  minified code. A tool's report goes into the documentation with an explicit
+  statement of what was scanned.
+- **Secure context in the browser.** `crypto.randomUUID()` and the `crypto.subtle`
+  family only exist over HTTPS or on `localhost`. Client code that depends on them
+  breaks on any other host served over HTTP — and it breaks silently, inside the
+  handler.
+- **`--no-cache` is not "from scratch".** `docker compose build --no-cache` ignores
+  the layer cache, but it does not re-download the base image already in BuildKit's
+  cache. A clean-install measurement has to time that download separately, or the
+  number comes out optimistic with no warning at all.
+- **A measured number has copies.** When a measurement changes, look for the old
+  number across the whole repository. The 2 million load dropped from 51 to 46
+  minutes in the README and in `docs/performance.md`, and `docs/producao.md` went on
+  saying 51 for a whole commit.
+- **A tweak that speeds up reads can slow down writes.** The 1 GB buffer pool made
+  the report's queries 1.5 to 2 times faster and the 2 million load 34% slower on
+  this machine. Having measured the gain on one side, measure the other — and when
+  the strange number shows up, run a control on the old configuration before blaming
+  the machine or the tweak.
