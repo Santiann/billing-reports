@@ -30,7 +30,7 @@ class ApiDocumentationTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('content-type', 'text/html; charset=UTF-8');
-        $response->assertSee('Gerador de Relatórios', false);
+        $response->assertSee('Billing Reports', false);
     }
 
     /** Laravel's welcome page must not have survived. */

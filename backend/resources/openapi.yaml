@@ -1,108 +1,105 @@
-# Especificação da API — OpenAPI 3.1
+# API specification — OpenAPI 3.1
 #
-# Este arquivo é escrito à mão e verificado por teste. `OpenApiSpecTest` compara
-# as operações daqui com as rotas registradas no Laravel nas DUAS direções: rota
-# sem entrada falha, e entrada sem rota também. Documentação de API à mão
-# apodrece em silêncio, e é esse silêncio que o teste remove.
+# This file is written by hand and verified by a test. `OpenApiSpecTest` compares
+# the operations here against the routes registered in Laravel in BOTH directions:
+# a route with no entry fails, and an entry with no route fails too. Hand-written
+# API documentation rots in silence, and that silence is what the test removes.
 #
-# Os exemplos não foram inventados: saíram de chamadas reais à API, com os
-# valores conferidos contra o InterestCalculator.
+# The examples were not invented: they came from real calls to the API, with the
+# values checked against InterestCalculator.
 
 openapi: 3.1.0
 
 info:
-  title: Gerador de Relatórios — API de faturamento
+  title: Billing Reports — billing API
   version: "1.0.0"
-  summary: Cobranças, clientes e relatório com juros compostos sobre atraso.
+  summary: Billings, customers and a report with compound interest on arrears.
   description: |
-    API REST do gerador de relatórios de faturamento. Cobre cadastro de clientes, cadastro e
-    pagamento de cobranças, e o relatório de faturamento com exportação.
+    The REST API of the billing report generator. It covers creating customers,
+    creating and paying billings, and the billing report with its exports.
 
-    ## Autenticação
+    ## Authentication
 
-    Token Sanctum no cabeçalho `Authorization: Bearer <token>`, obtido em
-    `POST /api/auth/login`. Todas as rotas exigem o token, exceto o próprio
-    login.
+    A Sanctum token in the `Authorization: Bearer <token>` header, obtained from
+    `POST /api/auth/login`. Every route requires the token, except the login
+    itself.
 
-    Na aplicação web o token nunca chega ao browser: ele é guardado num cookie
-    httpOnly pelo Next.js, que fala com esta API a partir do servidor.
+    In the web application the token never reaches the browser: Next.js keeps it
+    in an httpOnly cookie and talks to this API from the server.
 
-    ## A regra de juros
+    ## The interest rule
 
-    Cobrança vencida e não paga acumula **juros compostos**:
+    A billing past its due date and unpaid accrues **compound interest**:
 
-        valor_atualizado = valor_original * (1 + taxa_mensal) ^ (dias_atraso / 30)
+        updated_amount = original_amount * (1 + monthly_rate) ^ (days_late / 30)
 
-    Três consequências aparecem nas respostas:
+    Three consequences show up in the responses:
 
-    - `interest_amount` e `updated_amount` vêm calculados do backend em toda
-      listagem e em toda cobrança isolada, sempre pela mesma regra.
-    - Cobrança **paga não acumula juros**. Os juros congelam na data do
-      pagamento, e `paid_amount` e `paid_interest_amount` guardam o valor
-      daquele dia — nunca um recálculo.
-    - "Vencida" não é status gravado: é `status = pending` com vencimento no
-      passado, e chega como o booleano `is_overdue`.
+    - `interest_amount` and `updated_amount` arrive computed by the backend on
+      every listing and on every single billing, always by the same rule.
+    - A **paid billing accrues no interest**. The interest freezes at the payment
+      date, and `paid_amount` and `paid_interest_amount` hold that day's value —
+      never a recompute.
+    - "Overdue" is not a stored status: it is `status = pending` with the due date
+      in the past, and it arrives as the boolean `is_overdue`.
 
-    ## Valores monetários são string
+    ## Monetary amounts are strings
 
-    Todo campo de dinheiro trafega como string decimal (`"1534.05"`), não como
-    número. Em JSON, número é ponto flutuante de dupla precisão, e o relatório
-    soma milhões de linhas: o centavo se perde na serialização antes mesmo de
-    chegar na tela.
+    Every money field travels as a decimal string (`"1534.05"`), not as a number.
+    In JSON a number is a double-precision float, and the report sums millions of
+    rows: the cent is lost in serialisation before it even reaches the screen.
   contact:
     name: João Santian
     email: joaosantian1@gmail.com
 
 servers:
   - url: http://localhost:8000
-    description: Ambiente do Docker Compose
+    description: The Docker Compose environment
 
 security:
   - bearerAuth: []
 
 tags:
-  - name: Autenticação
-    description: Login, logout e sessão corrente.
+  - name: Authentication
+    description: Login, logout and the current session.
   - name: Dashboard
-    description: Indicadores do mês corrente e série dos últimos doze meses.
-  - name: Clientes
-    description: Cadastro de clientes. Documento é CPF ou CNPJ, só dígitos.
-  - name: Cobranças
-    description: Cadastro, edição e registro de pagamento.
-  - name: Operação
-    description: Health check para monitoramento.
-  - name: Relatório
+    description: The current month's indicators and the last twelve months' series.
+  - name: Customers
+    description: Customer records. The document is a CPF or CNPJ, digits only.
+  - name: Billings
+    description: Creating, editing and recording a payment.
+  - name: Operations
+    description: Health check for monitoring.
+  - name: Report
     description: |
-      Relatório de faturamento por período, com totalizadores sobre o conjunto
-      filtrado inteiro — nunca sobre a página exibida — e exportação em CSV e
-      PDF.
+      The billing report by period, with totals over the whole filtered set —
+      never over the page on display — and exports to CSV and PDF.
 
 paths:
   # ------------------------------------------------------------- operação ---
 
   /api/health:
     get:
-      tags: [Operação]
-      summary: Health check das dependências
+      tags: [Operations]
+      summary: Health check of the dependencies
       description: |
-        Pública, porque sonda de monitoramento não faz login.
+        Public, because a monitoring probe does not log in.
 
-        Responde **200** com `status: ok` quando todas as dependências
-        respondem, e **503** com `status: degraded` quando alguma falha — com o
-        nome da que falhou e a mensagem do erro. Um health que responde 200
-        sempre é pior que nenhum: o monitoramento passa a confiar nele e para de
-        avisar.
+        It answers **200** with `status: ok` when every dependency answers, and
+        **503** with `status: degraded` when one fails — naming the one that
+        failed and the error's message. A health check that always answers 200 is
+        worse than none: the monitoring starts trusting it and stops warning.
 
-        A checagem do cache é de **leitura**. Escrever provaria mais e custaria
-        um commit por sonda: com o driver de banco, cada gravação vai ao disco.
+        The cache check is a **read**. Writing would prove more and would cost one
+        commit per probe: with the database driver, every write goes to disk.
 
-        O `/up` do Laravel continua existindo e responde outra pergunta — se o
-        PHP subiu. Esta rota responde se as dependências estão de pé.
+        Laravel's `/up` still exists and answers a different question — whether
+        PHP came up. This route answers whether the dependencies are standing.
       operationId: health
       security: []
       responses:
         200:
-          description: Todas as dependências responderam.
+          description: Every dependency answered.
           content:
             application/json:
               schema:
@@ -123,7 +120,7 @@ paths:
                     ok: true
                     duration_ms: 0.42
         503:
-          description: Alguma dependência não respondeu.
+          description: One of the dependencies did not answer.
           content:
             application/json:
               schema:
@@ -147,12 +144,12 @@ paths:
 
   /api/auth/login:
     post:
-      tags: [Autenticação]
-      summary: Autentica e devolve um token
+      tags: [Authentication]
+      summary: Authenticates and returns a token
       description: |
-        Credenciais erradas respondem **401**, não 422: o payload é válido, o
-        que falhou foi a autenticação. A mensagem é a mesma para e-mail
-        inexistente e senha errada, para não revelar quais e-mails existem.
+        Wrong credentials answer **401**, not 422: the payload is valid, what
+        failed was the authentication. The message is the same for an unknown
+        email and a wrong password, so as not to reveal which emails exist.
       operationId: login
       security: []
       requestBody:
@@ -191,7 +188,7 @@ paths:
                   name: Administrador
                   email: admin@billing.test
         401:
-          description: Credenciais inválidas.
+          description: Invalid credentials.
           content:
             application/json:
               schema:
@@ -202,18 +199,17 @@ paths:
           $ref: '#/components/responses/ErroDeValidacao'
         429:
           description: |
-            Tentativas demais. São duas contagens, por minuto: **5** para a
-            mesma conta a partir do mesmo IP, que é a força bruta contra uma
-            conta, e **20** para o mesmo IP somando todas as contas, que é a
-            varredura de e-mails. O cabeçalho `Retry-After` traz os segundos
-            que faltam.
+            Too many attempts. There are two counts, per minute: **5** for the
+            same account from the same IP, which is brute force against one
+            account, and **20** for the same IP across every account, which is an
+            email sweep. The `Retry-After` header carries the seconds left.
 
-            Requisição sem e-mail nem senha não conta: não é tentativa de
-            autenticação. E um login correto zera a contagem da conta — não a
-            do IP.
+            A request with neither email nor password does not count: it is not an
+            authentication attempt. And a successful login clears the account's
+            count — not the IP's.
           headers:
             Retry-After:
-              description: Segundos até a próxima tentativa ser aceita.
+              description: Seconds until the next attempt is accepted.
               schema:
                 type: integer
           content:
@@ -225,15 +221,15 @@ paths:
 
   /api/auth/logout:
     post:
-      tags: [Autenticação]
-      summary: Revoga o token da sessão corrente
+      tags: [Authentication]
+      summary: Revokes the current session's token
       description: |
-        Revoga apenas o token usado nesta chamada. Os outros tokens do mesmo
-        usuário continuam valendo — sair no navegador não derruba o celular.
+        Revokes only the token used in this call. The same user's other tokens
+        stay valid — signing out in the browser does not knock out the phone.
       operationId: logout
       responses:
         200:
-          description: Sessão encerrada.
+          description: Session ended.
           content:
             application/json:
               schema:
@@ -245,16 +241,16 @@ paths:
 
   /api/auth/me:
     get:
-      tags: [Autenticação]
-      summary: Devolve o usuário do token
+      tags: [Authentication]
+      summary: Returns the token's user
       description: |
-        Usada pelo layout autenticado do frontend para confirmar que o cookie
-        ainda corresponde a um token válido. O middleware do Next só olha a
-        presença do cookie; quem confirma que ele vale é esta rota.
+        Used by the frontend's authenticated layout to confirm the cookie still
+        corresponds to a valid token. Next's middleware only looks at the cookie's
+        presence; this route is what confirms it is valid.
       operationId: me
       responses:
         200:
-          description: Usuário autenticado.
+          description: Authenticated user.
           content:
             application/json:
               schema:
@@ -275,27 +271,29 @@ paths:
   /api/dashboard:
     get:
       tags: [Dashboard]
-      summary: Indicadores do mês e série de doze meses
+      summary: The month's indicators and a twelve-month series
       description: |
-        A tela inicial numa chamada. Duas agregações no banco, nenhuma linha
-        carregada para somar em memória.
+        The home screen in one call. Two aggregations in the database, not a
+        single row loaded to be summed in memory.
 
-        `period` recorta o **mês corrente por vencimento** — o que vence agora,
-        o que já entrou e o que falta entrar. `monthly` traz os últimos doze
-        meses, incluindo o corrente, para o gráfico de faturado contra recebido.
+        `period` scopes the **current month by due date** — what falls due now,
+        what has come in and what is still to come. `monthly` brings the last
+        twelve months, the current one included, for the billed-against-received
+        chart.
 
-        Duas leituras que valem para os dois blocos:
+        Two readings that hold for both blocks:
 
-        - **`received_amount` vem das colunas congeladas**, nunca de recálculo.
-          É a mesma regra do relatório, e o dashboard não pode discordar dele.
-        - **`pending_amount` já inclui os juros de hoje**: é o valor atualizado
-          do que não foi pago, não a soma dos valores originais.
+        - **`received_amount` comes from the frozen columns**, never from a
+          recompute. It is the report's rule, and the dashboard cannot disagree
+          with it.
+        - **`pending_amount` already includes today's interest**: it is the
+          updated amount of what is unpaid, not the sum of the original amounts.
 
-        Medido contra 2.000.000 de cobranças: 0,66s a 0,93s.
+        Measured against 2,000,000 billings: 0.66s to 0.93s.
       operationId: dashboard
       responses:
         200:
-          description: Indicadores e série.
+          description: Indicators and series.
           content:
             application/json:
               schema:
@@ -336,13 +334,14 @@ paths:
 
   /api/customers:
     get:
-      tags: [Clientes]
-      summary: Lista clientes
+      tags: [Customers]
+      summary: Lists customers
       description: |
-        Busca, filtro, ordenação e paginação acontecem **no banco**. O termo de
-        busca casa nome e e-mail por `LIKE`, e casa documento apenas se o termo
-        tiver dígitos — sem essa guarda, um termo textual viraria
-        `document LIKE '%'` e traria a tabela inteira.
+        Searching, filtering, sorting and pagination all happen **in the
+        database**. The search term matches name and email with `LIKE`, and
+        matches the document only if the term has digits — without that guard, a
+        textual term would become `document LIKE '%'` and bring back the whole
+        table.
       operationId: listarClientes
       parameters:
         - name: search
@@ -368,7 +367,7 @@ paths:
             $ref: '#/components/schemas/Direcao'
         - name: per_page
           in: query
-          description: Teto de 100. Sem teto, `per_page=999999` derrubaria a API.
+          description: Capped at 100. Without a cap, `per_page=999999` would take the API down.
           schema:
             type: integer
             minimum: 1
@@ -382,7 +381,7 @@ paths:
             default: 1
       responses:
         200:
-          description: Página de clientes.
+          description: A page of customers.
           content:
             application/json:
               schema:
@@ -422,12 +421,13 @@ paths:
           $ref: '#/components/responses/ErroDeValidacao'
 
     post:
-      tags: [Clientes]
-      summary: Cadastra um cliente
+      tags: [Customers]
+      summary: Creates a customer
       description: |
-        O documento é gravado **só com dígitos**: guardar com máscara faria a
-        busca depender do formato digitado. CPF tem 11 dígitos e CNPJ tem 14;
-        nada entre os dois é aceito, e o documento é único na base.
+        The document is stored as **digits only**: keeping the formatting would
+        make the search depend on how it was typed. A CPF has 11 digits and a CNPJ
+        has 14; nothing in between is accepted, and the document is unique across
+        the base.
       operationId: criarCliente
       requestBody:
         required: true
@@ -465,8 +465,8 @@ paths:
           $ref: '#/components/responses/PerfilSemPermissao'
         422:
           description: |
-            Validação falhou. Os erros vêm campo a campo, que é o que permite ao
-            formulário marcar o campo errado em vez de mostrar um aviso solto.
+            Validation failed. The errors come field by field, which is what lets
+            the form mark the wrong field instead of showing a loose warning.
           content:
             application/json:
               schema:
@@ -485,31 +485,31 @@ paths:
 
   /api/customers/import:
     post:
-      tags: [Clientes]
-      summary: Importa clientes de um arquivo CSV
+      tags: [Customers]
+      summary: Imports customers from a CSV file
       description: |
-        Duas etapas no mesmo endpoint. Com `?preview=1` o arquivo é analisado e
-        **nada é gravado** — a resposta diz o que aconteceria. Sem o parâmetro,
-        as linhas válidas são importadas.
+        Two steps on the same endpoint. With `?preview=1` the file is analysed
+        and **nothing is written** — the response says what would happen. Without
+        the parameter, the valid rows are imported.
 
-        **Importação parcial é o comportamento esperado**, não uma falha: linha
-        com erro não impede as outras de entrar. As válidas entram e as
-        recusadas voltam em `errors`, com o número da linha **do arquivo**
-        (contando o cabeçalho, que é como o usuário vai encontrá-la na planilha)
-        e o motivo.
+        **A partial import is the expected behaviour**, not a failure: a row with
+        an error does not stop the others from going in. The valid ones go in and
+        the refused ones come back in `errors`, with the line number **from the
+        file** (counting the header, which is how the user will find it in the
+        spreadsheet) and the reason.
 
-        O arquivo é lido linha a linha, então o tamanho dele não precisa caber
-        na memória do processo. A gravação vai em lotes de 500, com os
-        documentos do lote conferidos contra o banco numa consulta só.
+        The file is read row by row, so its size does not have to fit in the
+        process's memory. Writing goes in batches of 500, with the batch's
+        documents checked against the database in a single query.
 
-        Sobre o formato: o separador é detectado — `;` do Excel em português ou
-        `,` — e o cabeçalho aceita apelidos (`nome` ou `name`, `documento` ou
-        `cpf`). O documento pode vir com máscara; ela é removida. Status vazio
-        assume ativo.
+        On the format: the separator is detected — `;` from Excel in Portuguese or
+        `,` — and the header accepts aliases (`nome` or `name`, `documento` or
+        `cpf`). The document may arrive formatted; the formatting is stripped. An
+        empty status assumes active.
 
-        Arquivo sem as colunas obrigatórias é recusado **inteiro**, com 422: não
-        há o que importar parcialmente quando nem dá para saber o que é cada
-        coluna.
+        A file missing the required columns is refused **whole**, with a 422:
+        there is nothing to import partially when you cannot even tell what each
+        column is.
       operationId: importarClientes
       parameters:
         - name: preview
@@ -529,12 +529,12 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: CSV de até 20 MB.
+                  description: A CSV of up to 20 MB.
       responses:
         200:
           description: |
-            Relatório do que aconteceu — ou do que aconteceria, na prévia.
-            `imported_count` é sempre 0 quando `preview=1`.
+            A report of what happened — or of what would happen, on a preview.
+            `imported_count` is always 0 when `preview=1`.
           content:
             application/json:
               schema:
@@ -573,8 +573,8 @@ paths:
           $ref: '#/components/responses/PerfilSemPermissao'
         422:
           description: |
-            O arquivo não serve: não é CSV, passa do tamanho, ou o cabeçalho não
-            tem as colunas obrigatórias.
+            The file is no good: it is not a CSV, it exceeds the size, or the
+            header is missing the required columns.
           content:
             application/json:
               schema:
@@ -589,8 +589,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/IdDoCliente'
     get:
-      tags: [Clientes]
-      summary: Exibe um cliente
+      tags: [Customers]
+      summary: Shows a customer
       operationId: exibirCliente
       responses:
         200:
@@ -617,11 +617,11 @@ paths:
           $ref: '#/components/responses/NaoEncontrado'
 
     put:
-      tags: [Clientes]
-      summary: Atualiza um cliente
+      tags: [Customers]
+      summary: Updates a customer
       description: |
-        A unicidade do documento ignora o próprio registro — sem isso ninguém
-        salvaria uma edição sem antes trocar de documento.
+        The document's uniqueness ignores the record itself — without that nobody
+        could save an edit without first changing the document.
       operationId: atualizarCliente
       requestBody:
         required: true
@@ -663,12 +663,12 @@ paths:
           $ref: '#/components/responses/ErroDeValidacao'
 
     patch:
-      tags: [Clientes]
-      summary: Atualiza um cliente (mesmo contrato do PUT)
+      tags: [Customers]
+      summary: Updates a customer (same contract as PUT)
       description: |
-        A rota aceita os dois verbos e aplica as mesmas regras: os campos
-        continuam todos obrigatórios. Está documentado porque está registrado —
-        `PATCH` aqui não é atualização parcial.
+        The route accepts both verbs and applies the same rules: every field is
+        still required. It is documented because it is registered — `PATCH` here
+        is not a partial update.
       operationId: atualizarClienteParcial
       requestBody:
         required: true
@@ -713,15 +713,15 @@ paths:
 
   /api/billings:
     get:
-      tags: [Cobranças]
-      summary: Lista cobranças
+      tags: [Billings]
+      summary: Lists billings
       description: |
-        `interest_amount` e `updated_amount` saem do próprio `SELECT`, pela face
-        SQL do cálculo de juros. É isso que permite ordenar por valor atualizado
-        sem carregar o conjunto em memória.
+        `interest_amount` and `updated_amount` come out of the `SELECT` itself,
+        through the SQL face of the interest calculation. That is what makes it
+        possible to sort by updated amount without loading the set into memory.
 
-        O cliente vem junto por eager loading: sem isso, serializar uma página
-        de 15 linhas dispararia 15 consultas.
+        The customer comes along through eager loading: without it, serialising a
+        page of 15 rows would fire 15 queries.
       operationId: listarCobrancas
       parameters:
         - name: customer_id
@@ -735,7 +735,7 @@ paths:
             $ref: '#/components/schemas/StatusDaCobranca'
         - name: search
           in: query
-          description: Trecho da descrição.
+          description: A fragment of the description.
           schema:
             type: string
             maxLength: 255
@@ -765,7 +765,7 @@ paths:
             default: 1
       responses:
         200:
-          description: Página de cobranças.
+          description: A page of billings.
           content:
             application/json:
               schema:
@@ -820,15 +820,15 @@ paths:
           $ref: '#/components/responses/ErroDeValidacao'
 
     post:
-      tags: [Cobranças]
-      summary: Cadastra uma cobrança
+      tags: [Billings]
+      summary: Creates a billing
       description: |
-        `status` e os campos de pagamento **não são aceitos** aqui, mesmo que
-        enviados. Toda cobrança nasce pendente: aceitar `status: paid` criaria
-        uma cobrança paga sem os valores congelados, e quem faz essa transição é
+        `status` and the payment fields are **not accepted** here, even if sent.
+        Every billing is born pending: accepting `status: paid` would create a paid
+        billing without the frozen amounts, and what makes that transition is
         `POST /api/billings/{billing}/payment`.
 
-        A taxa é fração mensal, não porcentagem: `0.02` é 2% ao mês.
+        The rate is a monthly fraction, not a percentage: `0.02` is 2% a month.
       operationId: criarCobranca
       requestBody:
         required: true
@@ -845,7 +845,7 @@ paths:
               due_date: "2026-08-09"
       responses:
         201:
-          description: Cobrança criada, sempre pendente.
+          description: Billing created, always pending.
           content:
             application/json:
               schema:
@@ -874,7 +874,7 @@ paths:
         403:
           $ref: '#/components/responses/PerfilSemPermissao'
         422:
-          description: Validação falhou.
+          description: Validation failed.
           content:
             application/json:
               schema:
@@ -887,31 +887,33 @@ paths:
 
   /api/billings/import:
     post:
-      tags: [Cobranças]
-      summary: Importa cobranças de um arquivo CSV
+      tags: [Billings]
+      summary: Imports billings from a CSV file
       description: |
-        Mesma mecânica da importação de clientes — `?preview=1` analisa sem
-        gravar, importação parcial é o comportamento esperado, e as linhas
-        recusadas voltam com o número da linha do arquivo e o motivo — com duas
-        regras próprias.
+        The same mechanics as the customer import — `?preview=1` analyses without
+        writing, a partial import is the expected behaviour, and refused rows come
+        back with the file's line number and the reason — with two rules of its
+        own.
 
-        **O cliente é resolvido pelo documento**, que precisa já estar
-        cadastrado. O arquivo vem de fora e não conhece o id interno; documento
-        é a identidade de negócio que as duas pontas têm. Linha cujo documento
-        não existe falha sozinha, sem impedir as outras.
+        **The customer is resolved by document**, which has to exist already. The
+        file comes from outside and does not know the internal id; the document is
+        the business identity both ends have. A row whose document does not exist
+        fails on its own, without stopping the others.
 
-        **A cobrança nasce pendente**, como a cadastrada pela tela. Coluna de
-        status ou de valor pago no arquivo é **ignorada**, não aceita: aceitar
-        `paid` criaria cobrança paga sem os valores congelados, e quem faz essa
-        transição é `POST /api/billings/{billing}/payment`.
+        **The billing is born pending**, like one created through the screen. A
+        status or paid-amount column in the file is **ignored**, not accepted:
+        accepting `paid` would create a paid billing without the frozen amounts,
+        and what makes that transition is
+        `POST /api/billings/{billing}/payment`.
 
-        Formatos aceitos, porque o arquivo costuma sair de planilha: valor como
-        `1.234,56` ou `1234.56`, data como `09/08/2026` ou `2026-08-09`, taxa
-        como `0,02`. Taxa ausente vira zero — cobrança sem juros é legítima.
+        Accepted formats, because the file usually comes out of a spreadsheet: an
+        amount as `1.234,56` or `1234.56`, a date as `09/08/2026` or
+        `2026-08-09`, a rate as `0,02`. A missing rate becomes zero — a billing
+        with no interest is legitimate.
 
-        Ao contrário de cliente, **linhas idênticas geram duas cobranças**:
-        cobrança não tem chave natural, e duas mensalidades do mesmo cliente com
-        o mesmo vencimento são duas cobranças de verdade.
+        Unlike customers, **identical rows create two billings**: a billing has no
+        natural key, and two monthly charges for the same customer with the same
+        due date are two real billings.
       operationId: importarCobrancas
       parameters:
         - name: preview
@@ -932,11 +934,11 @@ paths:
                   type: string
                   format: binary
                   description: |
-                    CSV com as colunas documento, descricao, valor, emissao e
-                    vencimento. A taxa é opcional.
+                    A CSV with the columns documento, descricao, valor, emissao
+                    and vencimento. The rate is optional.
       responses:
         200:
-          description: Relatório do que aconteceu — ou do que aconteceria.
+          description: A report of what happened — or of what would happen.
           content:
             application/json:
               schema:
@@ -989,17 +991,17 @@ paths:
     parameters:
       - $ref: '#/components/parameters/IdDaCobranca'
     get:
-      tags: [Cobranças]
-      summary: Exibe uma cobrança
+      tags: [Billings]
+      summary: Shows a billing
       description: |
-        Numa cobrança isolada os juros são calculados em PHP, e não pelo
-        `SELECT` como na listagem. Existe teste afirmando que os dois caminhos
-        devolvem o mesmo valor até o centavo — é o que sustenta a exigência de
-        resultado consistente entre telas e relatório.
+        On a single billing the interest is computed in PHP, and not by the
+        `SELECT` as in the listing. There is a test asserting both paths return the
+        same value down to the cent — it is what upholds the requirement of a
+        consistent result across screens and report.
       operationId: exibirCobranca
       responses:
         200:
-          description: Cobrança encontrada.
+          description: Billing found.
           content:
             application/json:
               schema:
@@ -1029,13 +1031,13 @@ paths:
           $ref: '#/components/responses/NaoEncontrado'
 
     put:
-      tags: [Cobranças]
-      summary: Atualiza uma cobrança pendente
+      tags: [Billings]
+      summary: Updates a pending billing
       description: |
-        **Cobrança paga é imutável.** Alterar valor ou taxa depois do pagamento
-        invalidaria `paid_amount` e `paid_interest_amount`, que foram congelados
-        na data do pagamento e não são recalculáveis — o cálculo é função da
-        data de então. A tentativa responde 422.
+        **A paid billing is immutable.** Changing the amount or the rate after
+        payment would invalidate `paid_amount` and `paid_interest_amount`, which
+        were frozen at the payment date and are not recomputable — the calculation
+        is a function of that date. The attempt answers 422.
       operationId: atualizarCobranca
       requestBody:
         required: true
@@ -1052,7 +1054,7 @@ paths:
               due_date: "2026-08-09"
       responses:
         200:
-          description: Cobrança atualizada.
+          description: Billing updated.
           content:
             application/json:
               schema:
@@ -1083,7 +1085,7 @@ paths:
         404:
           $ref: '#/components/responses/NaoEncontrado'
         422:
-          description: Validação falhou, ou a cobrança já está paga.
+          description: Validation failed, or the billing is already paid.
           content:
             application/json:
               schema:
@@ -1095,11 +1097,11 @@ paths:
                     - Uma cobrança paga não pode ser editada.
 
     patch:
-      tags: [Cobranças]
-      summary: Atualiza uma cobrança pendente (mesmo contrato do PUT)
+      tags: [Billings]
+      summary: Updates a pending billing (same contract as PUT)
       description: |
-        A rota aceita os dois verbos e aplica as mesmas regras, inclusive a de
-        que cobrança paga é imutável.
+        The route accepts both verbs and applies the same rules, including the one
+        that a paid billing is immutable.
       operationId: atualizarCobrancaParcial
       requestBody:
         required: true
@@ -1116,7 +1118,7 @@ paths:
               due_date: "2026-08-09"
       responses:
         200:
-          description: Cobrança atualizada.
+          description: Billing updated.
           content:
             application/json:
               schema:
@@ -1153,46 +1155,46 @@ paths:
     parameters:
       - $ref: '#/components/parameters/IdDaCobranca'
     post:
-      tags: [Cobranças]
-      summary: Registra o pagamento e congela os juros
+      tags: [Billings]
+      summary: Records the payment and freezes the interest
       description: |
-        Os juros são calculados **na data do pagamento**, não em hoje: pagar com
-        data retroativa produz o valor daquele dia. A partir daqui a cobrança
-        para de acumular, e o valor exibido vem das colunas gravadas.
+        The interest is computed **at the payment date**, not at today: paying
+        with a backdated date produces that day's value. From here on the billing
+        stops accruing, and the displayed amount comes from the stored columns.
 
-        Os dois campos são opcionais:
+        Both fields are optional:
 
-        - `payment_date` ausente assume hoje. Não pode ser futura — juros são
-          função da data, e aceitar data futura gravaria um congelamento que
-          ainda não ocorreu — nem anterior à emissão.
-        - `paid_amount` ausente assume o valor atualizado. Informá-lo cobre
-          acordo e desconto; os juros calculados continuam registrados em
-          `paid_interest_amount` de qualquer forma.
+        - A missing `payment_date` assumes today. It cannot be in the future —
+          interest is a function of the date, and accepting a future date would
+          store a freeze that has not happened yet — nor before the issue date.
+        - A missing `paid_amount` assumes the updated amount. Supplying it covers
+          settlements and discounts; the computed interest stays recorded in
+          `paid_interest_amount` either way.
 
-        ## Idempotência
+        ## Idempotency
 
-        Esta e o estorno são as operações idempotentes da API — as duas em que
-        repetir muda dinheiro de lugar. Mandando `Idempotency-Key`, a segunda chamada
-        **devolve o resultado da primeira** em vez de processar de novo — com
-        `Idempotent-Replay: true` no cabeçalho da resposta, para quem chama
-        distinguir "pagou agora" de "já tinha pago".
+        This and the reversal are the API's idempotent operations — the two where
+        repeating moves money around. By sending `Idempotency-Key`, the second call
+        **returns the first one's result** instead of processing again — with
+        `Idempotent-Replay: true` in the response header, so the caller can tell
+        "just paid" from "had already paid".
 
-        A resposta guardada é a que a primeira chamada produziu, seja ela qual
-        for: um 422 de validação se repete como 422. Um 500 **não** é guardado,
-        porque depois de um erro de servidor o certo é tentar de novo.
+        The stored response is whatever the first call produced, whatever that was:
+        a validation 422 replays as a 422. A 500 is **not** stored, because after a
+        server error the right move is to try again.
 
-        Três situações que a chave não cobre, e não deve:
+        Three situations the key does not cover, and should not:
 
-        - **Sem o cabeçalho, nada muda.** Pagar uma cobrança já paga continua
-          respondendo 422. Idempotência serve a quem repete a mesma operação;
-          transformar toda segunda tentativa em sucesso esconderia um erro real.
-        - **Mesma chave com outro conteúdo responde 422.** Inclui usar a mesma
-          chave em outra cobrança. É bug de quem chama, e devolver o resultado
-          antigo esconderia o bug.
-        - **A chave vale 24 horas.** Depois disso ela é uma chave nova.
-        - **O estorno não invalida a chave.** Ela descreve a operação de pagar,
-          que aconteceu: um retry atrasado que chegue depois do estorno recebe o
-          resultado original em vez de pagar de novo.
+        - **Without the header, nothing changes.** Paying an already paid billing
+          still answers 422. Idempotency serves whoever repeats the same operation;
+          turning every second attempt into a success would hide a real error.
+        - **The same key with different content answers 422.** That includes using
+          the same key on another billing. It is the caller's bug, and returning the
+          old result would hide the bug.
+        - **The key is valid for 24 hours.** After that it is a new key.
+        - **A reversal does not invalidate the key.** It describes the act of
+          paying, which happened: a late retry arriving after the reversal receives
+          the original result instead of paying again.
       operationId: registrarPagamento
       parameters:
         - $ref: '#/components/parameters/ChaveDeIdempotencia'
@@ -1206,7 +1208,7 @@ paths:
                 payment_date:
                   type: [string, "null"]
                   format: date
-                  description: Data do pagamento. Ausente assume hoje.
+                  description: The payment date. Missing assumes today.
                 paid_amount:
                   type: [string, "null"]
                   description: Valor recebido. Ausente assume o valor atualizado.
@@ -1215,9 +1217,9 @@ paths:
       responses:
         200:
           description: |
-            Pagamento registrado. No exemplo, R$ 1.500,00 a 2% ao mês com 30
-            dias de atraso: `1500 * 1.02^1 = 1530,00`, dos quais R$ 30,00 são
-            juros — e esses números não mudam mais.
+            Payment recorded. In the example, R$ 1,500.00 at 2% a month with 30
+            days late: `1500 * 1.02^1 = 1530.00`, of which R$ 30.00 is interest —
+            and those numbers never change again.
           content:
             application/json:
               schema:
@@ -1251,9 +1253,9 @@ paths:
           $ref: '#/components/responses/RequisicaoEmAndamento'
         422:
           description: |
-            Data inválida, valor inválido, a cobrança já está paga — ou a chave
-            de idempotência já foi usada para outra requisição, que vem sem o
-            bloco `errors` por não ser erro de campo.
+            An invalid date, an invalid amount, the billing is already paid — or
+            the idempotency key has already been used for another request, which
+            comes back without the `errors` block since it is not a field error.
           content:
             application/json:
               schema:
@@ -1268,36 +1270,36 @@ paths:
     parameters:
       - $ref: '#/components/parameters/IdDaCobranca'
     post:
-      tags: [Cobranças]
-      summary: Estorna o pagamento
+      tags: [Billings]
+      summary: Reverses the payment
       description: |
-        Desfaz um pagamento que não se sustentou — cheque devolvido,
-        transferência revertida, baixa lançada na cobrança errada. Não tem
-        corpo.
+        Undoes a payment that did not hold up — a bounced cheque, a reversed
+        transfer, a settlement posted against the wrong billing. It has no body.
 
-        - **A cobrança volta a pendente**, com `payment_date`, `paid_amount` e
-          `paid_interest_amount` nulos.
-        - **Os valores congelados não somem**: vão para a trilha de auditoria,
-          no `from` da entrada de estorno.
-        - **Os juros voltam a correr desde o vencimento original**, não desde o
-          pagamento nem desde o estorno. O pagamento que não se sustentou não
-          aconteceu para o devedor, e o estorno não pode virar desconto.
+        - **The billing goes back to pending**, with `payment_date`, `paid_amount`
+          and `paid_interest_amount` null.
+        - **The frozen amounts do not disappear**: they go into the audit trail, in
+          the reversal entry's `from`.
+        - **The interest starts running again from the original due date**, not
+          from the payment nor from the reversal. A payment that did not hold up
+          did not happen as far as the debtor is concerned, and a reversal must not
+          turn into a discount.
 
-        A cobrança estornada pode ser paga de novo, e aí os juros congelam na
-        nova data.
+        A reversed billing can be paid again, and then the interest freezes at the
+        new date.
 
-        Aceita `Idempotency-Key`, pela mesma razão do pagamento: pagou,
-        estornou, pagou de novo — um retry atrasado do estorno, sem chave,
-        desfaria o segundo pagamento.
+        It accepts `Idempotency-Key`, for the same reason as the payment: paid,
+        reversed, paid again — a late reversal retry, with no key, would undo the
+        second payment.
       operationId: estornarPagamento
       parameters:
         - $ref: '#/components/parameters/ChaveDeIdempotencia'
       responses:
         200:
           description: |
-            Pagamento estornado. No exemplo, R$ 1.500,00 a 2% ao mês vencida em
-            09/08 e estornada em 14/09: 36 dias de atraso desde o vencimento,
-            `1500 * 1.02^(36/30) = 1536,07`.
+            Payment reversed. In the example, R$ 1,500.00 at 2% a month due on
+            09/08 and reversed on 14/09: 36 days late from the due date,
+            `1500 * 1.02^(36/30) = 1536.07`.
           content:
             application/json:
               schema:
@@ -1330,7 +1332,7 @@ paths:
         409:
           $ref: '#/components/responses/RequisicaoEmAndamento'
         422:
-          description: A cobrança não está paga — ou a chave de idempotência já foi usada para outra requisição.
+          description: The billing is not paid — or the idempotency key has already been used for another request.
           content:
             application/json:
               schema:
@@ -1345,27 +1347,26 @@ paths:
     parameters:
       - $ref: '#/components/parameters/IdDaCobranca'
     get:
-      tags: [Cobranças]
-      summary: Trilha de auditoria da cobrança
+      tags: [Billings]
+      summary: The billing's audit trail
       description: |
-        Quem alterou o quê, e quando — da alteração mais recente para a mais
-        antiga, cinquenta por página.
+        Who changed what, and when — newest change first, fifty per page.
 
-        Entram a **edição**, o **pagamento** e o **estorno**. O cadastro e a importação não
-        entram: a trilha começa na primeira alteração, e `created_at` da
-        cobrança já diz quando ela nasceu.
+        **Edits**, **payments** and **reversals** get in. Creation and importing do
+        not: the trail starts at the first change, and the billing's `created_at`
+        already says when it was born.
 
-        `from` e `to` vêm como o banco guarda — dinheiro em string decimal,
-        data em `YYYY-MM-DD`, status pelo valor do enum, cliente pelo id. Só
-        entra o campo que mudou de fato: `"1000"` sobre `"1000.00"` é o mesmo
-        número e não aparece.
+        `from` and `to` arrive as the database stores them — money as a decimal
+        string, a date as `YYYY-MM-DD`, status by its enum value, a customer by id.
+        Only a field that actually changed gets in: `"1000"` over `"1000.00"` is the
+        same number and does not appear.
 
-        A entrada de pagamento guarda os valores congelados no `to`, e a de
-        estorno os traz no `from`: as colunas de pagamento da cobrança são
-        limpas, e o que foi pago continua registrado aqui.
+        The payment entry keeps the frozen amounts in `to`, and the reversal's
+        brings them in `from`: the billing's payment columns are cleared, and what
+        was paid stays recorded here.
 
-        `user` é nulo quando a alteração não veio de uma requisição — console
-        ou comando artisan.
+        `user` is null when the change did not come from a request — the console or
+        an artisan command.
       operationId: trilhaDaCobranca
       parameters:
         - name: page
@@ -1376,7 +1377,7 @@ paths:
             default: 1
       responses:
         200:
-          description: Entradas da trilha, da mais recente para a mais antiga.
+          description: The trail's entries, newest first.
           content:
             application/json:
               schema:
@@ -1437,26 +1438,26 @@ paths:
 
   /api/reports/billings:
     get:
-      tags: [Relatório]
-      summary: Relatório de faturamento por período
+      tags: [Report]
+      summary: The billing report by period
       description: |
-        Além da página de cobranças, a resposta traz três blocos:
+        Beyond the page of billings, the response carries three blocks:
 
-        - **`totals`** — agregação sobre o conjunto filtrado **inteiro**, de
-          consulta própria. Não é a soma da página: quem está na página 3 de um
-          relatório de mil cobranças precisa do total do relatório. Fica em
-          cache por recorte e nunca é servida velha: qualquer escrita em
-          cobrança e a virada do dia recalculam. Ordenação e página não entram
-          no recorte — reordenar reaproveita os totais.
-        - **`filters`** — eco do recorte aplicado, já normalizado. A tela
-          reexibe e as exportações imprimem no cabeçalho do arquivo a partir
-          desta mesma fonte.
-        - **`export`** — o teto do PDF e se o recorte corrente cabe nele, para a
-          tela desabilitar o botão **antes** do clique em vez de mandar o
-          usuário para um 422.
+        - **`totals`** — an aggregation over the **whole** filtered set, from a
+          query of its own. It is not the page's sum: whoever is on page 3 of a
+          thousand-billing report needs the report's total. It is cached per scope
+          and is never served stale: any write to a billing and the day rolling
+          over both recompute it. Sorting and paging are not part of the scope —
+          reordering reuses the totals.
+        - **`filters`** — an echo of the applied scope, already normalised. The
+          screen re-displays them and the exports print them in the file's header
+          from this same source.
+        - **`export`** — the PDF's cap and whether the current scope fits it, so
+          the screen can disable the button **before** the click instead of
+          sending the user into a 422.
 
-        O período pode ser recortado por emissão, vencimento ou pagamento, à
-        escolha de quem consulta — cada uma tem índice próprio.
+        The period can be scoped by issue, due or payment date, at the caller's
+        choice — each one has an index of its own.
       operationId: relatorioDeFaturamento
       parameters:
         - $ref: '#/components/parameters/BaseDaData'
@@ -1471,8 +1472,8 @@ paths:
             enum: [issue_date, due_date, payment_date, original_amount, interest_amount, updated_amount]
             default: due_date
           description: |
-            Ordenar por `updated_amount` ou `interest_amount` só é possível
-            porque o cálculo existe em SQL.
+            Sorting by `updated_amount` or `interest_amount` is only possible
+            because the calculation exists in SQL.
         - name: direction
           in: query
           schema:
@@ -1493,7 +1494,7 @@ paths:
             default: 1
       responses:
         200:
-          description: Página do relatório, com totalizadores do conjunto inteiro.
+          description: A page of the report, with totals for the whole set.
           content:
             application/json:
               schema:
@@ -1574,7 +1575,7 @@ paths:
         401:
           $ref: '#/components/responses/NaoAutenticado'
         422:
-          description: Filtro inválido.
+          description: Invalid filter.
           content:
             application/json:
               schema:
@@ -1587,20 +1588,20 @@ paths:
 
   /api/reports/billings/csv:
     get:
-      tags: [Relatório]
-      summary: Exporta o relatório em CSV
+      tags: [Report]
+      summary: Exports the report to CSV
       description: |
-        **Sem limite de linhas.** O arquivo é escrito linha a linha enquanto o
-        resultado é percorrido, e em nenhum momento o conjunto existe inteiro em
-        memória — é o que permite exportar centenas de milhares de cobranças.
+        **No row limit.** The file is written row by row while the result is
+        walked, and at no point does the set exist whole in memory — that is what
+        makes it possible to export hundreds of thousands of billings.
 
-        Aceita exatamente os mesmos filtros da tela, validados pelo mesmo
-        objeto: o arquivo é o relatório que está na tela, não uma segunda
-        consulta parecida. Período, filtros e totalizadores são impressos no
-        próprio arquivo.
+        It accepts exactly the same filters as the screen, validated by the same
+        object: the file is the report that is on the screen, not a second, similar
+        query. The period, the filters and the totals are printed in the file
+        itself.
 
-        Separador `;` e BOM UTF-8, porque o destino é o Excel — sem o BOM ele
-        abre o arquivo como Latin-1 e os acentos viram lixo.
+        Separator `;` and a UTF-8 BOM, because the destination is Excel — without
+        the BOM it opens the file as Latin-1 and the accents turn to garbage.
       operationId: exportarRelatorioCsv
       parameters:
         - $ref: '#/components/parameters/BaseDaData'
@@ -1610,7 +1611,7 @@ paths:
         - $ref: '#/components/parameters/StatusDoRelatorio'
       responses:
         200:
-          description: Arquivo CSV, em stream.
+          description: A CSV file, streamed.
           headers:
             Content-Disposition:
               schema:
@@ -1634,30 +1635,29 @@ paths:
 
   /api/reports/billings/pdf:
     get:
-      tags: [Relatório]
-      summary: Exporta o relatório em PDF
+      tags: [Report]
+      summary: Exports the report to PDF
       description: |
-        **Tem teto de linhas, e isso é decisão de projeto.** PDF precisa ser
-        paginado e montado inteiro antes de ser entregue, então não existe
-        versão em streaming como a do CSV. Acima do teto a API responde 422
-        orientando o CSV, em vez de estourar a memória do processo.
+        **There is a row cap, and that is a design decision.** A PDF has to be
+        paginated and assembled whole before it can be delivered, so there is no
+        streaming version like the CSV's. Above the cap the API answers 422
+        pointing at the CSV, rather than blowing the process's memory.
 
-        O teto saiu de medição contra a base real, com nove colunas:
+        The cap came from measuring against the real base, with nine columns:
 
-        | Linhas | Memória | Tempo |
+        | Rows | Memory | Time |
         |---|---|---|
-        | 500 | 184 MB | 9,6s |
-        | 1.000 | 420 MB | 17,9s |
-        | 2.000 | 1.164 MB | 56,5s |
-        | 3.500 | 2.965 MB | 210,0s |
-        | 5.000 | estourou 3 GB | — |
+        | 500 | 184 MB | 9.6s |
+        | 1,000 | 420 MB | 17.9s |
+        | 2,000 | 1,164 MB | 56.5s |
+        | 3,500 | 2,965 MB | 210.0s |
+        | 5,000 | blew past 3 GB | — |
 
-        O crescimento é superlinear: dobrar as linhas quase triplica a memória.
-        Daí o teto em 1.000.
+        The growth is superlinear: doubling the rows almost triples the memory.
+        Hence the cap at 1,000.
 
-        A contagem que decide isso vem da consulta de totalizadores, antes de
-        qualquer linha ser carregada — descobrir que são linhas demais não custa
-        carregar linha nenhuma.
+        The count that decides this comes from the totals query, before any row is
+        loaded — finding out there are too many rows costs loading none of them.
       operationId: exportarRelatorioPdf
       parameters:
         - $ref: '#/components/parameters/BaseDaData'
@@ -1682,9 +1682,9 @@ paths:
           $ref: '#/components/responses/NaoAutenticado'
         422:
           description: |
-            O recorte excede o teto de linhas do PDF. A resposta traz a
-            contagem e o limite para a tela poder explicar o que houve, e a
-            mensagem indica o caminho que funciona.
+            The scope exceeds the PDF's row cap. The response carries the count
+            and the limit so the screen can explain what happened, and the message
+            points at the route that works.
           content:
             application/json:
               schema:
@@ -1706,14 +1706,14 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Token Sanctum obtido em `POST /api/auth/login`.
+      description: A Sanctum token obtained from `POST /api/auth/login`.
 
   parameters:
     IdDoCliente:
       name: customer
       in: path
       required: true
-      description: ID do cliente.
+      description: The customer's ID.
       schema:
         type: integer
       example: 1
@@ -1722,7 +1722,7 @@ components:
       name: billing
       in: path
       required: true
-      description: ID da cobrança.
+      description: The billing's ID.
       schema:
         type: integer
       example: 1
@@ -1731,9 +1731,9 @@ components:
       name: date_field
       in: query
       description: |
-        Qual das três datas define o período. Cada uma tem índice próprio, e a
-        escolha muda o recorte: a mesma cobrança entra num período por emissão e
-        em outro por vencimento.
+        Which of the three dates defines the period. Each one has an index of its
+        own, and the choice changes the scope: the same billing falls into one
+        period by issue date and another by due date.
       schema:
         type: string
         enum: [issue_date, due_date, payment_date]
@@ -1750,7 +1750,7 @@ components:
     FimDoPeriodo:
       name: end_date
       in: query
-      description: Não pode ser anterior a `start_date`.
+      description: It cannot be earlier than `start_date`.
       schema:
         type: string
         format: date
@@ -1767,9 +1767,9 @@ components:
       name: status
       in: query
       description: |
-        `overdue` não é status gravado: é a condição derivada de pendente com
-        vencimento no passado. `pending` traz as vencidas junto, porque vencida
-        é um caso de pendente.
+        `overdue` is not a stored status: it is the derived condition of pending
+        with the due date in the past. `pending` brings the overdue ones along,
+        because overdue is a case of pending.
       schema:
         type: string
         enum: [pending, paid, overdue]
@@ -1779,12 +1779,12 @@ components:
       in: header
       required: false
       description: |
-        Identifica a operação para que repeti-la não a execute duas vezes.
+        Identifies the operation so that repeating it does not execute it twice.
 
-        Opcional, e o nome vem do rascunho da IETF
-        (`draft-ietf-httpapi-idempotency-key-header`). Qualquer string única de
-        até 255 caracteres serve — um UUID v4 é a escolha natural. O escopo é
-        por usuário: dois clientes podem sortear a mesma chave sem se enxergar.
+        Optional, and the name comes from the IETF draft
+        (`draft-ietf-httpapi-idempotency-key-header`). Any unique string of up to
+        255 characters will do — a v4 UUID is the natural choice. The scope is per
+        user: two clients can draw the same key without seeing each other.
       schema:
         type: string
         maxLength: 255
@@ -1792,7 +1792,7 @@ components:
 
   responses:
     NaoAutenticado:
-      description: Token ausente, inválido ou revogado.
+      description: Token missing, invalid or revoked.
       content:
         application/json:
           schema:
@@ -1802,9 +1802,10 @@ components:
 
     PerfilSemPermissao:
       description: |
-        O perfil do usuário é de consulta e não escreve. Esta é a barreira real:
-        esconder o botão na tela é conveniência para quem não pode usá-lo, e
-        quem sabe o endereço do endpoint chega nele sem passar por tela nenhuma.
+        The user's role is read-only and does not write. This is the real barrier:
+        hiding the button on screen is a convenience for whoever cannot use it, and
+        whoever knows the endpoint's address reaches it without passing through any
+        screen.
       content:
         application/json:
           schema:
@@ -1813,7 +1814,7 @@ components:
             message: Seu perfil é de consulta e não permite esta operação.
 
     NaoEncontrado:
-      description: O registro não existe.
+      description: The record does not exist.
       content:
         application/json:
           schema:
@@ -1823,13 +1824,12 @@ components:
 
     RequisicaoEmAndamento:
       description: |
-        Outra requisição com esta mesma chave de idempotência ainda está sendo
-        processada. É a resposta do clique duplo rápido, em que a segunda
-        requisição chega antes de a primeira terminar — e é ela que impede as
-        duas de processarem.
+        Another request with this same idempotency key is still being processed.
+        It is the answer to the fast double click, where the second request arrives
+        before the first has finished — and it is what stops both from processing.
 
-        Não é falha: tente de novo em alguns instantes e a resposta guardada
-        pela primeira virá.
+        It is not a failure: try again in a moment and the response stored by the
+        first will come.
       content:
         application/json:
           schema:
@@ -1839,8 +1839,8 @@ components:
 
     ErroDeValidacao:
       description: |
-        Validação falhou. Os erros vêm campo a campo, que é o que permite ao
-        formulário marcar o campo errado em vez de mostrar um aviso solto.
+        Validation failed. The errors come field by field, which is what lets the
+        form mark the wrong field instead of showing a loose warning.
       content:
         application/json:
           schema:
@@ -1889,8 +1889,8 @@ components:
     Dinheiro:
       type: string
       description: |
-        Decimal com dois dígitos, como string. Número em JSON é ponto flutuante,
-        e o centavo se perde na serialização.
+        A two-digit decimal, as a string. A number in JSON is a float, and the cent
+        is lost in serialisation.
       pattern: '^-?\d+\.\d{2}$'
       examples: ["1534.05"]
 
@@ -1905,7 +1905,7 @@ components:
 
     StatusDaCobranca:
       type: string
-      description: Os dois valores gravados. "Vencida" é derivada, não gravada.
+      description: The two stored values. "Overdue" is derived, not stored.
       enum: [pending, paid]
 
     Mensagem:
@@ -1941,15 +1941,15 @@ components:
           enum: [admin, viewer]
         role_label:
           type: string
-          description: Rótulo em português, vindo do enum do backend.
+          description: A Portuguese label, coming from the backend enum.
           examples: ["Consulta"]
         can_write:
           type: boolean
           description: |
-            Se o perfil pode criar, editar, importar e registrar pagamento. A
-            tela usa isto para esconder o que não adianta oferecer — é
-            conveniência, não barreira: o backend recusa a operação de qualquer
-            forma, com 403.
+            Whether the role can create, edit, import and record a payment. The
+            screen uses this to hide what is pointless to offer — it is
+            convenience, not a barrier: the backend refuses the operation either
+            way, with a 403.
             
 
     Customer:
@@ -1961,7 +1961,7 @@ components:
           type: string
         document:
           type: string
-          description: CPF (11 dígitos) ou CNPJ (14), só dígitos.
+          description: A CPF (11 digits) or a CNPJ (14), digits only.
         email:
           type: string
           format: email
@@ -1969,7 +1969,7 @@ components:
           $ref: '#/components/schemas/StatusDoCliente'
         status_label:
           type: string
-          description: Rótulo em português, vindo do enum do backend para não duplicar tradução no frontend.
+          description: A Portuguese label, coming from the backend enum so the translation is not duplicated in the frontend.
         created_at:
           type: [string, "null"]
           format: date-time
@@ -1984,7 +1984,7 @@ components:
         document:
           type: string
           pattern: '^(\d{11}|\d{14})$'
-          description: Só dígitos. Único na base.
+          description: Digits only. Unique across the base.
         email:
           type: string
           format: email
@@ -2003,7 +2003,7 @@ components:
           $ref: '#/components/schemas/Dinheiro'
         monthly_interest_rate:
           type: string
-          description: Fração mensal, não porcentagem. `"0.0200"` é 2% ao mês.
+          description: A monthly fraction, not a percentage. `"0.0200"` is 2% a month.
         issue_date:
           type: string
           format: date
@@ -2019,17 +2019,17 @@ components:
           type: string
         is_overdue:
           type: boolean
-          description: Derivado — pendente com vencimento no passado. Não existe como coluna.
+          description: Derived — pending with the due date in the past. It does not exist as a column.
         paid_amount:
           oneOf:
             - $ref: '#/components/schemas/Dinheiro'
             - type: "null"
-          description: Congelado no ato do pagamento. Nulo enquanto pendente.
+          description: Frozen at the moment of payment. Null while pending.
         paid_interest_amount:
           oneOf:
             - $ref: '#/components/schemas/Dinheiro'
             - type: "null"
-          description: Juros congelados na data do pagamento. Nulo enquanto pendente.
+          description: Interest frozen at the payment date. Null while pending.
         interest_amount:
           $ref: '#/components/schemas/Dinheiro'
         updated_amount:
@@ -2054,18 +2054,18 @@ components:
           type: number
           minimum: 0
           maximum: 9.9999
-          description: Fração mensal. `0.02` é 2% ao mês.
+          description: A monthly fraction. `0.02` is 2% a month.
         issue_date:
           type: string
           format: date
         due_date:
           type: string
           format: date
-          description: Não pode ser anterior à emissão.
+          description: It cannot be earlier than the issue date.
 
     DashboardPeriod:
       type: object
-      description: O mês corrente, recortado por vencimento.
+      description: The current month, scoped by due date.
       properties:
         label:
           type: string
@@ -2085,10 +2085,10 @@ components:
           description: Soma das colunas congeladas no pagamento.
         pending_amount:
           $ref: '#/components/schemas/Dinheiro'
-          description: Valor ATUALIZADO do que não foi pago — já com juros.
+          description: The UPDATED amount of what is unpaid — interest included.
         interest_amount:
           $ref: '#/components/schemas/Dinheiro'
-          description: Juros acumulados pelas vencidas do mês, até hoje.
+          description: Interest accrued by the month's overdue billings, up to today.
         overdue_count:
           type: integer
 
@@ -2100,7 +2100,7 @@ components:
           examples: ["2026-09"]
         label:
           type: string
-          description: Rótulo curto, para caber sob a coluna do gráfico.
+          description: A short label, to fit under the chart's column.
           examples: ["set/26"]
         count:
           type: integer
@@ -2112,26 +2112,26 @@ components:
     RelatorioDeImportacao:
       type: object
       description: |
-        O que aconteceu com o arquivo. Existe nesta forma porque importação
-        parcial só é aceitável se o usuário souber o que entrou e o que não
-        entrou — um contador de sucesso sozinho esconde a metade que importa.
+        What happened to the file. It exists in this shape because a partial import
+        is only acceptable if the user knows what went in and what did not — a
+        success counter on its own hides the half that matters.
       properties:
         total_rows:
           type: integer
-          description: Linhas de dado, sem contar o cabeçalho.
+          description: Data rows, not counting the header.
         valid_count:
           type: integer
         imported_count:
           type: integer
-          description: Sempre 0 na prévia.
+          description: Always 0 on a preview.
         error_count:
           type: integer
         errors_truncated:
           type: boolean
           description: |
-            A lista de erros tem teto de 50; a contagem não. Um arquivo com
-            cabeçalho torto geraria um erro por linha, e devolver cem mil não
-            ajudaria ninguém.
+            The error list is capped at 50; the count is not. A file with a crooked
+            header would produce one error per row, and returning a hundred thousand
+            would help nobody.
         errors:
           type: array
           items:
@@ -2139,7 +2139,7 @@ components:
             properties:
               line:
                 type: integer
-                description: Linha do arquivo, contando o cabeçalho.
+                description: The line in the file, counting the header.
               messages:
                 type: array
                 items:
@@ -2148,10 +2148,10 @@ components:
                 type: object
                 additionalProperties:
                   type: string
-                description: A linha como veio, para o usuário se reconhecer.
+                description: The row as it arrived, so the user can recognise it.
         sample:
           type: array
-          description: Primeiras linhas válidas, já normalizadas.
+          description: The first valid rows, already normalised.
           items:
             type: object
             additionalProperties:
@@ -2160,8 +2160,8 @@ components:
     Totais:
       type: object
       description: |
-        Agregação sobre o conjunto filtrado inteiro, de consulta própria — nunca
-        a soma da página exibida.
+        An aggregation over the whole filtered set, from a query of its own — never
+        the sum of the page on display.
       properties:
         count:
           type: integer
@@ -2173,14 +2173,14 @@ components:
           $ref: '#/components/schemas/Dinheiro'
         paid_amount:
           $ref: '#/components/schemas/Dinheiro'
-          description: Soma das colunas congeladas das cobranças pagas.
+          description: The sum of the paid billings' frozen columns.
         pending_amount:
           $ref: '#/components/schemas/Dinheiro'
-          description: Soma do valor atualizado das não pagas.
+          description: The sum of the unpaid ones' updated amount.
 
     Filtros:
       type: object
-      description: Eco do recorte aplicado, já normalizado.
+      description: An echo of the applied scope, already normalised.
       properties:
         date_field:
           type: string
@@ -2199,7 +2199,7 @@ components:
 
     Paginacao:
       type: object
-      description: Envelope de paginação do Laravel.
+      description: Laravel's pagination envelope.
       properties:
         links:
           type: object
