@@ -1,35 +1,34 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Exigido pelo stage `runner` do Dockerfile: o build emite .next/standalone
-  // com um server.js e só as dependências realmente usadas, o que dispensa
-  // carregar node_modules inteiro na imagem final.
+  // Required by the Dockerfile's `runner` stage: the build emits .next/standalone
+  // with a server.js and only the dependencies actually used, which saves carrying
+  // the whole node_modules into the final image.
   output: "standalone",
 
   /*
-   * Origens que o servidor de DESENVOLVIMENTO aceita além de localhost.
+   * Origins the DEVELOPMENT server accepts besides localhost.
    *
-   * O Next bloqueia por padrão as requisições a recursos de desenvolvimento —
-   * `/_next/hmr` entre eles — vindas de host diferente daquele em que subiu.
-   * Os testes de ponta a ponta rodam num container e chegam por
-   * `http://frontend:3000`, o nome do serviço no Compose: sem esta linha o HMR
-   * é recusado, a hidratação não conclui e nenhum formulário responde a
-   * clique. Foi o Playwright que mostrou, e o log do próprio container nomeou
-   * a opção.
+   * Next blocks by default requests for development resources — `/_next/hmr` among
+   * them — coming from a host other than the one it started on. The end-to-end tests
+   * run in a container and arrive via `http://frontend:3000`, the service name in
+   * Compose: without this line HMR is refused, hydration never completes and no form
+   * responds to a click. Playwright surfaced it, and the container's own log named
+   * the option.
    *
-   * Não afeta produção: lá não há recurso de desenvolvimento a proteger.
+   * It does not affect production: there are no development resources to protect
+   * there.
    */
   allowedDevOrigins: ["frontend"],
 
   /*
-   * Cabeçalhos de segurança da aplicação.
+   * The application's security headers.
    *
-   * Sem CSP, e a ausência é uma decisão: o servidor de desenvolvimento do Next
-   * precisa de `unsafe-eval` e de estilo inline, então uma política que
-   * valesse só em produção iria para o ar sem nunca ter sido exercitada aqui —
-   * e CSP que ninguém testou quebra a aplicação no pior momento. A origem da
-   * API, que serve conteúdo estático e não tem script nenhum, ganhou CSP
-   * completo no nginx.
+   * No CSP, and the absence is a decision: Next's development server needs
+   * `unsafe-eval` and inline styles, so a policy that only applied in production
+   * would go live having never been exercised here — and a CSP nobody tested breaks
+   * the application at the worst moment. The API's origin, which serves static
+   * content and has no scripts at all, got a full CSP in nginx.
    */
   async headers() {
     return [
@@ -51,13 +50,13 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       /*
-       * O default é 1 MB, e a importação de CSV passa por Server Action.
+       * The default is 1 MB, and CSV importing goes through a Server Action.
        *
-       * O backend aceita arquivo de até 20 MB; sem este teto combinado, um CSV
-       * de 5 MB morreria no Next antes de chegar lá, com erro de payload em vez
-       * da mensagem que o formulário sabe exibir. O valor é um pouco maior que
-       * os 20 MB porque o limite conta o corpo HTTP cru, e o multipart
-       * acrescenta fronteiras e cabeçalhos de parte.
+       * The backend accepts files up to 20 MB; without this matching cap, a 5 MB CSV
+       * would die in Next before reaching it, with a payload error instead of the
+       * message the form knows how to show. The value is slightly above 20 MB because
+       * the limit counts the raw HTTP body, and multipart adds boundaries and
+       * per-part headers.
        */
       bodySizeLimit: "21mb",
     },

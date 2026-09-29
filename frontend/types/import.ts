@@ -1,6 +1,6 @@
-/** Uma linha que não entrou, com o motivo e o que ela trazia. */
+/** A row that did not go in, with the reason and what it carried. */
 export type ImportError = {
-  /** Linha do ARQUIVO, contando o cabeçalho. */
+  /** The line in the FILE, counting the header. */
   line: number;
   messages: string[];
   values: Record<string, string>;
@@ -11,14 +11,14 @@ export type ImportReport = {
   valid_count: number;
   imported_count: number;
   error_count: number;
-  /** A lista de erros tem teto; a contagem, não. */
+  /** The error list is capped; the count is not. */
   errors_truncated: boolean;
   errors: ImportError[];
   sample: Record<string, string>[];
 };
 
 export type ImportState = {
-  /** "preview" mostra o que aconteceria; "import" já aconteceu. */
+  /** "preview" shows what would happen; "import" already happened. */
   mode?: "preview" | "import";
   report?: ImportReport;
   message?: string;

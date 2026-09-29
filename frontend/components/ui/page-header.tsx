@@ -2,11 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 /**
- * Cabeçalho de página: caminho de volta, título e a ação principal.
+ * A page header: the way back, the title and the primary action.
  *
- * O título é serifado e grande porque é o único ponto da tela onde a identidade
- * do produto aparece — o resto é densidade de dado. A régua embaixo repete o
- * motivo do papel pautado e separa o cabeçalho do conteúdo sem sombra.
+ * The title is serif and large because it is the only point on the screen where the
+ * product's identity shows — the rest is data density. The rule below it echoes the
+ * reason for ruled paper and separates header from content without a shadow.
  */
 export function PageHeader({
   title,
@@ -15,9 +15,9 @@ export function PageHeader({
   action,
 }: {
   title: string;
-  /** Link de volta, exibido acima do título. */
+  /** The back link, shown above the title. */
   voltar?: { href: string; label: string };
-  /** Etiqueta ao lado do título — estado da cobrança, por exemplo. */
+  /** A label beside the title — the billing's state, for instance. */
   badge?: ReactNode;
   action?: ReactNode;
 }) {

@@ -1,11 +1,11 @@
 /**
- * Tema da interface.
+ * The interface theme.
  *
- * Três estados e não dois: "sistema" precisa existir como escolha própria,
- * senão quem prefere acompanhar o sistema operacional fica sem como voltar
- * depois de tocar no seletor uma vez.
+ * Three states and not two: "system" has to exist as a choice of its own,
+ * otherwise whoever prefers to follow the operating system has no way back after
+ * touching the selector once.
  *
- * Sem importar `next/headers`: este módulo é lido também no cliente.
+ * Without importing `next/headers`: this module is also read on the client.
  */
 
 export const THEME_COOKIE = "billing_theme";
@@ -18,7 +18,7 @@ export const THEMES: ReadonlyArray<{ value: Theme; label: string }> = [
   { value: "dark", label: "Escuro" },
 ];
 
-/** Um ano: preferência de aparência não expira com a sessão. */
+/** One year: an appearance preference does not expire with the session. */
 export const THEME_MAX_AGE = 60 * 60 * 24 * 365;
 
 export function isTheme(value: string | undefined): value is Theme {

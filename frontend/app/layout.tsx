@@ -6,15 +6,15 @@ import { isTheme, THEME_COOKIE } from "@/lib/theme";
 import "./globals.css";
 
 /**
- * Três famílias, cada uma com um trabalho.
+ * Three families, each with a job.
  *
- * IBM Plex Sans na interface: humanista, desenhada para leitura densa, e com
- * algarismo tabular de verdade — o que importa numa tela cheia de coluna de
- * valor. IBM Plex Mono no dado: id, documento e dinheiro alinhados. Instrument
- * Serif no título, que é o que dá cara ao produto.
+ * IBM Plex Sans for the interface: humanist, designed for dense reading, and with
+ * genuine tabular figures — which is what matters on a screen full of amount columns.
+ * IBM Plex Mono for data: ids, documents and money aligned. Instrument Serif for
+ * titles, which is what gives the product a face.
  *
- * `next/font` baixa e hospeda as fontes no build, então não há requisição a
- * servidor de terceiro em runtime nem salto de layout ao carregar.
+ * `next/font` downloads and self-hosts the fonts at build time, so there is no
+ * request to a third-party server at runtime and no layout shift on load.
  */
 const display = Instrument_Serif({
   variable: "--fonte-display",
@@ -44,18 +44,18 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   /*
-   * O tema é lido do cookie AQUI, no servidor, e não num efeito do cliente.
+   * The theme is read from the cookie HERE, on the server, not in a client effect.
    *
-   * É o que elimina o piscar: com `localStorage` a página renderiza no tema
-   * errado e troca depois da hidratação, e a saída comum para isso é um script
-   * inline no <head> que o bundler não enxerga. Lendo o cookie no layout, o
-   * `<html>` já sai da primeira resposta com o atributo certo.
+   * That is what eliminates the flash: with `localStorage` the page renders in the
+   * wrong theme and switches after hydration, and the common way out is an inline
+   * script in the <head> that the bundler cannot see. Reading the cookie in the
+   * layout, the `<html>` leaves the very first response with the right attribute.
    *
-   * "system" não vira atributo: a ausência dele é o que devolve a decisão ao
-   * `prefers-color-scheme`.
+   * "system" does not become an attribute: its absence is what hands the decision
+   * back to `prefers-color-scheme`.
    */
-  const escolhido = (await cookies()).get(THEME_COOKIE)?.value;
-  const theme = isTheme(escolhido) ? escolhido : "system";
+  const chosen = (await cookies()).get(THEME_COOKIE)?.value;
+  const theme = isTheme(chosen) ? chosen : "system";
 
   return (
     <html

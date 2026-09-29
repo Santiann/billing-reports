@@ -6,7 +6,7 @@ import { Forbidden } from "@/components/ui/forbidden";
 import { PageHeader } from "@/components/ui/page-header";
 import { getSessionUser } from "@/lib/session-user";
 
-const COLUNAS = [
+const COLUMNS = [
   { field: "document", label: "Documento" },
   { field: "description", label: "Descrição" },
   { field: "original_amount", label: "Valor" },
@@ -15,17 +15,17 @@ const COLUNAS = [
   { field: "due_date", label: "Vencimento" },
 ] as const;
 
-const EXEMPLO = `documento;descricao;valor;taxa;emissao;vencimento
+const EXAMPLE_CSV = `documento;descricao;valor;taxa;emissao;vencimento
 12345678000190;Mensalidade de agosto;1.500,00;0,02;10/07/2026;09/08/2026
 98765432000155;Consultoria;800,00;0,02;2026-07-15;2026-08-15`;
 
 export default async function ImportBillingsPage() {
-  // A tela não é a barreira — o backend recusa a operação de qualquer forma —
-  // mas quem digita o endereço merece a explicação, não um formulário que vai
-  // falhar no envio.
-  const { can_write: podeEscrever } = await getSessionUser();
+  // The screen is not the barrier — the backend refuses the operation either way —
+  // but whoever types the address deserves the explanation, not a form that will
+  // fail on submit.
+  const { can_write: canWrite } = await getSessionUser();
 
-  if (!podeEscrever) {
+  if (!canWrite) {
     return <Forbidden voltar={{ href: "/cobrancas", label: "Cobranças" }} />;
   }
 
@@ -57,10 +57,10 @@ export default async function ImportBillingsPage() {
 
       <ImportForm
         action={importBillings}
-        columns={COLUNAS}
+        columns={COLUMNS}
         labelField="description"
-        exampleCsv={EXEMPLO}
-        voltarHref="/cobrancas"
+        exampleCsv={EXAMPLE_CSV}
+        backHref="/cobrancas"
       />
     </div>
   );

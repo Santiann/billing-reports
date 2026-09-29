@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 
 /**
- * Lista de campos de um registro — a ficha do cliente ou da cobrança.
+ * The field list of one record — the customer's or the billing's detail panel.
  *
- * `<dl>` e não uma tabela: o que existe aqui é rótulo e valor de um registro
- * só, e é isso que a lista de definição descreve. Leitor de tela anuncia o
- * rótulo junto do valor sem precisar de cabeçalho de coluna.
+ * A `<dl>` and not a table: what exists here is the label and value of a single
+ * record, and that is what a definition list describes. A screen reader announces
+ * the label together with the value without needing a column header.
  *
- * Os valores de dinheiro passam `mono` para cair na mesma família das colunas
- * da tabela: o mesmo número precisa parecer o mesmo número nas duas telas.
+ * Money values pass `mono` so they land in the same family as the table's columns:
+ * the same number has to look like the same number on both screens.
  */
 
 export type Definition = {

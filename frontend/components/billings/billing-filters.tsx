@@ -44,8 +44,8 @@ export function BillingFilters() {
     >
       <div className="min-w-56 flex-1">
         <Field label="Buscar" htmlFor="search">
-          {/* Não-controlado, com a URL como fonte da verdade. A `key` remonta
-              o campo quando o parâmetro muda por fora. */}
+          {/* Uncontrolled, with the URL as the source of truth. The `key` remounts
+              the field when the parameter changes from outside. */}
           <Input
             id="search"
             name="search"

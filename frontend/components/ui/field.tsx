@@ -5,15 +5,15 @@ import type {
 } from "react";
 
 /**
- * Campo de formulário: rótulo, controle, dica e erro.
+ * A form field: label, control, hint and error.
  *
- * O `Field` embrulha os três porque a ligação entre eles é onde acessibilidade
- * se perde: `htmlFor` sem `id` correspondente, erro que o leitor de tela nunca
- * anuncia, campo inválido sem `aria-invalid`. Amarrado aqui, uma vez, nenhum
- * formulário precisa lembrar.
+ * `Field` wraps the three because the wiring between them is where accessibility
+ * gets lost: `htmlFor` with no matching `id`, an error the screen reader never
+ * announces, an invalid field with no `aria-invalid`. Tied together here, once, no
+ * form has to remember.
  */
 
-const CONTROLE =
+const CONTROL =
   "w-full rounded-md border border-rule-strong bg-surface px-3 py-2 text-sm " +
   "text-ink placeholder:text-ink-faint transition-colors " +
   "hover:border-ink-faint disabled:bg-sunken disabled:text-ink-muted " +
@@ -23,14 +23,14 @@ export function Input({
   className = "",
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={`${CONTROLE} ${className}`.trim()} {...props} />;
+  return <input className={`${CONTROL} ${className}`.trim()} {...props} />;
 }
 
 export function Select({
   className = "",
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`${CONTROLE} ${className}`.trim()} {...props} />;
+  return <select className={`${CONTROL} ${className}`.trim()} {...props} />;
 }
 
 export function Field({
@@ -79,11 +79,11 @@ export function Field({
 }
 
 /**
- * Erro de validação do campo.
+ * A field's validation error.
  *
- * `role="alert"` para o leitor de tela anunciar sem o usuário precisar voltar
- * ao campo. Vem do 422 do backend, campo a campo, e não de uma validação
- * paralela no cliente que poderia discordar da do servidor.
+ * `role="alert"` so the screen reader announces it without the user having to go
+ * back to the field. It comes from the backend's 422, field by field, and not from
+ * a parallel client-side validation that could disagree with the server's.
  */
 export function FieldError({
   id,

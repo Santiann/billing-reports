@@ -2,13 +2,13 @@ import { Badge } from "@/components/ui/badge";
 import type { Billing } from "@/types/billing";
 
 /**
- * O estado da cobrança como etiqueta.
+ * The billing's state as a label.
  *
- * Existe como componente porque a regra aparece em três telas — listagem,
- * detalhe e relatório — e ela tem um detalhe fácil de errar: "vencida" NÃO é
- * um dos dois status gravados. É condição derivada, pendente com vencimento no
- * passado, e o backend a entrega pronta em `is_overdue`. Repetir o ternário em
- * cada tela é como as três acabam discordando.
+ * It exists as a component because the rule appears on three screens — listing,
+ * detail and report — and it has a detail that is easy to get wrong: "overdue" is
+ * NOT one of the two stored statuses. It is a derived condition, pending with the
+ * due date in the past, and the backend delivers it ready in `is_overdue`.
+ * Repeating the ternary on each screen is how the three end up disagreeing.
  */
 export function BillingStatusBadge({
   billing,

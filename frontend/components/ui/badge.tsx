@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
 /**
- * Etiqueta de estado.
+ * A state label.
  *
- * Os tons saem dos tokens do domínio — vencida, paga, pendente — e não de uma
- * paleta genérica. É o que faz a mesma cor significar a mesma coisa na
- * listagem, no detalhe e no relatório.
+ * The tones come from the domain's tokens — overdue, paid, pending — and not from
+ * a generic palette. That is what makes the same colour mean the same thing in the
+ * listing, on the detail page and in the report.
  */
 
 export type BadgeTone =
@@ -14,11 +14,10 @@ export type BadgeTone =
   | "paid"
   | "pending"
   | "accent"
-  // `positive` tem a mesma aparência de `paid` e existe para o código não
-  // mentir: um cliente ATIVO não é um cliente pago. Compartilhar a cor é
-  // correto — verde significa a mesma coisa nas duas telas —, mas escrever
-  // `tone="paid"` num cliente faria o próximo leitor procurar um pagamento
-  // que não existe.
+  // `positive` looks the same as `paid` and exists so the code does not lie: an
+  // ACTIVE customer is not a paid customer. Sharing the colour is right — green
+  // means the same thing on both screens — but writing `tone="paid"` on a customer
+  // would send the next reader looking for a payment that does not exist.
   | "positive";
 
 const TONES: Record<BadgeTone, string> = {

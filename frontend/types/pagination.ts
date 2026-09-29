@@ -1,4 +1,4 @@
-/** Formato de AnonymousResourceCollection paginada do Laravel. */
+/** The shape of Laravel's paginated AnonymousResourceCollection. */
 export type Paginated<T> = {
   data: T[];
   links: {

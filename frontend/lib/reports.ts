@@ -9,7 +9,7 @@ export async function getBillingReport(
   const query = new URLSearchParams();
 
   for (const [key, value] of Object.entries(params)) {
-    // `sucesso` é da UI e não pertence à consulta.
+    // `sucesso` belongs to the UI and not to the query.
     if (value && key !== "sucesso") {
       query.set(key, value);
     }

@@ -3,12 +3,12 @@
 import { Button } from "@/components/ui/button";
 
 /**
- * Fronteira de erro da área autenticada: renderiza dentro do cabeçalho e
- * preserva a navegação. O que acontece acima dela — inclusive a falha do
- * próprio layout autenticado — cai no `app/error.tsx` da raiz.
+ * The authenticated area's error boundary: it renders inside the header and preserves
+ * the navigation. What happens above it — including a failure of the authenticated
+ * layout itself — falls through to the root's `app/error.tsx`.
  *
- * `retry` e não `reset`: só o primeiro refaz o fetch. Ver o comentário do
- * arquivo da raiz.
+ * `retry` and not `reset`: only the former redoes the fetch. See the comment in the
+ * root file.
  */
 export default function AppError({
   error,

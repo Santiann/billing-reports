@@ -4,14 +4,14 @@ import { buttonClasses } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 
 /**
- * Tela de operação não permitida pelo perfil.
+ * The screen for an operation the role does not allow.
  *
- * Existe porque esconder o link não impede ninguém de digitar o endereço, e
- * quem digita merece a explicação em vez de um 404 mentiroso — a página existe,
- * o que falta é permissão.
+ * It exists because hiding the link stops nobody from typing the address, and
+ * whoever types it deserves the explanation rather than a lying 404 — the page
+ * exists, what is missing is permission.
  *
- * O backend recusa a mesma operação de qualquer forma. Isto é cortesia, não
- * segurança.
+ * The backend refuses the same operation either way. This is courtesy, not
+ * security.
  */
 export function Forbidden({
   voltar,

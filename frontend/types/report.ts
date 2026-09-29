@@ -4,7 +4,7 @@ import type { Paginated } from "@/types/pagination";
 export type ReportDateField = "issue_date" | "due_date" | "payment_date";
 export type ReportStatus = "pending" | "paid" | "overdue";
 
-/** Totalizadores do conjunto filtrado inteiro, não da página exibida. */
+/** Totals for the whole filtered set, not for the page on screen. */
 export type ReportTotals = {
   count: number;
   original_amount: string;
@@ -14,7 +14,7 @@ export type ReportTotals = {
   pending_amount: string;
 };
 
-/** Eco dos filtros aplicados, como o backend os entendeu. */
+/** An echo of the applied filters, as the backend understood them. */
 export type ReportFilters = {
   date_field: ReportDateField;
   start_date: string | null;
@@ -26,8 +26,8 @@ export type ReportFilters = {
 };
 
 /**
- * O backend informa o teto do PDF e se o recorte atual cabe nele, para a tela
- * avisar antes do clique em vez de mandar o usuário bater num 422.
+ * The backend reports the PDF cap and whether the current scope fits it, so the
+ * screen can warn before the click instead of sending the user into a 422.
  */
 export type ReportExportInfo = {
   pdf_max_rows: number;

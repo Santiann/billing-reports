@@ -8,9 +8,9 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { CUSTOMER_STATUSES } from "@/types/customer";
 
 /**
- * Os filtros vivem na URL, não em estado de componente: assim a página é
- * compartilhável, sobrevive ao refresh e o Server Component consegue montar a
- * consulta já filtrada no servidor.
+ * The filters live in the URL, not in component state: that way the page is
+ * shareable, survives a refresh, and the Server Component can build the already
+ * filtered query on the server.
  */
 export function CustomerFilters() {
   const router = useRouter();
@@ -30,8 +30,8 @@ export function CustomerFilters() {
       }
     }
 
-    // Filtro novo sempre volta para a primeira página: manter `page=7` depois
-    // de filtrar costuma cair numa página que não existe mais.
+    // A new filter always goes back to the first page: keeping `page=7` after
+    // filtering usually lands on a page that no longer exists.
     params.delete("page");
     params.delete("sucesso");
 
@@ -51,10 +51,10 @@ export function CustomerFilters() {
     >
       <div className="min-w-56 flex-1">
         <Field label="Buscar" htmlFor="search">
-          {/* Não-controlado, com a URL como fonte da verdade. A `key` remonta o
-              campo quando o parâmetro muda por fora (voltar do browser, botão
-              Limpar), que é o que um useEffect de sincronia faria — só que sem
-              estado duplicado. */}
+          {/* Uncontrolled, with the URL as the source of truth. The `key` remounts
+              the field when the parameter changes from outside (browser back, the
+              Limpar button), which is what a syncing useEffect would do — only
+              without duplicated state. */}
           <Input
             id="search"
             name="search"

@@ -1,22 +1,22 @@
 import { THEMES, type Theme } from "@/lib/theme";
 
 /**
- * Seletor de tema: sistema, claro, escuro.
+ * The theme selector: system, light, dark.
  *
- * Formulário HTML puro, com três botões de submit e nenhum JavaScript. O POST
- * vai para um Route Handler que grava o cookie e devolve para a página de
- * origem, e é a navegação que faz o layout raiz rodar de novo no servidor e
- * devolver o `<html>` com o `data-theme` certo.
+ * Plain HTML form, with three submit buttons and no JavaScript. The POST goes to a
+ * Route Handler that writes the cookie and sends you back to the originating page,
+ * and it is the navigation that makes the root layout run again on the server and
+ * return the `<html>` with the right `data-theme`.
  *
- * A alternativa óbvia — Server Action com `revalidatePath` — foi tentada e não
- * funciona aqui: numa atualização suave o React não reconcilia atributo do
- * elemento `<html>`, então o cookie mudava, o servidor já respondia o tema
- * novo, e a tela continuava no tema antigo até alguém recarregar.
+ * The obvious alternative — a Server Action with `revalidatePath` — was tried and
+ * does not work here: on a soft update React does not reconcile attributes on the
+ * `<html>` element, so the cookie changed, the server was already answering with
+ * the new theme, and the screen stayed on the old one until someone reloaded.
  *
- * Componente de servidor: não há estado de cliente para manter.
+ * A server component: there is no client state to keep.
  */
 
-const ICONES: Record<Theme, React.ReactNode> = {
+const ICONS: Record<Theme, React.ReactNode> = {
   // Monitor.
   system: (
     <>
@@ -24,14 +24,14 @@ const ICONES: Record<Theme, React.ReactNode> = {
       <path d="M7 17h6M10 14v3" />
     </>
   ),
-  // Sol.
+  // Sun.
   light: (
     <>
       <circle cx="10" cy="10" r="3.5" />
       <path d="M10 2.5v1.5M10 16v1.5M17.5 10H16M4 10H2.5M15.3 4.7l-1 1M5.7 14.3l-1 1M15.3 15.3l-1-1M5.7 5.7l-1-1" />
     </>
   ),
-  // Lua.
+  // Moon.
   dark: (
     <>
       <path d="M16 11.2A6.5 6.5 0 0 1 8.8 4a6.5 6.5 0 1 0 7.2 7.2z" />
@@ -71,7 +71,7 @@ export function ThemeToggle({ atual }: { atual: Theme }) {
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              {ICONES[value]}
+              {ICONS[value]}
             </svg>
             <span className="sr-only">{label}</span>
           </button>

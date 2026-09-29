@@ -33,7 +33,7 @@ function sortHref(
     }
   }
 
-  // Clicar na coluna já ordenada inverte a direção.
+  // Clicking the already-sorted column flips the direction.
   const isCurrent = (params.sort ?? "name") === column;
   const nextDirection =
     isCurrent && (params.direction ?? "asc") === "asc" ? "desc" : "asc";
@@ -56,7 +56,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
     per_page: params.per_page,
   });
 
-  const { can_write: podeEscrever } = await getSessionUser();
+  const { can_write: canWrite } = await getSessionUser();
 
   const currentSort = params.sort ?? "name";
   const currentDirection = params.direction ?? "asc";
@@ -66,7 +66,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
       <PageHeader
         title="Clientes"
         action={
-          podeEscrever ? (
+          canWrite ? (
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/clientes/importar"
@@ -92,13 +92,13 @@ export default async function CustomersPage({ searchParams }: PageProps) {
         <Table label="Clientes cadastrados">
           <THead>
             {SORTABLE.map((column) => {
-              const ativa = currentSort === column.key;
+              const isActive = currentSort === column.key;
 
               return (
                 <TH
                   key={column.key}
                   aria-sort={
-                    ativa
+                    isActive
                       ? currentDirection === "asc"
                         ? "ascending"
                         : "descending"
@@ -109,13 +109,13 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                     href={sortHref(params, column.key)}
                     className={
                       "inline-flex items-center gap-1 transition-colors hover:text-ink " +
-                      (ativa ? "text-ink" : "")
+                      (isActive ? "text-ink" : "")
                     }
                   >
                     {column.label}
-                    {/* A seta ocupa lugar mesmo inativa: sem isso o cabeçalho
+                    {/* The arrow takes up room even when inactive: without it the
                         salta de largura a cada troca de ordenação. */}
-                    <span aria-hidden className={ativa ? "" : "opacity-0"}>
+                    <span aria-hidden className={isActive ? "" : "opacity-0"}>
                       {currentDirection === "asc" ? "↑" : "↓"}
                     </span>
                   </Link>
@@ -154,7 +154,7 @@ export default async function CustomersPage({ searchParams }: PageProps) {
                     </Badge>
                   </TD>
                   <TD numeric>
-                    {podeEscrever ? (
+                    {canWrite ? (
                       <Link
                         href={`/clientes/${customer.id}/editar`}
                         className="font-sans text-sm text-accent hover:underline"

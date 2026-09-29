@@ -10,48 +10,48 @@ import {
 
 import { reversePayment, type ReversalFormState } from "@/app/actions/payments";
 import { Button } from "@/components/ui/button";
-import { novaChaveDeIdempotencia } from "@/lib/idempotency";
+import { newIdempotencyKey } from "@/lib/idempotency";
 
 const INITIAL: ReversalFormState = {};
 
 /**
- * Estorno em dois passos, sem modal.
+ * A two-step reversal, with no modal.
  *
- * O primeiro clique só abre a confirmação, que diz o que vai acontecer com o
- * dinheiro antes de acontecer. Modal seria mais um componente para uma
- * pergunta de uma linha, e tiraria de vista os valores pagos que estão logo
- * acima — que são justamente o que a pessoa precisa conferir antes de estornar.
+ * The first click only opens the confirmation, which says what is about to happen
+ * to the money before it happens. A modal would be one more component for a
+ * one-line question, and it would hide the paid amounts sitting just above — which
+ * are exactly what someone needs to check before reversing.
  */
 export function ReversalForm({ billingId }: { billingId: number }) {
   const action = reversePayment.bind(null, billingId);
   const [state, formAction, isActionPending] = useActionState(action, INITIAL);
   const [isTransitionPending, startTransition] = useTransition();
-  const [confirmando, setConfirmando] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const isPending = isActionPending || isTransitionPending;
 
   /*
-   * Uma chave por montagem do formulário.
+   * One key per mount of the form.
    *
-   * O estorno não tem campos, então não há conteúdo que mude entre tentativas:
-   * todo reenvio desta tela é a mesma operação. A chave nasce no clique, e não
-   * na renderização, pelo mesmo motivo do formulário de pagamento — no
-   * servidor e na hidratação o sorteio daria dois valores.
+   * A reversal has no fields, so there is no content that changes between
+   * attempts: every resend from this screen is the same operation. The key is born
+   * on the click rather than during render, for the same reason as the payment
+   * form — on the server and at hydration the draw would give two values.
    */
-  const chave = useRef<string | null>(null);
+  const key = useRef<string | null>(null);
 
-  function enviar(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault();
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    chave.current ??= novaChaveDeIdempotencia();
+    key.current ??= newIdempotencyKey();
 
-    const dados = new FormData();
-    dados.set("idempotency_key", chave.current);
+    const data = new FormData();
+    data.set("idempotency_key", key.current);
 
-    startTransition(() => formAction(dados));
+    startTransition(() => formAction(data));
   }
 
-  if (!confirmando) {
+  if (!confirming) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-ink-muted">
@@ -59,7 +59,7 @@ export function ReversalForm({ billingId }: { billingId: number }) {
           transferência revertida, baixa lançada na cobrança errada.
         </p>
         <div>
-          <Button variant="secondary" onClick={() => setConfirmando(true)}>
+          <Button variant="secondary" onClick={() => setConfirming(true)}>
             Estornar pagamento
           </Button>
         </div>
@@ -68,7 +68,7 @@ export function ReversalForm({ billingId }: { billingId: number }) {
   }
 
   return (
-    <form onSubmit={enviar} className="flex flex-col gap-4">
+    <form onSubmit={submit} className="flex flex-col gap-4">
       {state.message ? (
         <p
           role="alert"
@@ -85,7 +85,7 @@ export function ReversalForm({ billingId }: { billingId: number }) {
       </p>
 
       <div className="flex flex-wrap gap-3">
-        {/* `danger`: no domínio, a cor de vencida já significa perda. */}
+        {/* `danger`: in this domain, the overdue colour already means loss. */}
         <Button type="submit" variant="danger" disabled={isPending}>
           {isPending ? "Estornando…" : "Confirmar estorno"}
         </Button>
@@ -93,7 +93,7 @@ export function ReversalForm({ billingId }: { billingId: number }) {
           type="button"
           variant="secondary"
           disabled={isPending}
-          onClick={() => setConfirmando(false)}
+          onClick={() => setConfirming(false)}
         >
           Cancelar
         </Button>

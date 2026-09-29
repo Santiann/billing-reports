@@ -51,15 +51,15 @@ export default async function ReportPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const report = await getBillingReport(params);
 
-  // O seletor precisa do nome para reexibir o cliente filtrado; a URL só
-  // carrega o id.
+  // The picker needs the name to re-display the filtered customer; the URL only
+  // carries the id.
   let selectedCustomer: Customer | undefined;
 
   if (report.filters.customer_id) {
     try {
       selectedCustomer = await getCustomer(String(report.filters.customer_id));
     } catch {
-      // Cliente removido não pode derrubar o relatório inteiro.
+      // A removed customer must not bring the whole report down.
     }
   }
 
@@ -71,7 +71,7 @@ export default async function ReportPage({ searchParams }: PageProps) {
       <PageHeader
         title="Relatório de faturamento"
         action={
-          /* Os filtros vêm do backend, já normalizados: o arquivo sai com o
+          /* The filters come from the backend, already normalized: the file comes
              mesmo recorte que a tela está mostrando. */
           <ReportExport
             filters={report.filters}
@@ -94,14 +94,14 @@ export default async function ReportPage({ searchParams }: PageProps) {
             <TH>Descrição</TH>
             {COLUMNS.map((column) => {
               const numeric = "numeric" in column && column.numeric;
-              const ativa = currentSort === column.key;
+              const isActive = currentSort === column.key;
 
               return (
                 <TH
                   key={column.key}
                   numeric={numeric}
                   aria-sort={
-                    ativa
+                    isActive
                       ? currentDirection === "asc"
                         ? "ascending"
                         : "descending"
@@ -112,13 +112,13 @@ export default async function ReportPage({ searchParams }: PageProps) {
                     href={sortHref(params, column.key)}
                     className={
                       "inline-flex items-center gap-1 transition-colors hover:text-ink " +
-                      (ativa ? "text-ink" : "")
+                      (isActive ? "text-ink" : "")
                     }
                   >
                     {column.label}
-                    {/* A seta ocupa lugar mesmo inativa: sem isso a coluna
+                    {/* The arrow takes up room even when inactive: without it the
                         salta de largura a cada troca de ordenação. */}
-                    <span aria-hidden className={ativa ? "" : "opacity-0"}>
+                    <span aria-hidden className={isActive ? "" : "opacity-0"}>
                       {currentDirection === "asc" ? "↑" : "↓"}
                     </span>
                   </Link>

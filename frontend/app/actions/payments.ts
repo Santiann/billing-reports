@@ -25,13 +25,12 @@ export async function registerPayment(
   const paidAmount = String(formData.get("paid_amount") ?? "");
 
   /*
-   * A chave de idempotência vem do formulário, sorteada no browser.
+   * The idempotency key comes from the form, drawn in the browser.
    *
-   * Ela não pode nascer aqui: uma Server Action reexecutada por retry de rede
-   * rodaria este código de novo e sortearia outra chave, que é justamente o
-   * caso que a chave existe para cobrir. Nascendo no cliente, o reenvio manda
-   * a mesma — e o backend devolve o primeiro resultado em vez de cobrar duas
-   * vezes.
+   * It cannot be born here: a Server Action re-executed by a network retry would run
+   * this code again and draw another key, which is exactly the case the key exists to
+   * cover. Born on the client, the resend sends the same one — and the backend returns
+   * the first result instead of charging twice.
    */
   const idempotencyKey = String(formData.get("idempotency_key") ?? "");
 
@@ -40,8 +39,8 @@ export async function registerPayment(
       method: "POST",
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {},
       body: {
-        // Campos vazios viram null para o backend aplicar o default: hoje,
-        // e o valor atualizado calculado.
+        // Empty fields become null so the backend applies its defaults: today,
+        // and the computed updated amount.
         payment_date: paymentDate || null,
         paid_amount: paidAmount || null,
       },
@@ -60,9 +59,9 @@ export async function registerPayment(
       redirect("/api/auth/expire");
     }
 
-    // 409: a primeira requisição desta mesma chave ainda está processando.
-    // Não é falha — é cedo. Dizer "não foi possível" faria o usuário clicar
-    // de novo, que é o oposto do que a situação pede.
+    // 409: the first request with this same key is still processing. It is not a
+    // failure — it is early. Saying "could not" would make the user click again,
+    // which is the opposite of what the situation calls for.
     if (error instanceof ApiError && error.status === 409) {
       return {
         message: "Este pagamento já está sendo registrado. Aguarde um instante.",
@@ -82,12 +81,12 @@ export type ReversalFormState = {
 };
 
 /**
- * Estorna o pagamento.
+ * Reverses the payment.
  *
- * Mesma forma do registro de pagamento, inclusive a chave de idempotência
- * vinda do browser: o estorno é a outra operação em que repetir muda dinheiro
- * de lugar. Pagou, estornou, pagou de novo — um retry atrasado do estorno sem
- * chave desfaria o segundo pagamento.
+ * The same shape as recording a payment, idempotency key from the browser included:
+ * a reversal is the other operation where repeating moves money around. Paid,
+ * reversed, paid again — a late reversal retry with no key would undo the second
+ * payment.
  */
 export async function reversePayment(
   id: number,
@@ -106,8 +105,8 @@ export async function reversePayment(
     if (error instanceof ApiError && error.status === 422) {
       const payload = error.payload as ValidationPayload | null;
 
-      // Não há campo no formulário: o erro possível é de estado, "esta
-      // cobrança não está paga", e vem na chave status.
+      // There is no field in the form: the possible error is one of state, "this
+      // billing is not paid", and it arrives under the status key.
       return {
         message:
           payload?.errors?.status?.[0] ??

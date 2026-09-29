@@ -3,11 +3,11 @@ export type DashboardPeriod = {
   start_date: string;
   end_date: string;
   count: number;
-  /** Soma do valor original das cobranças que vencem no mês. */
+  /** Sum of the original amount of the billings falling due in the month. */
   original_amount: string;
-  /** Congelado no pagamento, nunca recalculado. */
+  /** Frozen at payment time, never recomputed. */
   received_amount: string;
-  /** Valor ATUALIZADO do que ainda não foi pago: já inclui juros. */
+  /** The UPDATED amount of what is still unpaid: interest already included. */
   pending_amount: string;
   interest_amount: string;
   overdue_count: number;

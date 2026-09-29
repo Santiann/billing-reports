@@ -4,42 +4,42 @@ import Link from "next/link";
 import { useSelectedLayoutSegment } from "next/navigation";
 
 /**
- * Navegação principal, com a seção corrente marcada.
+ * The main navigation, with the current section marked.
  *
- * Cliente por um motivo só: saber em qual seção se está. `useSelectedLayoutSegment`
- * em vez de `usePathname` porque o que interessa é o primeiro segmento — estando
- * em `/cobrancas/8321/editar`, quem lê o cabeçalho precisa ver "Cobranças"
- * marcado, e comparar o caminho inteiro não daria isso sem um `startsWith`
- * escrito à mão.
+ * A client component for one reason only: knowing which section you are in.
+ * `useSelectedLayoutSegment` rather than `usePathname` because what matters is the
+ * first segment — standing at `/cobrancas/8321/editar`, whoever reads the header
+ * needs to see "Cobranças" marked, and comparing the whole path would not give
+ * that without a hand-written `startsWith`.
  */
 
-const SECOES = [
-  { segmento: "clientes", href: "/clientes", label: "Clientes" },
-  { segmento: "cobrancas", href: "/cobrancas", label: "Cobranças" },
-  { segmento: "relatorio", href: "/relatorio", label: "Relatório" },
+const SECTIONS = [
+  { segment: "clientes", href: "/clientes", label: "Clientes" },
+  { segment: "cobrancas", href: "/cobrancas", label: "Cobranças" },
+  { segment: "relatorio", href: "/relatorio", label: "Relatório" },
 ] as const;
 
 export function MainNav({ className = "" }: { className?: string }) {
-  const segmento = useSelectedLayoutSegment();
+  const segment = useSelectedLayoutSegment();
 
   return (
     <nav aria-label="Seções" className={`flex items-center gap-1 ${className}`.trim()}>
-      {SECOES.map((secao) => {
-        const ativa = segmento === secao.segmento;
+      {SECTIONS.map((section) => {
+        const isActive = segment === section.segment;
 
         return (
           <Link
-            key={secao.href}
-            href={secao.href}
-            aria-current={ativa ? "page" : undefined}
+            key={section.href}
+            href={section.href}
+            aria-current={isActive ? "page" : undefined}
             className={
               "rounded-md px-2.5 py-1.5 text-sm transition-colors " +
-              (ativa
+              (isActive
                 ? "bg-sunken font-medium text-ink"
                 : "text-ink-muted hover:bg-sunken hover:text-ink")
             }
           >
-            {secao.label}
+            {section.label}
           </Link>
         );
       })}

@@ -7,43 +7,43 @@ import { fetchAsUser } from "@/lib/server-api";
 import type { ImportReport, ImportState } from "@/types/import";
 
 /**
- * Analisa ou importa um CSV.
+ * Analyses or imports a CSV.
  *
- * A mesma action faz as duas coisas, decidido pelo botão que enviou o
- * formulário. O arquivo é reenviado na confirmação, em vez de ficar guardado no
- * servidor entre a prévia e o confirmar — o input do browser ainda tem o
- * arquivo, e essa escolha dispensa diretório temporário, identificador de
- * sessão, expiração e faxina de arquivo abandonado.
+ * The same action does both, decided by the button that submitted the form. The file
+ * is resent on confirmation rather than being held on the server between the preview
+ * and the confirm — the browser's input still has the file, and that choice does
+ * away with a temporary directory, a session identifier, an expiry and cleaning up
+ * abandoned files.
  *
- * O custo é um upload a mais. Para um CSV de clientes ele é trivial, e o
- * relatório da confirmação é gerado pelo mesmo código da prévia — então o que o
- * usuário viu é o que vai acontecer.
+ * The cost is one extra upload. For a customer CSV it is trivial, and the
+ * confirmation's report is produced by the same code as the preview — so what the
+ * user saw is what will happen.
  */
-async function enviar(
-  recurso: "customers" | "billings",
+async function submit(
+  resource: "customers" | "billings",
   formData: FormData,
 ): Promise<ImportState> {
-  const arquivo = formData.get("file");
-  const modo = formData.get("acao") === "import" ? "import" : "preview";
+  const file = formData.get("file");
+  const mode = formData.get("step") === "import" ? "import" : "preview";
 
-  if (!(arquivo instanceof File) || arquivo.size === 0) {
+  if (!(file instanceof File) || file.size === 0) {
     return { errors: { file: ["Selecione um arquivo CSV."] } };
   }
 
-  const corpo = new FormData();
-  corpo.set("file", arquivo);
+  const body = new FormData();
+  body.set("file", file);
 
   try {
     const report = await fetchAsUser<ImportReport>(
-      `/api/${recurso}/import${modo === "preview" ? "?preview=1" : ""}`,
-      { method: "POST", body: corpo },
+      `/api/${resource}/import${mode === "preview" ? "?preview=1" : ""}`,
+      { method: "POST", body },
     );
 
-    if (modo === "import") {
-      revalidatePath(`/${recurso === "customers" ? "clientes" : "cobrancas"}`);
+    if (mode === "import") {
+      revalidatePath(`/${resource === "customers" ? "clientes" : "cobrancas"}`);
     }
 
-    return { mode: modo, report };
+    return { mode, report };
   } catch (error) {
     if (error instanceof ApiError && error.status === 422) {
       const payload = error.payload as {
@@ -62,12 +62,12 @@ export async function importCustomers(
   _previous: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
-  return enviar("customers", formData);
+  return submit("customers", formData);
 }
 
 export async function importBillings(
   _previous: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
-  return enviar("billings", formData);
+  return submit("billings", formData);
 }

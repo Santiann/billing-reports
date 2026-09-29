@@ -7,14 +7,14 @@ import { ApiError } from "@/lib/api";
 import { fetchAsUser } from "@/lib/server-api";
 
 /**
- * Mutações de cliente.
+ * Customer mutations.
  *
- * Rodam no servidor, leem o cookie httpOnly e anexam o Bearer. O browser não
- * tem o token, então não teria como chamar o Laravel direto — mesma razão
- * pela qual o login passa por Route Handler.
+ * They run on the server, read the httpOnly cookie and attach the Bearer. The
+ * browser does not have the token, so it would have no way to call Laravel directly —
+ * the same reason the login goes through a Route Handler.
  *
- * Os erros de validação do Laravel (422) voltam campo a campo para o
- * formulário exibir, em vez de virarem uma mensagem genérica.
+ * Laravel's validation errors (422) come back field by field for the form to
+ * display, rather than collapsing into a generic message.
  */
 export type CustomerFormState = {
   errors?: Record<string, string[]>;
@@ -65,8 +65,8 @@ export async function createCustomer(
     return toFormState(error, "Não foi possível cadastrar o cliente.");
   }
 
-  // redirect() fora do try: ele sinaliza por exceção, e ser capturado pelo
-  // catch acima viraria "erro ao cadastrar" num cadastro que deu certo.
+  // redirect() outside the try: it signals by throwing, and being caught by the
+  // catch above would turn a successful create into "erro ao cadastrar".
   revalidatePath("/clientes");
   redirect("/clientes?sucesso=cliente-criado");
 }

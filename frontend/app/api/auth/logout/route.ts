@@ -5,11 +5,11 @@ import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 import { getSessionToken } from "@/lib/server-api";
 
 /**
- * Encerra a sessão.
+ * Ends the session.
  *
- * Revoga o token no Laravel e apaga o cookie. O cookie é apagado mesmo se a
- * chamada à API falhar: deixar o usuário preso numa sessão que ele pediu para
- * encerrar é pior do que um token órfão, que expira sozinho.
+ * Revokes the token in Laravel and deletes the cookie. The cookie is deleted even if
+ * the API call fails: leaving the user stuck in a session they asked to end is worse
+ * than an orphaned token, which expires on its own.
  */
 export async function POST() {
   const token = await getSessionToken();
@@ -18,7 +18,7 @@ export async function POST() {
     try {
       await apiFetch("/api/auth/logout", { method: "POST", token });
     } catch {
-      // Sem tratamento: o cookie some de qualquer jeito, logo abaixo.
+      // No handling: the cookie goes away regardless, just below.
     }
   }
 

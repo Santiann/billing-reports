@@ -1,13 +1,13 @@
 /**
- * Nome e opções do cookie de sessão.
+ * The session cookie's name and options.
  *
- * Sem importar `next/headers`: este módulo é lido também pelo middleware, que
- * roda em outro runtime.
+ * Without importing `next/headers`: this module is also read by the middleware,
+ * which runs on another runtime.
  */
 
 export const SESSION_COOKIE = "billing_session";
 
-/** 8 horas — expediente, não sessão eterna. */
+/** 8 hours — a working day, not an eternal session. */
 export const SESSION_MAX_AGE = 60 * 60 * 8;
 
 export const sessionCookieOptions = {

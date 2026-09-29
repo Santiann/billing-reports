@@ -5,12 +5,12 @@ import { InterestCurve } from "@/components/landing/interest-curve";
 import { buttonClasses } from "@/components/ui/button";
 
 /**
- * Página pública, servida na raiz para quem não tem sessão.
+ * The public page, served at the root to whoever has no session.
  *
- * Toda afirmação numérica daqui é medida, e nenhuma é inventada. Não há
- * depoimento de cliente nem logotipo de empresa porque não há cliente nem
- * empresa: a prova que este sistema tem para oferecer é o que ele faz com dois
- * milhões de cobranças, e é isso que está escrito.
+ * Every numeric claim here is measured, and none is invented. There is no customer
+ * testimonial and no company logo because there is no customer and no company: the
+ * proof this system has to offer is what it does with two million billings, and that
+ * is what is written.
  */
 
 export const metadata: Metadata = {
@@ -19,48 +19,48 @@ export const metadata: Metadata = {
     "Juros de atraso calculados no banco, não na planilha. O mesmo número na tela, no relatório e no arquivo exportado, sobre dois milhões de cobranças.",
 };
 
-const NUMEROS = [
-  { valor: "2.000.000", label: "cobranças na base de medição" },
-  { valor: "0,24s", label: "no recorte de um mês por cliente" },
-  { valor: "0,84s", label: "para o painel inteiro carregar" },
-  { valor: "293", label: "testes automatizados" },
+const STATS = [
+  { value: "2.000.000", label: "cobranças na base de medição" },
+  { value: "0,24s", label: "no recorte de um mês por cliente" },
+  { value: "0,84s", label: "para o painel inteiro carregar" },
+  { value: "293", label: "testes automatizados" },
 ];
 
-const RECURSOS = [
+const FEATURES = [
   {
-    titulo: "Uma fórmula, não quatro",
-    corpo:
+    title: "Uma fórmula, não quatro",
+    body:
       "O cálculo de juros existe num lugar só e responde em SQL e em PHP pela mesma regra. É o que permite ordenar o relatório por valor atualizado sem carregar nada em memória — e o que garante que a tela de detalhe e o arquivo exportado nunca discordem sobre a mesma cobrança.",
   },
   {
-    titulo: "O banco filtra, ordena e soma",
-    corpo:
+    title: "O banco filtra, ordena e soma",
+    body:
       "Nenhuma tela carrega o conjunto inteiro para recortar depois. Os totalizadores saem de uma consulta de agregação sobre o filtro aplicado, não da soma da página que está à vista — quem está na página 3 vê o total do relatório, não o total de dez linhas.",
   },
   {
-    titulo: "Exportação que aguenta o volume",
-    corpo:
+    title: "Exportação que aguenta o volume",
+    body:
       "O CSV é escrito linha a linha enquanto o resultado é percorrido, sem limite de tamanho. O PDF tem teto de mil linhas, e o teto saiu de medição: o renderizador consome 420 MB para mil linhas e estoura 3 GB em cinco mil. Acima do teto a API recusa e aponta o CSV, em vez de morrer no meio.",
   },
 ];
 
-const PASSOS = [
+const STEPS = [
   {
-    numero: "01",
-    titulo: "Traga os clientes e as cobranças",
-    corpo:
+    number: "01",
+    title: "Traga os clientes e as cobranças",
+    body:
       "Cadastre pela tela ou importe um CSV. A importação analisa o arquivo antes de gravar e devolve, linha a linha, o que não entrou e por quê.",
   },
   {
-    numero: "02",
-    titulo: "Acompanhe o que vence e o que venceu",
-    corpo:
+    number: "02",
+    title: "Acompanhe o que vence e o que venceu",
+    body:
       "O painel mostra o mês corrente e os últimos doze meses. Cobrança vencida acumula juros compostos sobre os dias de atraso, calculados na hora da consulta.",
   },
   {
-    numero: "03",
-    titulo: "Feche o período e exporte",
-    corpo:
+    number: "03",
+    title: "Feche o período e exporte",
+    body:
       "Recorte por emissão, vencimento ou pagamento, com os totalizadores do conjunto inteiro. O arquivo sai com o mesmo recorte que está na tela.",
   },
 ];
@@ -81,7 +81,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1">
-        {/* --- acima da dobra ------------------------------------------- */}
+        {/* --- above the fold ------------------------------------------- */}
         <section className="mx-auto max-w-5xl px-5 py-16 sm:py-24">
           <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr]">
             <div>
@@ -125,18 +125,18 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* --- prova ---------------------------------------------------- */}
+        {/* --- proof ---------------------------------------------------- */}
         <section className="border-y border-rule bg-surface">
           <dl className="mx-auto grid max-w-5xl gap-px bg-rule px-0 sm:grid-cols-2 lg:grid-cols-4">
-            {NUMEROS.map((numero) => (
-              <div key={numero.label} className="bg-surface px-5 py-6">
-                <dt className="sr-only">{numero.label}</dt>
+            {STATS.map((stat) => (
+              <div key={stat.label} className="bg-surface px-5 py-6">
+                <dt className="sr-only">{stat.label}</dt>
                 <dd>
                   <span className="block text-3xl font-semibold text-ink">
-                    {numero.valor}
+                    {stat.value}
                   </span>
                   <span className="mt-1 block text-sm text-ink-muted">
-                    {numero.label}
+                    {stat.label}
                   </span>
                 </dd>
               </div>
@@ -144,7 +144,7 @@ export default function LandingPage() {
           </dl>
         </section>
 
-        {/* --- o problema ----------------------------------------------- */}
+        {/* --- the problem ---------------------------------------------- */}
         <section className="mx-auto max-w-3xl px-5 py-16 sm:py-20">
           <h2 className="font-display text-3xl leading-tight text-ink">
             A conta muda todo dia, e a planilha não sabe disso
@@ -166,7 +166,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* --- solução -------------------------------------------------- */}
+        {/* --- the solution --------------------------------------------- */}
         <section className="border-t border-rule bg-surface">
           <div className="mx-auto max-w-5xl px-5 py-16 sm:py-20">
             <h2 className="font-display text-3xl leading-tight text-ink">
@@ -174,13 +174,13 @@ export default function LandingPage() {
             </h2>
 
             <div className="mt-10 grid gap-10 sm:grid-cols-3">
-              {RECURSOS.map((recurso) => (
-                <div key={recurso.titulo}>
+              {FEATURES.map((feature) => (
+                <div key={feature.title}>
                   <h3 className="border-t-2 border-ink pt-3 text-base font-semibold text-ink">
-                    {recurso.titulo}
+                    {feature.title}
                   </h3>
                   <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-                    {recurso.corpo}
+                    {feature.body}
                   </p>
                 </div>
               ))}
@@ -188,30 +188,30 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* --- como funciona -------------------------------------------- */}
+        {/* --- how it works --------------------------------------------- */}
         <section className="mx-auto max-w-5xl px-5 py-16 sm:py-20">
           <h2 className="font-display text-3xl leading-tight text-ink">
             Três passos, e o período fecha
           </h2>
 
           <ol className="mt-10 grid gap-8 sm:grid-cols-3">
-            {PASSOS.map((passo) => (
-              <li key={passo.numero}>
+            {STEPS.map((step) => (
+              <li key={step.number}>
                 <span className="font-mono text-sm text-ink-faint">
-                  {passo.numero}
+                  {step.number}
                 </span>
                 <h3 className="mt-2 text-base font-semibold text-ink">
-                  {passo.titulo}
+                  {step.title}
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                  {passo.corpo}
+                  {step.body}
                 </p>
               </li>
             ))}
           </ol>
         </section>
 
-        {/* --- chamada final -------------------------------------------- */}
+        {/* --- closing call --------------------------------------------- */}
         <section className="border-t border-rule bg-surface">
           <div className="mx-auto max-w-3xl px-5 py-16 text-center sm:py-20">
             <h2 className="font-display text-3xl leading-tight text-ink">

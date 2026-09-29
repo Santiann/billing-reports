@@ -1,10 +1,10 @@
 /**
- * Esqueleto do detalhe da cobrança.
+ * The billing detail's skeleton.
  *
- * Mesma razão do detalhe de cliente: sem ele valeria o `loading.tsx` da
- * listagem de cobranças, que desenha uma tabela. Os blocos abaixo seguem o que
- * a tela realmente mostra — seis campos em duas colunas e, embaixo, o painel
- * de pagamento ou o de valor atualizado, que existe nos dois casos.
+ * The same reason as the customer detail's: without it the billing listing's
+ * `loading.tsx` would apply, and that one draws a table. The blocks below follow what
+ * the screen actually shows — six fields in two columns and, below them, either the
+ * payment panel or the updated-amount panel, one of which always exists.
  */
 export default function LoadingBilling() {
   return (

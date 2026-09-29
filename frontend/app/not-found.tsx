@@ -3,19 +3,19 @@ import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 
 /**
- * 404 da aplicação inteira.
+ * The whole application's 404.
  *
- * Atende dois casos que chegam pelo mesmo caminho: URL que não existe, e
- * `notFound()` chamado de dentro de uma página — que é o que as telas de
- * detalhe de cliente e de cobrança fazem quando a API responde 404. Por isso a
- * mensagem fala de página e de registro: quem digitou um id que não existe
- * precisa entender que o problema é o registro, não o endereço.
+ * It serves two cases that arrive by the same path: a URL that does not exist, and
+ * `notFound()` called from inside a page — which is what the customer and billing
+ * detail screens do when the API answers 404. That is why the message talks about both
+ * a page and a record: whoever typed an id that does not exist needs to understand
+ * that the problem is the record, not the address.
  *
- * Os dois casos renderizam em contextos diferentes, e é por isso que a altura
- * é `flex-1` e não `min-h-screen`: a URL inexistente para no layout raiz e
- * ocupa a tela toda, mas o `notFound()` vindo do grupo `(app)` renderiza
- * DENTRO do cabeçalho da aplicação. Ali, uma altura de viewport inteira abaixo
- * do cabeçalho vira scroll vertical — visto em 360px antes de virar commit.
+ * The two cases render in different contexts, and that is why the height is `flex-1`
+ * and not `min-h-screen`: a non-existent URL stops at the root layout and fills the
+ * whole screen, but a `notFound()` coming from the `(app)` group renders INSIDE the
+ * application header. There, a full viewport height below the header becomes vertical
+ * scrolling — seen at 360px before it became a commit.
  */
 export default function NotFound() {
   return (

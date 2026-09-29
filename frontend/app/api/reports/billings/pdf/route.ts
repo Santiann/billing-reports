@@ -2,15 +2,15 @@ import { apiFetchRaw } from "@/lib/api";
 import { getSessionToken } from "@/lib/server-api";
 
 /**
- * Download do relatório em PDF.
+ * The PDF report download.
  *
- * Mesmo motivo do CSV para ser Route Handler: o token vive num cookie
- * httpOnly e o browser não o tem.
+ * The same reason as the CSV for being a Route Handler: the token lives in an httpOnly
+ * cookie and the browser does not have it.
  *
- * Diferença: o PDF pode ser recusado com 422 quando o recorte excede o teto.
- * O corpo desse 422 é repassado para o browser em vez de virar um erro
- * genérico — é ele que diz quantas cobranças há, qual o limite, e que o CSV
- * não tem limite.
+ * The difference: the PDF can be refused with a 422 when the scope exceeds the cap.
+ * That 422's body is passed through to the browser rather than becoming a generic
+ * error — it is what says how many billings there are, what the limit is, and that the
+ * CSV has none.
  */
 export async function GET(request: Request) {
   const token = await getSessionToken();

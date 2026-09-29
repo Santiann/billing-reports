@@ -30,8 +30,8 @@ export function CustomerForm({
 
   return (
     <form action={formAction} className="flex max-w-xl flex-col gap-5" noValidate>
-      {/* Mensagem geral: erro de rede ou o resumo do 422. Os erros de campo
-          aparecem sob cada campo, vindos da mesma resposta. */}
+      {/* The general message: a network error or the 422's summary. The field errors
+          appear under each field, coming from the same response. */}
       {state.message ? (
         <p
           role="alert"

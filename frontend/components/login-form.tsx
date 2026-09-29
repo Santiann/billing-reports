@@ -25,8 +25,8 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
 
     try {
       await login(email, password);
-      // refresh() antes de push() para os Server Components relerem o cookie
-      // recém-gravado; sem isso a home renderiza com a sessão antiga.
+      // refresh() before push() so the Server Components re-read the freshly
+      // written cookie; without it the home page renders with the old session.
       router.refresh();
       router.push(redirectTo);
     } catch (cause) {
@@ -64,9 +64,9 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
       </Field>
 
       {/*
-        Erro de credencial não é erro de campo: o 401 não diz qual dos dois
-        está errado, de propósito, para não revelar quais e-mails existem.
-        Por isso aparece acima do botão, e não sob um campo.
+        A credential error is not a field error: the 401 deliberately does not say
+        which of the two is wrong, so as not to reveal which emails exist. That is
+        why it appears above the button rather than under a field.
       */}
       {error ? (
         <p

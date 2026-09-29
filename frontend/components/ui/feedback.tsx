@@ -1,11 +1,10 @@
 /*
- * Um código por operação, e não por verbo.
+ * One code per operation, not per verb.
  *
- * `criado` servia a cliente e a cobrança, e as duas listas renderizam este
- * mesmo componente — então cadastrar uma COBRANÇA exibia "Cliente cadastrado
- * com sucesso". Foi o teste de ponta a ponta que mostrou, ao procurar a
- * confirmação na tela. `editado` continua servindo aos dois porque a mensagem
- * dele não nomeia entidade nenhuma.
+ * `criado` served both the customer and the billing, and both listings render this
+ * same component — so creating a BILLING displayed "Cliente cadastrado com
+ * sucesso". The end-to-end test surfaced it, while looking for the confirmation on
+ * screen. `editado` still serves both because its message names no entity.
  */
 const MESSAGES: Record<string, string> = {
   "cliente-criado": "Cliente cadastrado com sucesso.",
@@ -17,11 +16,11 @@ const MESSAGES: Record<string, string> = {
 };
 
 /**
- * Confirmação de operação bem-sucedida.
+ * The confirmation of a successful operation.
  *
- * Vem por parâmetro de URL em vez de estado de cliente: assim sobrevive ao
- * redirect que a Server Action faz depois de salvar, que é justamente o
- * momento em que o usuário precisa da confirmação.
+ * It arrives as a URL parameter rather than client state: that way it survives the
+ * redirect the Server Action performs after saving, which is exactly the moment
+ * the user needs the confirmation.
  */
 export function Feedback({ code }: { code?: string }) {
   const message = code ? MESSAGES[code] : undefined;

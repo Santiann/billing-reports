@@ -2,16 +2,16 @@ import { apiFetchRaw } from "@/lib/api";
 import { getSessionToken } from "@/lib/server-api";
 
 /**
- * Download do relatório em CSV.
+ * The CSV report download.
  *
- * Precisa ser Route Handler, não Server Action nem link direto ao Laravel: o
- * browser não tem o token — ele vive num cookie httpOnly — então não consegue
- * chamar o endpoint de exportação por conta própria. Aqui o servidor anexa o
- * Bearer e devolve o corpo como stream.
+ * It has to be a Route Handler, not a Server Action nor a direct link to Laravel: the
+ * browser does not have the token — it lives in an httpOnly cookie — so it cannot call
+ * the export endpoint on its own. Here the server attaches the Bearer and returns the
+ * body as a stream.
  *
- * O corpo é repassado sem ser lido: `upstream.body` é um ReadableStream, e
- * consumi-lo para reenviar depois guardaria o arquivo inteiro em memória,
- * anulando o streaming que o backend implementou.
+ * The body is passed through unread: `upstream.body` is a ReadableStream, and
+ * consuming it to resend afterwards would hold the whole file in memory, undoing the
+ * streaming the backend implemented.
  */
 export async function GET(request: Request) {
   const token = await getSessionToken();
@@ -28,8 +28,8 @@ export async function GET(request: Request) {
   );
 
   if (!upstream.ok) {
-    // Erro de validação vem como JSON; repassar o corpo evita esconder a
-    // causa atrás de uma mensagem genérica.
+    // A validation error arrives as JSON; passing the body through avoids hiding the
+    // cause behind a generic message.
     return new Response(await upstream.text(), {
       status: upstream.status,
       headers: {

@@ -2,11 +2,11 @@ import { fetchAsUser } from "@/lib/server-api";
 import type { Dashboard } from "@/types/dashboard";
 
 /**
- * Uma chamada só para a tela inteira.
+ * One call for the whole screen.
  *
- * Os dois blocos — indicadores do mês e série de doze meses — vêm juntos
- * porque são duas consultas no banco e uma resposta. Buscar em dois endpoints
- * criaria duas idas ao servidor em sequência para montar a mesma tela.
+ * Both blocks — the month's indicators and the twelve-month series — come
+ * together because they are two database queries and one response. Fetching from
+ * two endpoints would mean two sequential round trips to build the same screen.
  */
 export function getDashboard(): Promise<Dashboard> {
   return fetchAsUser<Dashboard>("/api/dashboard");

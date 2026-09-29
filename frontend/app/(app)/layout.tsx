@@ -10,10 +10,10 @@ import { getSessionUser } from "@/lib/session-user";
 import { isTheme, THEME_COOKIE } from "@/lib/theme";
 
 /**
- * Layout da área autenticada.
+ * The authenticated area's layout.
  *
- * A sessão é verificada aqui, uma vez, em vez de em cada página. O middleware
- * só olha a presença do cookie; quem confirma que o token vale é esta chamada.
+ * The session is checked here, once, rather than on every page. The middleware only
+ * looks at the cookie's presence; this call is what confirms the token is valid.
  */
 export default async function AppLayout({
   children,
@@ -25,8 +25,8 @@ export default async function AppLayout({
   try {
     user = await getSessionUser();
   } catch (error) {
-    // Cookie presente e token inválido: quem apaga o cookie é o handler,
-    // senão middleware e layout se redirecionam em loop.
+    // Cookie present and token invalid: the handler is what deletes the cookie,
+    // otherwise middleware and layout redirect to each other in a loop.
     if (error instanceof ApiError && error.status === 401) {
       redirect("/api/auth/expire");
     }
@@ -34,8 +34,8 @@ export default async function AppLayout({
     throw error;
   }
 
-  const escolhido = (await cookies()).get(THEME_COOKIE)?.value;
-  const theme = isTheme(escolhido) ? escolhido : "system";
+  const chosen = (await cookies()).get(THEME_COOKIE)?.value;
+  const theme = isTheme(chosen) ? chosen : "system";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -63,7 +63,7 @@ export default async function AppLayout({
           <div className="order-2 ml-auto flex items-center gap-2 sm:order-3">
             <span className="hidden text-xs text-ink-muted lg:inline">
               {user.email}
-              {/* O perfil só é dito quando limita: administrador é o caso
+              {/* The role is only stated when it limits: administrator is the
                   normal e não precisa de etiqueta. */}
               {user.can_write ? null : (
                 <span className="ml-2 rounded-sm bg-sunken px-1.5 py-0.5 text-ink-faint">

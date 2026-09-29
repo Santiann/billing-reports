@@ -3,14 +3,14 @@ import { formatCurrency } from "@/lib/format";
 import type { DashboardPeriod } from "@/types/dashboard";
 
 /**
- * Os indicadores do mês corrente.
+ * The current month's indicators.
  *
- * Figura PROPORCIONAL nos valores, não tabular: `tabular-nums` dá a todo dígito
- * a largura do zero, o que alinha coluna e afrouxa número grande isolado.
- * Alinhamento vertical é problema de tabela.
+ * PROPORTIONAL figures on the values, not tabular: `tabular-nums` gives every
+ * digit the width of a zero, which lines up a column but loosens a large number
+ * standing on its own. Vertical alignment is a table's problem.
  */
 export function PeriodSummary({ period }: { period: DashboardPeriod }) {
-  const indicadores = [
+  const indicators = [
     {
       label: "Faturado no mês",
       value: formatCurrency(period.original_amount),
@@ -50,17 +50,17 @@ export function PeriodSummary({ period }: { period: DashboardPeriod }) {
       </div>
 
       <dl className="grid gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
-        {indicadores.map((indicador) => (
-          <div key={indicador.label} className="bg-surface px-4 py-4">
+        {indicators.map((indicator) => (
+          <div key={indicator.label} className="bg-surface px-4 py-4">
             <dt className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-              {indicador.label}
+              {indicator.label}
             </dt>
             <dd
-              className={`mt-1 text-2xl font-semibold ${"tone" in indicador ? indicador.tone : "text-ink"}`}
+              className={`mt-1 text-2xl font-semibold ${"tone" in indicator ? indicator.tone : "text-ink"}`}
             >
-              {indicador.value}
+              {indicator.value}
             </dd>
-            <p className="mt-1 text-xs text-ink-faint">{indicador.hint}</p>
+            <p className="mt-1 text-xs text-ink-faint">{indicator.hint}</p>
           </div>
         ))}
       </dl>

@@ -11,10 +11,10 @@ import { getDashboard } from "@/lib/dashboard";
 import { formatCurrency } from "@/lib/format";
 
 /**
- * Tela inicial.
+ * The home screen.
  *
- * Uma chamada, duas consultas de agregação, nenhuma linha carregada para o PHP
- * somar. Medido contra 2.000.000 de cobranças: 1,35s a 1,60s de ponta a ponta.
+ * One call, two aggregation queries, no rows loaded for PHP to sum. Measured against
+ * 2,000,000 billings: 1.35s to 1.60s end to end.
  */
 export default async function DashboardPage() {
   const { period, monthly } = await getDashboard();
@@ -35,14 +35,14 @@ export default async function DashboardPage() {
       <Card className="mb-6">
         <CardHeader title="Faturado e recebido, por mês de vencimento" />
         <CardBody>
-          <MonthlyChart meses={monthly} />
+          <MonthlyChart months={monthly} />
         </CardBody>
       </Card>
 
       <Card className="mb-6">
         <CardHeader title="Taxa de recebimento" />
         <CardBody>
-          <CollectionChart meses={monthly} />
+          <CollectionChart months={monthly} />
         </CardBody>
       </Card>
 
@@ -66,18 +66,18 @@ export default async function DashboardPage() {
             <TH numeric>Taxa</TH>
           </THead>
           <TBody>
-            {monthly.map((mes) => {
-              const faturado = Number(mes.original_amount);
-              const taxa =
-                faturado > 0 ? (Number(mes.received_amount) / faturado) * 100 : 0;
+            {monthly.map((month) => {
+              const billed = Number(month.original_amount);
+              const rate =
+                billed > 0 ? (Number(month.received_amount) / billed) * 100 : 0;
 
               return (
-                <TR key={mes.month}>
-                  <TD>{mes.label}</TD>
-                  <TD numeric>{mes.count.toLocaleString("pt-BR")}</TD>
-                  <TD numeric>{formatCurrency(mes.original_amount)}</TD>
-                  <TD numeric>{formatCurrency(mes.received_amount)}</TD>
-                  <TD numeric>{taxa.toFixed(1)}%</TD>
+                <TR key={month.month}>
+                  <TD>{month.label}</TD>
+                  <TD numeric>{month.count.toLocaleString("pt-BR")}</TD>
+                  <TD numeric>{formatCurrency(month.original_amount)}</TD>
+                  <TD numeric>{formatCurrency(month.received_amount)}</TD>
+                  <TD numeric>{rate.toFixed(1)}%</TD>
                 </TR>
               );
             })}

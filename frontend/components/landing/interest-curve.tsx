@@ -1,48 +1,49 @@
 /**
- * A figura da dobra: o que uma cobrança de mil reais vira quando atrasa.
+ * The figure above the fold: what a one-thousand-real billing becomes when it
+ * goes late.
  *
- * Mostra o RESULTADO do sistema, não a interface dele. Uma captura de tela
- * seria menos legível e diria menos — quem chega nesta página quer entender o
- * que o sistema calcula, não como ele é por dentro.
+ * It shows the system's RESULT, not its interface. A screenshot would be less
+ * legible and would say less — whoever lands on this page wants to understand
+ * what the system computes, not what it looks like inside.
  *
- * Os números são reais: 1.000,00 a 2% ao mês pela fórmula de juros compostos
- * que o sistema usa, `valor * (1 + taxa) ^ (dias / 30)`. Em 90 dias dá
- * 1.061,21. Inventar a curva aqui seria mentir sobre a única coisa que esta
- * página tem para provar.
+ * The numbers are real: 1,000.00 at 2% a month by the compound interest formula
+ * the system uses, `amount * (1 + rate) ^ (days / 30)`. At 90 days that gives
+ * 1,061.21. Inventing the curve here would be lying about the one thing this
+ * page has to prove.
  */
 
-const PONTOS = [
-  { dias: 0, valor: 1000.0 },
-  { dias: 15, valor: 1009.95 },
-  { dias: 30, valor: 1020.0 },
-  { dias: 45, valor: 1030.15 },
-  { dias: 60, valor: 1040.4 },
-  { dias: 75, valor: 1050.75 },
-  { dias: 90, valor: 1061.21 },
+const POINTS = [
+  { days: 0, amount: 1000.0 },
+  { days: 15, amount: 1009.95 },
+  { days: 30, amount: 1020.0 },
+  { days: 45, amount: 1030.15 },
+  { days: 60, amount: 1040.4 },
+  { days: 75, amount: 1050.75 },
+  { days: 90, amount: 1061.21 },
 ];
 
-const LARGURA = 420;
-const ALTURA = 300;
-const MARGEM = { topo: 46, direita: 16, baixo: 40, esquerda: 16 };
+const WIDTH = 420;
+const HEIGHT = 300;
+const MARGIN = { top: 46, right: 16, bottom: 40, left: 16 };
 
 export function InterestCurve() {
-  const areaLargura = LARGURA - MARGEM.esquerda - MARGEM.direita;
-  const areaAltura = ALTURA - MARGEM.topo - MARGEM.baixo;
-  const base = MARGEM.topo + areaAltura;
+  const areaWidth = WIDTH - MARGIN.left - MARGIN.right;
+  const areaHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
+  const base = MARGIN.top + areaHeight;
 
-  const minimo = 995;
-  const maximo = 1065;
+  const min = 995;
+  const max = 1065;
 
-  const x = (dias: number) => MARGEM.esquerda + (dias / 90) * areaLargura;
-  const y = (valor: number) =>
-    base - ((valor - minimo) / (maximo - minimo)) * areaAltura;
+  const x = (days: number) => MARGIN.left + (days / 90) * areaWidth;
+  const y = (amount: number) =>
+    base - ((amount - min) / (max - min)) * areaHeight;
 
-  const linha = PONTOS.map(
-    (ponto, i) => `${i === 0 ? "M" : "L"} ${x(ponto.dias)} ${y(ponto.valor)}`,
+  const line = POINTS.map(
+    (point, i) => `${i === 0 ? "M" : "L"} ${x(point.days)} ${y(point.amount)}`,
   ).join(" ");
 
-  const area = `${linha} L ${x(90)} ${base} L ${x(0)} ${base} Z`;
-  const ultimo = PONTOS[PONTOS.length - 1];
+  const area = `${line} L ${x(90)} ${base} L ${x(0)} ${base} Z`;
+  const last = POINTS[POINTS.length - 1];
 
   return (
     <figure className="m-0 rounded-lg border border-rule bg-surface p-5 shadow-card">
@@ -51,22 +52,22 @@ export function InterestCurve() {
       </figcaption>
 
       <svg
-        viewBox={`0 0 ${LARGURA} ${ALTURA}`}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full"
         role="img"
         aria-label="Uma cobrança de mil reais a dois por cento ao mês vale mil e sessenta e um reais e vinte e um centavos após noventa dias de atraso"
       >
-        {/* Valor original, para a diferença ter contra o que ser lida. */}
+        {/* The original amount, so the difference has something to be read against. */}
         <line
-          x1={MARGEM.esquerda}
-          x2={LARGURA - MARGEM.direita}
+          x1={MARGIN.left}
+          x2={WIDTH - MARGIN.right}
           y1={y(1000)}
           y2={y(1000)}
           className="stroke-rule-strong"
           strokeWidth="1"
         />
         <text
-          x={MARGEM.esquerda}
+          x={MARGIN.left}
           y={y(1000) + 16}
           className="fill-ink-faint text-[11px]"
         >
@@ -75,7 +76,7 @@ export function InterestCurve() {
 
         <path d={area} className="fill-chart-received" opacity="0.1" />
         <path
-          d={linha}
+          d={line}
           fill="none"
           className="stroke-chart-received"
           strokeWidth="2"
@@ -84,32 +85,32 @@ export function InterestCurve() {
         />
 
         <circle
-          cx={x(ultimo.dias)}
-          cy={y(ultimo.valor)}
+          cx={x(last.days)}
+          cy={y(last.amount)}
           r="5"
           className="fill-chart-received stroke-surface"
           strokeWidth="2"
         />
 
-        {/* Rótulo só na ponta: é o número que a página está afirmando. */}
+        {/* A label only at the end: it is the number the page is asserting. */}
         <text
-          x={x(ultimo.dias)}
-          y={y(ultimo.valor) - 16}
+          x={x(last.days)}
+          y={y(last.amount) - 16}
           textAnchor="end"
           className="fill-ink text-[15px] font-semibold"
         >
           R$ 1.061,21
         </text>
 
-        {[0, 30, 60, 90].map((dias) => (
+        {[0, 30, 60, 90].map((days) => (
           <text
-            key={dias}
-            x={x(dias)}
-            y={ALTURA - 12}
-            textAnchor={dias === 0 ? "start" : dias === 90 ? "end" : "middle"}
+            key={days}
+            x={x(days)}
+            y={HEIGHT - 12}
+            textAnchor={days === 0 ? "start" : days === 90 ? "end" : "middle"}
             className="fill-ink-faint text-[11px]"
           >
-            {dias === 0 ? "vencimento" : `${dias} dias`}
+            {days === 0 ? "vencimento" : `${days} dias`}
           </text>
         ))}
       </svg>

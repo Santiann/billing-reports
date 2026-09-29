@@ -3,22 +3,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/session";
 
 /**
- * Proteção de rota pela presença do cookie de sessão.
+ * Route protection by the presence of the session cookie.
  *
- * O middleware não valida o token — validar é trabalho do Laravel, em toda
- * requisição de dado. Aqui só se decide quem vê a tela de login e quem vê a
- * aplicação. Um cookie forjado não abre nada: a API responde 401 e o Server
- * Component manda de volta para o login.
+ * The middleware does not validate the token — validating is Laravel's job, on
+ * every data request. All that is decided here is who sees the login screen and who
+ * sees the application. A forged cookie opens nothing: the API answers 401 and the
+ * Server Component sends you back to the login.
  */
 
-/** Abertas a quem não tem sessão. */
+/** Open to whoever has no session. */
 const PUBLIC_ROUTES = ["/login", "/apresentacao"];
 
 /**
- * Abertas SÓ para quem não tem sessão.
+ * Open ONLY to whoever has no session.
  *
- * A tela de login não faz sentido para quem já entrou. A apresentação faz:
- * é página pública, e quem está logado pode querer abri-la.
+ * The login screen makes no sense to someone already signed in. The landing page
+ * does: it is a public page, and a signed-in user may well want to open it.
  */
 const GUEST_ONLY = ["/login"];
 
@@ -27,16 +27,16 @@ export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
   /*
-   * A raiz atende duas plateias.
+   * The root serves two audiences.
    *
-   * Com sessão, `/` é a aplicação — o dashboard, protegido como sempre. Sem
-   * sessão, ela mostra a apresentação em vez de empurrar para o login: quem
-   * chega pela primeira vez precisa saber o que é isto antes de ver um
-   * formulário de senha.
+   * With a session, `/` is the application — the dashboard, protected as always.
+   * Without one, it shows the landing page instead of pushing you to the login:
+   * whoever arrives for the first time needs to know what this is before seeing a
+   * password form.
    *
-   * `rewrite` e não `redirect`, e a diferença importa: o endereço continua `/`.
-   * Um redirect para `/apresentacao` mudaria a URL na barra e faria o botão
-   * "voltar" do browser brigar com o login.
+   * `rewrite` and not `redirect`, and the difference matters: the address stays `/`.
+   * A redirect to `/apresentacao` would change the URL in the bar and make the
+   * browser's back button fight with the login.
    */
   if (pathname === "/" && !hasSession) {
     const url = request.nextUrl.clone();
@@ -49,7 +49,7 @@ export function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
-    // Para devolver o usuário ao destino original depois do login.
+    // So the user can be returned to the original destination after logging in.
     if (pathname !== "/") {
       loginUrl.searchParams.set("redirect", pathname);
     }
@@ -69,7 +69,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Fora: os Route Handlers (que precisam responder deslogado, senão não há
-  // como fazer login), os assets e os arquivos estáticos.
+  // Excluded: the Route Handlers (which have to answer while logged out, otherwise
+  // there is no way to log in), the assets and the static files.
   matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|.*\\.svg$).*)"],
 };

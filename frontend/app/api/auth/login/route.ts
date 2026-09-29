@@ -9,12 +9,12 @@ import {
 import type { LoginResponse } from "@/types/auth";
 
 /**
- * Troca credenciais por sessão.
+ * Trades credentials for a session.
  *
- * O browser posta aqui, não no Laravel. Este handler chama a API, recebe o
- * token Sanctum, grava num cookie httpOnly e devolve apenas o usuário. O token
- * nunca chega ao JavaScript do cliente — é isso que impede que um XSS o roube,
- * e é por isso que não existe token em localStorage neste projeto.
+ * The browser posts here, not to Laravel. This handler calls the API, receives the
+ * Sanctum token, writes it into an httpOnly cookie and returns only the user. The
+ * token never reaches client JavaScript — that is what stops an XSS from stealing it,
+ * and it is why there is no token in localStorage in this project.
  */
 export async function POST(request: Request) {
   let credentials: { email?: unknown; password?: unknown };
@@ -46,15 +46,15 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error) {
-    // 401 e 422 do Laravel são respostas legítimas e passam adiante com o
-    // corpo original, para o formulário mostrar a mensagem certa.
+    // Laravel's 401 and 422 are legitimate responses and pass through with the
+    // original body, so the form can show the right message.
     if (error instanceof ApiError) {
       return NextResponse.json(error.payload ?? { message: error.message }, {
         status: error.status,
       });
     }
 
-    // Aqui a API não respondeu. Não é erro de credencial.
+    // Here the API did not answer at all. This is not a credential error.
     return NextResponse.json(
       { message: "Não foi possível falar com a API." },
       { status: 502 },

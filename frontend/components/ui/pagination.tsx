@@ -10,9 +10,9 @@ type PaginationProps = {
 };
 
 /**
- * Os links vêm do número da página, não de `meta.links` do Laravel: aqueles
- * carregam a URL que o backend enxerga (http://backend dentro do Compose) e
- * não servem para o browser.
+ * The links are built from the page number, not from Laravel's `meta.links`: those
+ * carry the URL the backend sees (http://backend inside Compose) and are no use to
+ * the browser.
  */
 function buildHref(
   basePath: string,

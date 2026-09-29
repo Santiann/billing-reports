@@ -6,7 +6,7 @@ export type Customer = {
   document: string;
   email: string;
   status: CustomerStatus;
-  /** Rótulo traduzido, vindo do enum de PHP. */
+  /** Translated label, coming from the PHP enum. */
   status_label: string;
   created_at: string | null;
 };

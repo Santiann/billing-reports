@@ -96,7 +96,7 @@ export function BillingForm({
           hint="Em fração — 0,02 equivale a 2% ao mês."
           errors={state.errors?.monthly_interest_rate}
         >
-          {/* Fração, não porcentagem: é como a coluna guarda. */}
+          {/* A fraction, not a percentage: it is how the column stores it. */}
           <Input
             id="monthly_interest_rate"
             name="monthly_interest_rate"
@@ -143,9 +143,9 @@ export function BillingForm({
         </Field>
       </div>
 
-      {/* Status e pagamento não estão no formulário de propósito: quem faz a
-          transição para paga é o registro de pagamento, que grava junto os
-          valores congelados. */}
+      {/* Status and payment are deliberately absent from the form: what makes the
+          transition to paid is recording the payment, which writes the frozen
+          amounts along with it. */}
 
       <div className="flex items-center gap-3 border-t border-rule pt-5">
         <Button type="submit" disabled={isPending}>

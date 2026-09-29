@@ -5,24 +5,24 @@ import Link from "next/link";
 import { Button, buttonClasses } from "@/components/ui/button";
 
 /**
- * Fronteira de erro da raiz.
+ * The root error boundary.
  *
- * A área autenticada já tem a sua em `(app)/error.tsx`, que renderiza dentro
- * do cabeçalho do app e preserva a navegação. Esta cobre o que está fora dele:
- * o `/login` e qualquer rota que falhe antes de entrar no grupo `(app)`. Sem
- * ela, um erro no login cai na tela padrão do Next — em inglês, sem saída e
- * sem identidade do sistema.
+ * The authenticated area already has its own in `(app)/error.tsx`, which renders
+ * inside the app header and preserves the navigation. This one covers what is outside
+ * it: `/login` and any route that fails before entering the `(app)` group. Without
+ * it, an error on the login lands on Next's default screen — in English, with no way
+ * out and none of the system's identity.
  *
- * O que ela não cobre é erro lançado pelo próprio layout raiz; isso exigiria
- * um `global-error.tsx`, que precisa reconstruir `<html>` e `<body>` por conta
- * própria. O layout raiz daqui não faz nada além de montar a página e carregar
- * a fonte, então o custo desse arquivo não se paga.
+ * What it does not cover is an error thrown by the root layout itself; that would
+ * require a `global-error.tsx`, which has to rebuild `<html>` and `<body>` on its own.
+ * The root layout here does nothing beyond assembling the page and loading the fonts,
+ * so that file does not pay for itself.
  *
- * O prop de recuperação é `retry`, não `reset`. São coisas diferentes nesta
- * versão do Next: `retry()` refaz o fetch e re-renderiza, enquanto `reset()`
- * só limpa o estado de erro e reaproveita o payload que já falhou — o que,
- * para queda de API, reexibe o mesmo erro. Verificado derrubando o nginx com
- * a tela aberta: com `reset`, o botão não saía do lugar.
+ * The recovery prop is `retry`, not `reset`. They are different things in this version
+ * of Next: `retry()` redoes the fetch and re-renders, while `reset()` only clears the
+ * error state and reuses the payload that already failed — which, for an API outage,
+ * shows the same error again. Verified by taking nginx down with the screen open: with
+ * `reset`, the button went nowhere.
  */
 export default function RootError({
   error,
@@ -42,7 +42,7 @@ export default function RootError({
           {error.message || "Não foi possível carregar esta página."}
         </p>
 
-        {/* Em produção o Next troca a mensagem do servidor por uma genérica e
+        {/* In production Next swaps the server's message for a generic one and
             guarda o texto real no log, referenciado por este digest. É o que
             liga o que o usuário viu ao que foi registrado. */}
         {error.digest ? (

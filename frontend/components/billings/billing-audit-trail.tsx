@@ -8,55 +8,55 @@ import {
 import { BILLING_STATUSES } from "@/types/billing";
 import type { BillingAuditEntry } from "@/types/billing-audit";
 
-const DINHEIRO = new Set(["original_amount", "paid_amount", "paid_interest_amount"]);
-const DATAS = new Set(["issue_date", "due_date", "payment_date"]);
+const MONEY = new Set(["original_amount", "paid_amount", "paid_interest_amount"]);
+const DATES = new Set(["issue_date", "due_date", "payment_date"]);
 
-/** Texto corrido fica na fonte do texto; mono é para número e data, como na ficha. */
-const TEXTO = new Set(["description"]);
+/** Running text stays in the text font; mono is for numbers and dates, as on the detail panel. */
+const TEXT = new Set(["description"]);
 
 /**
- * A cor do marcador é a do estado em que a cobrança FICOU: paga depois do
- * pagamento, pendente depois do estorno. A edição não muda estado e fica
- * neutra.
+ * The marker's colour is that of the state the billing ENDED UP in: paid after a
+ * payment, pending after a reversal. An edit does not change state and stays
+ * neutral.
  */
-const MARCADOR: Record<BillingAuditEntry["event"], string> = {
+const MARKER: Record<BillingAuditEntry["event"], string> = {
   updated: "bg-ink-faint",
   paid: "bg-paid",
   reversed: "bg-pending",
 };
 
 /**
- * Formata pelo campo, com as mesmas funções da ficha da cobrança.
+ * Formats per field, with the same functions as the billing's detail panel.
  *
- * O valor pago na trilha e o valor pago na ficha são o mesmo número, e
- * precisam parecer o mesmo número.
+ * The paid amount in the trail and the paid amount on the panel are the same
+ * number, and they need to look like the same number.
  */
-function formatar(campo: string, valor: string | number | null): string {
-  if (valor === null) {
+function formatByField(field: string, value: string | number | null): string {
+  if (value === null) {
     return "—";
   }
 
-  if (DINHEIRO.has(campo)) {
-    return formatCurrency(valor);
+  if (MONEY.has(field)) {
+    return formatCurrency(value);
   }
 
-  if (DATAS.has(campo)) {
-    return formatDate(String(valor));
+  if (DATES.has(field)) {
+    return formatDate(String(value));
   }
 
-  if (campo === "monthly_interest_rate") {
-    return formatPercent(valor);
+  if (field === "monthly_interest_rate") {
+    return formatPercent(value);
   }
 
-  if (campo === "status") {
-    return BILLING_STATUSES.find((s) => s.value === valor)?.label ?? String(valor);
+  if (field === "status") {
+    return BILLING_STATUSES.find((s) => s.value === value)?.label ?? String(value);
   }
 
-  if (campo === "customer_id") {
-    return `cliente nº ${valor}`;
+  if (field === "customer_id") {
+    return `cliente nº ${value}`;
   }
 
-  return String(valor);
+  return String(value);
 }
 
 export function BillingAuditTrail({
@@ -77,61 +77,61 @@ export function BillingAuditTrail({
           </p>
         ) : (
           <ol className="divide-y divide-rule">
-            {entries.map((entrada) => (
-              <li key={entrada.id} className="px-4 py-4">
+            {entries.map((entry) => (
+              <li key={entry.id} className="px-4 py-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <p className="flex items-center gap-2 text-sm">
-                    {/* Marcador de cor com rótulo ao lado: a cor não carrega
+                    {/* A colour marker with a label beside it: colour does not carry
                         a informação sozinha. */}
                     <span
                       aria-hidden
                       className={
                         "inline-block size-2 rounded-full " +
-                        MARCADOR[entrada.event]
+                        MARKER[entry.event]
                       }
                     />
                     <span className="font-semibold text-ink">
-                      {entrada.event_label}
+                      {entry.event_label}
                     </span>
                     <span className="text-ink-muted">
-                      por {entrada.user?.name ?? "sistema"}
+                      por {entry.user?.name ?? "sistema"}
                     </span>
                   </p>
 
                   <time
-                    dateTime={entrada.created_at}
+                    dateTime={entry.created_at}
                     className="font-mono text-xs text-ink-faint"
                   >
-                    {formatDateTime(entrada.created_at)}
+                    {formatDateTime(entry.created_at)}
                   </time>
                 </div>
 
                 <dl className="mt-3 grid gap-x-4 gap-y-1.5 pl-4 text-sm sm:grid-cols-[10rem_1fr]">
-                  {entrada.changes.map((mudanca) => (
-                    <div key={mudanca.field} className="contents">
-                      <dt className="text-ink-muted">{mudanca.label}</dt>
+                  {entry.changes.map((change) => (
+                    <div key={change.field} className="contents">
+                      <dt className="text-ink-muted">{change.label}</dt>
                       <dd
                         className={
                           "text-ink " +
-                          (TEXTO.has(mudanca.field) ? "" : "font-mono tabular-nums")
+                          (TEXT.has(change.field) ? "" : "font-mono tabular-nums")
                         }
                       >
-                        {/* Só se risca o que existia: um "—" riscado some. */}
+                        {/* Only what existed gets struck through: a struck "—" vanishes. */}
                         <span
                           className={
                             "text-ink-faint " +
-                            (mudanca.from === null
+                            (change.from === null
                               ? ""
                               : "line-through decoration-rule-strong")
                           }
                         >
-                          {formatar(mudanca.field, mudanca.from)}
+                          {formatByField(change.field, change.from)}
                         </span>
                         <span aria-hidden className="px-2 text-ink-faint">
                           →
                         </span>
                         <span className="sr-only">para</span>
-                        {formatar(mudanca.field, mudanca.to)}
+                        {formatByField(change.field, change.to)}
                       </dd>
                     </div>
                   ))}

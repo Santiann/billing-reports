@@ -57,14 +57,14 @@ export default async function BillingsPage({ searchParams }: PageProps) {
     per_page: params.per_page,
   });
 
-  const { can_write: podeEscrever } = await getSessionUser();
+  const { can_write: canWrite } = await getSessionUser();
 
   return (
     <div>
       <PageHeader
         title="Cobranças"
         action={
-          podeEscrever ? (
+          canWrite ? (
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/cobrancas/importar"
@@ -92,14 +92,14 @@ export default async function BillingsPage({ searchParams }: PageProps) {
             <TH>Cliente</TH>
             <TH>Descrição</TH>
             {SORTABLE.map((column) => {
-              const ativa = params.sort === column.key;
+              const isActive = params.sort === column.key;
 
               return (
                 <TH
                   key={column.key}
                   numeric={column.numeric}
                   aria-sort={
-                    ativa
+                    isActive
                       ? (params.direction ?? "desc") === "asc"
                         ? "ascending"
                         : "descending"
@@ -110,13 +110,13 @@ export default async function BillingsPage({ searchParams }: PageProps) {
                     href={sortHref(params, column.key)}
                     className={
                       "inline-flex items-center gap-1 transition-colors hover:text-ink " +
-                      (ativa ? "text-ink" : "")
+                      (isActive ? "text-ink" : "")
                     }
                   >
                     {column.label}
-                    {/* A seta ocupa lugar mesmo inativa: sem isso a coluna
+                    {/* The arrow takes up room even when inactive: without it the
                         salta de largura a cada troca de ordenação. */}
-                    <span aria-hidden className={ativa ? "" : "opacity-0"}>
+                    <span aria-hidden className={isActive ? "" : "opacity-0"}>
                       {(params.direction ?? "desc") === "asc" ? "↑" : "↓"}
                     </span>
                   </Link>
@@ -170,7 +170,7 @@ export default async function BillingsPage({ searchParams }: PageProps) {
                     <BillingStatusBadge billing={billing} />
                   </TD>
                   <TD numeric>
-                    {billing.status === "paid" || !podeEscrever ? (
+                    {billing.status === "paid" || !canWrite ? (
                       <span className="text-ink-faint">—</span>
                     ) : (
                       <Link

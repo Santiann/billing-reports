@@ -5,25 +5,25 @@ export type User = {
   name: string;
   email: string;
   role: UserRole;
-  /** Rótulo em português, vindo do enum do backend. */
+  /** Portuguese label, coming from the backend enum. */
   role_label: string;
   /**
-   * Se o perfil pode criar, editar, importar e registrar pagamento.
+   * Whether the role can create, edit, import and record a payment.
    *
-   * A tela usa isto para esconder o que não adianta oferecer. É conveniência,
-   * não barreira — quem manda no acesso é o backend, que responde 403 para a
-   * mesma operação mesmo sem tela nenhuma no caminho.
+   * The screen uses this to hide what is pointless to offer. It is convenience,
+   * not a barrier — the backend is what governs access, and it answers 403 to the
+   * same operation even with no screen in the way.
    */
   can_write: boolean;
 };
 
-/** Resposta do Laravel em POST /api/auth/login. */
+/** Laravel's response to POST /api/auth/login. */
 export type LoginResponse = {
   token: string;
   user: User;
 };
 
-/** Resposta do Route Handler do Next: o token NÃO volta para o browser. */
+/** The Next Route Handler's response: the token does NOT go back to the browser. */
 export type SessionResponse = {
   user: User;
 };

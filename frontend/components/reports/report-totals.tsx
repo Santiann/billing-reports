@@ -2,23 +2,23 @@ import { formatCurrency } from "@/lib/format";
 import type { ReportTotals } from "@/types/report";
 
 /**
- * Os seis totalizadores do recorte.
+ * The scope's six totals.
  *
- * Vêm de uma consulta de agregação sobre o conjunto filtrado inteiro. Não são a
- * soma das linhas exibidas: na página 3 de um relatório de mil cobranças, somar
- * a página daria um número sem significado.
+ * They come from an aggregation query over the whole filtered set. They are not the
+ * sum of the rows on display: on page 3 of a thousand-billing report, summing the
+ * page would give a meaningless number.
  *
- * Fileira de indicadores, e não gráfico: seis números de escalas diferentes —
- * uma contagem e cinco valores — não têm eixo comum, e um gráfico de barras
- * aqui seria decoração sobre dado que já se lê direto.
+ * A row of indicators, not a chart: six numbers on different scales — one count and
+ * five amounts — have no common axis, and a bar chart here would be decoration over
+ * data that already reads directly.
  *
- * Os valores usam figura PROPORCIONAL, ao contrário das colunas da tabela.
- * `tabular-nums` dá a todo dígito a largura do zero, o que é o que faz uma
- * coluna alinhar — e o que faz um número grande e isolado parecer frouxo.
- * Alinhamento vertical é o problema da tabela, não do indicador.
+ * The values use PROPORTIONAL figures, unlike the table's columns. `tabular-nums`
+ * gives every digit the width of a zero, which is what makes a column line up — and
+ * what makes a large, isolated number look loose. Vertical alignment is the table's
+ * problem, not the indicator's.
  */
 
-type Indicador = {
+type Indicator = {
   label: string;
   value: string;
   tone?: "ink" | "overdue" | "paid" | "pending";
@@ -32,7 +32,7 @@ const TONES = {
 } as const;
 
 export function ReportTotalsPanel({ totals }: { totals: ReportTotals }) {
-  const indicadores: ReadonlyArray<Indicador> = [
+  const indicators: ReadonlyArray<Indicator> = [
     { label: "Cobranças", value: totals.count.toLocaleString("pt-BR") },
     { label: "Valor original", value: formatCurrency(totals.original_amount) },
     {
@@ -55,15 +55,15 @@ export function ReportTotalsPanel({ totals }: { totals: ReportTotals }) {
 
   return (
     <dl className="mb-4 grid gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-3">
-      {indicadores.map((indicador) => (
-        <div key={indicador.label} className="bg-surface px-4 py-3">
+      {indicators.map((indicator) => (
+        <div key={indicator.label} className="bg-surface px-4 py-3">
           <dt className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-            {indicador.label}
+            {indicator.label}
           </dt>
           <dd
-            className={`mt-1 text-xl font-semibold ${TONES[indicador.tone ?? "ink"]}`}
+            className={`mt-1 text-xl font-semibold ${TONES[indicator.tone ?? "ink"]}`}
           >
-            {indicador.value}
+            {indicator.value}
           </dd>
         </div>
       ))}

@@ -1,18 +1,19 @@
 /**
- * Ponto único de contato com a API do Laravel.
+ * The single point of contact with the Laravel API.
  *
- * Existem duas origens e elas não são intercambiáveis. Usar a errada é o bug
- * mais provável deste projeto, e ele só se manifesta dentro do Docker — fora
- * do Compose as duas URLs coincidem e o erro fica invisível.
+ * There are two origins and they are not interchangeable. Using the wrong one is
+ * the most likely bug in this project, and it only shows up inside Docker —
+ * outside Compose the two URLs coincide and the mistake stays invisible.
  *
  *   Server Components, Route Handlers, middleware -> API_URL_INTERNAL
- *     Rodam dentro da rede do Compose e resolvem o backend pelo nome do
- *     serviço (http://backend, que é o nginx).
+ *     They run inside the Compose network and resolve the backend by service
+ *     name (http://backend, which is nginx).
  *
- *   Código executando no browser -> NEXT_PUBLIC_API_URL
- *     Não enxerga a rede do Compose; resolve pela porta publicada no host.
+ *   Code running in the browser -> NEXT_PUBLIC_API_URL
+ *     It cannot see the Compose network; it resolves through the port published
+ *     on the host.
  *
- * Nenhum componente monta URL de API na mão. Tudo passa por aqui.
+ * No component builds an API URL by hand. Everything goes through here.
  */
 
 export class ApiError extends Error {
@@ -35,8 +36,8 @@ function resolveBaseUrl(): string {
   if (!base) {
     throw new Error(
       isServer
-        ? "API_URL_INTERNAL não definida. Ela é obrigatória em Server Components, Route Handlers e middleware."
-        : "NEXT_PUBLIC_API_URL não definida. Ela é obrigatória no código que roda no browser.",
+        ? "API_URL_INTERNAL is not set. It is required in Server Components, Route Handlers and middleware."
+        : "NEXT_PUBLIC_API_URL is not set. It is required in code that runs in the browser.",
     );
   }
 
@@ -44,11 +45,11 @@ function resolveBaseUrl(): string {
 }
 
 /**
- * Resposta crua da API, sem parse.
+ * The raw API response, unparsed.
  *
- * Para downloads: o corpo é repassado ao browser como stream, e lê-lo inteiro
- * para converter em JSON anularia o streaming que o backend implementa.
- * Continua passando por aqui para a resolução de origem ficar num lugar só.
+ * For downloads: the body is passed through to the browser as a stream, and
+ * reading it whole to convert it into JSON would undo the streaming the backend
+ * implements. It still goes through here so origin resolution stays in one place.
  */
 export async function apiFetchRaw(
   path: string,
@@ -65,7 +66,7 @@ export async function apiFetchRaw(
 }
 
 export type ApiFetchOptions = Omit<RequestInit, "body"> & {
-  /** Token Sanctum. Em Server Component vem do cookie httpOnly. */
+  /** Sanctum token. In a Server Component it comes from the httpOnly cookie. */
   token?: string | null;
   body?: unknown;
 };
@@ -75,12 +76,12 @@ export async function apiFetch<T>(
   { token, body, headers, ...init }: ApiFetchOptions = {},
 ): Promise<T> {
   /*
-   * FormData vai cru, sem Content-Type.
+   * FormData goes raw, with no Content-Type.
    *
-   * Serializar em JSON perderia o arquivo, e declarar o Content-Type à mão
-   * quebraria o upload de um jeito difícil de enxergar: o multipart precisa de
-   * um `boundary` que só quem monta o corpo conhece. Deixar a chave ausente é
-   * o que faz o fetch preenchê-la com a fronteira certa.
+   * Serialising it as JSON would lose the file, and declaring the Content-Type by
+   * hand would break the upload in a way that is hard to see: multipart needs a
+   * `boundary` only whoever assembles the body knows. Leaving the header absent
+   * is what makes fetch fill it in with the right boundary.
    */
   const multipart = body instanceof FormData;
 
@@ -97,7 +98,7 @@ export async function apiFetch<T>(
     ...(body !== undefined
       ? { body: multipart ? (body as FormData) : JSON.stringify(body) }
       : {}),
-    // Relatório é dado vivo: nada aqui pode servir de cache.
+    // The report is live data: nothing here may be served from cache.
     cache: "no-store",
   });
 

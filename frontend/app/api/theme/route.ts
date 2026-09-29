@@ -3,69 +3,69 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isTheme, THEME_COOKIE, THEME_MAX_AGE } from "@/lib/theme";
 
 /**
- * Troca o tema da interface.
+ * Switches the interface theme.
  *
- * Route Handler, e não Server Action, contrariando a regra geral deste projeto
- * de que mutação usa Action. A exceção está na própria regra: Route Handler é
- * para o que o browser precisa NAVEGAR, e o tema precisa.
+ * A Route Handler, not a Server Action, going against this project's general rule
+ * that mutations use an Action. The exception is in the rule itself: Route Handlers
+ * are for what the browser needs to NAVIGATE to, and the theme needs that.
  *
- * O motivo é concreto e foi medido na tela. O tema vive em `data-theme` no
- * `<html>`, que é renderizado pelo layout raiz. Numa atualização suave — que é
- * o que uma Server Action provoca — o React atualiza a árvore mas não
- * reconcilia atributo do elemento `<html>`: o cookie era gravado, o servidor
- * já respondia o tema novo, e o atributo continuava o antigo até alguém
- * recarregar a página.
+ * The reason is concrete and was observed on screen. The theme lives in `data-theme`
+ * on the `<html>`, which the root layout renders. On a soft update — which is what a
+ * Server Action causes — React updates the tree but does not reconcile attributes on
+ * the `<html>` element: the cookie was written, the server was already answering with
+ * the new theme, and the attribute stayed on the old one until someone reloaded the
+ * page.
  *
- * Com `<form method="post">` apontando para cá, o browser navega de verdade, o
- * layout raiz é executado no servidor e o `<html>` chega pronto. De quebra, o
- * seletor passa a funcionar sem JavaScript nenhum.
+ * With a `<form method="post">` pointing here, the browser really navigates, the root
+ * layout executes on the server and the `<html>` arrives ready. As a bonus, the
+ * selector works with no JavaScript at all.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
     const form = await request.formData();
-    const escolhido = form.get("theme");
-    const theme = typeof escolhido === "string" && isTheme(escolhido) ? escolhido : "system";
+    const submitted = form.get("theme");
+    const theme = typeof submitted === "string" && isTheme(submitted) ? submitted : "system";
 
     const response = new NextResponse(null, {
-        // 303 e não 307: o retorno tem que virar GET. Um 307 repetiria o POST
-        // na página de destino.
+        // 303 and not 307: the return has to become a GET. A 307 would repeat the
+        // POST on the destination page.
         status: 303,
-        // Location RELATIVO, e não NextResponse.redirect().
+        // A RELATIVE Location, and not NextResponse.redirect().
         //
-        // `redirect()` exige URL absoluta, e dentro do container
-        // `request.nextUrl.origin` resolve para o endereço de bind
-        // (http://0.0.0.0:3000) e não para o host que o browser usou. O
-        // browser seguiria para OUTRA ORIGEM, não mandaria o cookie de sessão
-        // junto, e o usuário cairia no login a cada troca de tema — foi
-        // exatamente o que aconteceu na primeira versão. É a mesma armadilha
-        // que o handler de expiração de sessão já documenta.
-        headers: { Location: destino(request) },
+        // `redirect()` requires an absolute URL, and inside the container
+        // `request.nextUrl.origin` resolves to the bind address
+        // (http://0.0.0.0:3000) rather than the host the browser used. The browser
+        // would follow to ANOTHER ORIGIN, would not send the session cookie along,
+        // and the user would land on the login on every theme switch — which is
+        // exactly what happened in the first version. It is the same trap the
+        // session expiry handler already documents.
+        headers: { Location: target(request) },
     });
 
     response.cookies.set(THEME_COOKIE, theme, {
         maxAge: THEME_MAX_AGE,
         sameSite: "lax",
         path: "/",
-        // Sem httpOnly, ao contrário do cookie de sessão: não há o que
-        // proteger numa preferência de aparência.
+        // No httpOnly, unlike the session cookie: there is nothing to protect in an
+        // appearance preference.
     });
 
     return response;
 }
 
 /**
- * O caminho de onde o usuário veio, para devolvê-lo ao mesmo lugar.
+ * The path the user came from, so they can be returned to the same place.
  *
- * Duas guardas, e as duas importam:
+ * Two guards, and both matter:
  *
- * O host do `Referer` precisa bater com o header `Host` — que é o host que o
- * BROWSER usou, e não `request.nextUrl.origin`, que dentro do container é o
- * endereço de bind. Sem isso, um formulário hospedado em outro site escolheria
- * em que página interna o usuário aterrissa depois de trocar o tema.
+ * The `Referer`'s host has to match the `Host` header — which is the host the
+ * BROWSER used, and not `request.nextUrl.origin`, which inside the container is the
+ * bind address. Without that, a form hosted on another site would get to choose which
+ * internal page the user lands on after switching themes.
  *
- * E volta só o caminho, nunca a URL inteira: o Location é relativo de
- * propósito, pela mesma razão do host acima.
+ * And only the path comes back, never the whole URL: the Location is relative on
+ * purpose, for the same reason as the host above.
  */
-function destino(request: NextRequest): string {
+function target(request: NextRequest): string {
     const referer = request.headers.get("referer");
     const host = request.headers.get("host");
 
@@ -77,7 +77,7 @@ function destino(request: NextRequest): string {
                 return `${url.pathname}${url.search}`;
             }
         } catch {
-            // Referer malformado cai no default.
+            // A malformed Referer falls through to the default.
         }
     }
 

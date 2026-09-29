@@ -28,12 +28,12 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
   const query = await searchParams;
 
   let billing: Billing;
-  let trilha: Paginated<BillingAuditEntry>;
+  let trail: Paginated<BillingAuditEntry>;
 
   try {
-    // Em paralelo: a trilha não depende da cobrança para ser buscada, e em
-    // sequência a página esperaria as duas respostas uma depois da outra.
-    [billing, trilha] = await Promise.all([getBilling(id), getBillingAudit(id)]);
+    // In parallel: the trail does not depend on the billing to be fetched, and in
+    // sequence the page would wait for the two responses one after the other.
+    [billing, trail] = await Promise.all([getBilling(id), getBillingAudit(id)]);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       notFound();
@@ -42,8 +42,8 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
     throw error;
   }
 
-  const paga = billing.status === "paid";
-  const { can_write: podeEscrever } = await getSessionUser();
+  const isPaid = billing.status === "paid";
+  const { can_write: canWrite } = await getSessionUser();
 
   return (
     <div>
@@ -52,7 +52,7 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
         voltar={{ href: "/cobrancas", label: "Cobranças" }}
         badge={<BillingStatusBadge billing={billing} />}
         action={
-          paga || !podeEscrever ? undefined : (
+          isPaid || !canWrite ? undefined : (
             <Link
               href={`/cobrancas/${billing.id}/editar`}
               className={buttonClasses({ variant: "secondary" })}
@@ -90,13 +90,13 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
         ]}
       />
 
-      {paga ? (
+      {isPaid ? (
         <section className="mt-8">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">
             Pagamento
           </h2>
 
-          {/* Valores congelados na data do pagamento, lidos das colunas
+          {/* Amounts frozen on the payment date, read from the columns
               gravadas — nunca recalculados. */}
           <Definitions
             columns={3}
@@ -127,9 +127,9 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
             estornado.
           </p>
 
-          {/* Some para o perfil de consulta; o endpoint recusa de qualquer
+          {/* Hidden for the read-only role; the endpoint refuses either
               forma. */}
-          {podeEscrever ? (
+          {canWrite ? (
             <Card className="mt-8">
               <CardHeader title="Estornar pagamento" />
               <CardBody className="p-6">
@@ -145,7 +145,7 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
               Valor atualizado
             </h2>
 
-            {/* Calculado em tempo real: juros compostos sobre os dias de
+            {/* Computed in real time: compound interest over the days
                 atraso, nunca gravado no banco enquanto não há pagamento. */}
             <Definitions
               columns={3}
@@ -170,9 +170,9 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
             />
           </section>
 
-          {/* O formulário some para o perfil de consulta; o endpoint recusa
+          {/* The form is hidden for the read-only role; the endpoint refuses
               de qualquer forma. */}
-          {podeEscrever ? (
+          {canWrite ? (
             <Card className="mt-8">
               <CardHeader title="Registrar pagamento" />
               <CardBody className="p-6">
@@ -183,7 +183,7 @@ export default async function BillingPage({ params, searchParams }: PageProps) {
         </>
       )}
 
-      <BillingAuditTrail entries={trilha.data} total={trilha.meta.total} />
+      <BillingAuditTrail entries={trail.data} total={trail.meta.total} />
     </div>
   );
 }

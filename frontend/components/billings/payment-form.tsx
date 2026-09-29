@@ -5,7 +5,7 @@ import { useActionState, useRef, useTransition, type FormEvent } from "react";
 import { registerPayment, type PaymentFormState } from "@/app/actions/payments";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input } from "@/components/ui/field";
-import { novaChaveDeIdempotencia } from "@/lib/idempotency";
+import { newIdempotencyKey } from "@/lib/idempotency";
 import { formatCurrency } from "@/lib/format";
 import type { Billing } from "@/types/billing";
 
@@ -19,52 +19,53 @@ export function PaymentForm({ billing }: { billing: Billing }) {
   const isPending = isActionPending || isTransitionPending;
 
   /*
-   * A chave de idempotência desta tentativa.
+   * The idempotency key for this attempt.
    *
-   * Ela é sorteada uma vez e reaproveitada enquanto o conteúdo do formulário
-   * não mudar. É essa regra que separa os dois casos:
+   * It is drawn once and reused as long as the form's content does not change.
+   * That rule is what separates the two cases:
    *
-   *   mesmo conteúdo   -> mesma chave -> o backend devolve o primeiro
-   *                       resultado em vez de cobrar de novo. É o duplo
-   *                       clique, e o reenvio depois de a conexão cair.
+   *   same content     -> same key -> the backend returns the first result
+   *                       instead of charging again. This is the double click,
+   *                       and the resend after the connection drops.
    *
-   *   conteúdo mudou   -> chave nova -> é outra operação. Quem corrigiu a data
-   *                       depois de um erro está pedindo outra coisa, e
-   *                       reaproveitar a chave devolveria o erro antigo.
+   *   content changed  -> new key  -> it is another operation. Someone who
+   *                       corrected the date after an error is asking for
+   *                       something else, and reusing the key would hand back
+   *                       the old error.
    */
-  const tentativa = useRef<{ chave: string; conteudo: string } | null>(null);
+  const attempt = useRef<{ key: string; content: string } | null>(null);
 
-  function chaveDaTentativa(dados: FormData): string {
-    const conteudo = JSON.stringify([
-      dados.get("payment_date"),
-      dados.get("paid_amount"),
+  function attemptKey(data: FormData): string {
+    const content = JSON.stringify([
+      data.get("payment_date"),
+      data.get("paid_amount"),
     ]);
 
-    if (tentativa.current?.conteudo !== conteudo) {
-      tentativa.current = { chave: novaChaveDeIdempotencia(), conteudo };
+    if (attempt.current?.content !== content) {
+      attempt.current = { key: newIdempotencyKey(), content };
     }
 
-    return tentativa.current.chave;
+    return attempt.current.key;
   }
 
   /*
-   * O envio passa por `onSubmit` porque a chave só pode nascer no browser:
-   * sorteá-la durante a renderização daria um valor no servidor e outro na
-   * hidratação. Aqui ela é sorteada no clique, quando só existe um lado. De
-   * quebra o formulário não é resetado pelo React, então os valores digitados
-   * sobrevivem a um erro de validação.
+   * Submitting goes through `onSubmit` because the key can only be born in the
+   * browser: drawing it during render would give one value on the server and
+   * another at hydration. Here it is drawn on the click, when only one side
+   * exists. As a bonus React does not reset the form, so the typed values
+   * survive a validation error.
    */
-  function enviar(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault();
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    const dados = new FormData(evento.currentTarget);
-    dados.set("idempotency_key", chaveDaTentativa(dados));
+    const data = new FormData(event.currentTarget);
+    data.set("idempotency_key", attemptKey(data));
 
-    startTransition(() => formAction(dados));
+    startTransition(() => formAction(data));
   }
 
   return (
-    <form onSubmit={enviar} className="flex flex-col gap-5" noValidate>
+    <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
       {state.message ? (
         <p
           role="alert"
@@ -74,7 +75,7 @@ export function PaymentForm({ billing }: { billing: Billing }) {
         </p>
       ) : null}
 
-      {/* O erro de "já está paga" vem na chave status, sem campo na tela. */}
+      {/* The "already paid" error arrives under the status key, with no field on screen. */}
       <FieldError messages={state.errors?.status} />
 
       <div className="grid gap-5 sm:grid-cols-2">
@@ -84,8 +85,8 @@ export function PaymentForm({ billing }: { billing: Billing }) {
           hint="Em branco usa hoje. Os juros congelam na data informada."
           errors={state.errors?.payment_date}
         >
-          {/* Os juros congelam na data informada, não em hoje: pagamento
-              retroativo produz o valor daquele dia. */}
+          {/* Interest freezes on the date given, not on today: a backdated
+              payment produces that day's amount. */}
           <Input
             id="payment_date"
             name="payment_date"

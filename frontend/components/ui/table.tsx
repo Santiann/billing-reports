@@ -1,17 +1,16 @@
 import type { ReactNode, ThHTMLAttributes } from "react";
 
 /**
- * Tabela de dados.
+ * A data table.
  *
- * O primitivo existe por causa de uma regra que nenhuma tela pode esquecer:
- * **coluna de dinheiro é tabular e alinhada à direita**. Com algarismo de
- * largura variável, R$ 1.111,11 ocupa menos que R$ 8.888,88 e a coluna deixa de
- * se poder comparar de relance — que é a única razão de existir uma coluna de
- * valor.
+ * The primitive exists because of a rule no screen may forget: **a money column is
+ * tabular and right aligned**. With variable-width digits, R$ 1.111,11 takes less
+ * room than R$ 8.888,88 and the column can no longer be compared at a glance —
+ * which is the only reason an amount column exists.
  *
- * A rolagem horizontal fica dentro do embrulho, não no corpo da página. Em
- * 360px a tabela do relatório não cabe, e a saída certa é ela rolar sozinha em
- * vez de empurrar a tela inteira.
+ * Horizontal scrolling lives inside the wrapper, not on the page body. At 360px the
+ * report's table does not fit, and the right way out is for it to scroll on its own
+ * rather than push the whole screen.
  */
 
 export function Table({
@@ -19,7 +18,7 @@ export function Table({
   label,
 }: {
   children: ReactNode;
-  /** Descrição para leitor de tela, já que o <caption> não é exibido. */
+  /** A description for screen readers, since the <caption> is not displayed. */
   label: string;
 }) {
   return (
@@ -95,7 +94,7 @@ export function TD({
   );
 }
 
-/** Estado vazio ocupando a largura toda da tabela. */
+/** An empty state spanning the table's full width. */
 export function TEmpty({
   colSpan,
   children,

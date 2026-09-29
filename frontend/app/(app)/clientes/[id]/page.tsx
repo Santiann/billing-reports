@@ -25,7 +25,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
   try {
     customer = await getCustomer(id);
   } catch (error) {
-    // 404 da API vira 404 do Next, não erro genérico.
+    // The API's 404 becomes Next's 404, not a generic error.
     if (error instanceof ApiError && error.status === 404) {
       notFound();
     }
@@ -33,11 +33,11 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
     throw error;
   }
 
-  const { can_write: podeEscrever } = await getSessionUser();
+  const { can_write: canWrite } = await getSessionUser();
 
   return (
     <div>
-      {/* Nome e status sobem da ficha para o cabeçalho: repetir o nome logo
+      {/* Name and status move up from the panel into the header: repeating the
           abaixo do título era a única linha que a ficha tinha de sobra. */}
       <PageHeader
         title={customer.name}
@@ -48,7 +48,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps) 
           </Badge>
         }
         action={
-          podeEscrever ? (
+          canWrite ? (
             <Link
               href={`/clientes/${customer.id}/editar`}
               className={buttonClasses({ variant: "secondary" })}

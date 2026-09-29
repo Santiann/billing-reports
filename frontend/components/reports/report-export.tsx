@@ -8,16 +8,16 @@ type ReportExportProps = {
 };
 
 /**
- * Links de exportação.
+ * The export links.
  *
- * São âncoras comuns apontando para os Route Handlers do próprio Next: a
- * navegação do browser dispara o download, e o token é anexado no servidor.
- * Os filtros viajam na query string, então o arquivo sai com o mesmo recorte
- * que está na tela.
+ * They are ordinary anchors pointing at Next's own Route Handlers: the browser's
+ * navigation triggers the download, and the token is attached on the server. The
+ * filters travel in the query string, so the file comes out with the same scope
+ * that is on screen.
  *
- * O PDF tem teto e o CSV não. Quando o recorte passa do teto, o botão vira
- * texto explicativo apontando o CSV — avisar antes é melhor do que deixar o
- * usuário clicar e receber um 422.
+ * The PDF has a cap and the CSV does not. When the scope exceeds the cap, the
+ * button becomes explanatory text pointing at the CSV — warning beforehand beats
+ * letting the user click and receive a 422.
  */
 export function ReportExport({ filters, info, count }: ReportExportProps) {
   const params = new URLSearchParams();

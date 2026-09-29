@@ -4,12 +4,12 @@ import { fetchAsUser } from "@/lib/server-api";
 import type { SessionResponse, User } from "@/types/auth";
 
 /**
- * O usuário da sessão, uma vez por requisição.
+ * The session's user, once per request.
  *
- * `cache()` do React deduplica por requisição: o layout autenticado e a página
- * que ele embrulha chamam esta função e o Laravel recebe UMA chamada. Sem isso,
- * toda tela que precisasse saber o perfil somaria um round-trip ao
- * `/api/auth/me` que o layout já tinha feito.
+ * React's `cache()` deduplicates per request: the authenticated layout and the
+ * page it wraps both call this function and Laravel receives ONE call. Without
+ * it, every screen that needed to know the role would add a round trip to
+ * `/api/auth/me` that the layout had already made.
  */
 export const getSessionUser = cache(async (): Promise<User> => {
   const { user } = await fetchAsUser<SessionResponse>("/api/auth/me");

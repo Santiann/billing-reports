@@ -1,10 +1,10 @@
 /**
- * Esqueleto do detalhe do cliente.
+ * The customer detail's skeleton.
  *
- * Sem este arquivo, a tela de detalhe herdaria o `loading.tsx` de
- * `/clientes` — o esqueleto da LISTA, com filtros e tabela larga, que não se
- * parece com nada do que vai aparecer. O salto de um layout para o outro é
- * pior do que não ter esqueleto.
+ * Without this file the detail screen would inherit `/clientes`'s `loading.tsx` — the
+ * LIST's skeleton, with filters and a wide table, which looks nothing like what is
+ * about to appear. The jump from one layout to the other is worse than having no
+ * skeleton at all.
  */
 export default function LoadingCustomer() {
   return (

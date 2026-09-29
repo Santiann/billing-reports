@@ -13,13 +13,13 @@ type CustomerPickerProps = {
 };
 
 /**
- * Seletor de cliente com busca.
+ * A customer picker with search.
  *
- * Um <select> com todos os clientes não escala — a base de teste tem cinco
- * mil. Aqui o usuário digita, a busca vai ao Route Handler (que anexa o token
- * no servidor) e só os primeiros resultados descem. O id selecionado viaja
- * num input escondido, então o formulário continua sendo um form comum e a
- * Server Action não precisa saber que existe um combobox.
+ * A <select> holding every customer does not scale — the test base has five
+ * thousand. Here the user types, the search goes to the Route Handler (which
+ * attaches the token on the server) and only the first results come down. The
+ * selected id travels in a hidden input, so the form stays an ordinary form and
+ * the Server Action does not need to know a combobox exists.
  */
 export function CustomerPicker({
   name,
@@ -40,7 +40,7 @@ export function CustomerPicker({
     }
 
     const controller = new AbortController();
-    // Debounce: sem ele cada tecla vira uma requisição.
+    // Debounce: without it every keystroke becomes a request.
     const timer = setTimeout(async () => {
       setIsLoading(true);
 
@@ -55,7 +55,7 @@ export function CustomerPicker({
           setResults(payload.data);
         }
       } catch {
-        // Abortos de digitação caem aqui e não são erro.
+        // Aborts from typing land here and are not errors.
       } finally {
         setIsLoading(false);
       }

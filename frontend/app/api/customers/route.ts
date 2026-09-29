@@ -4,11 +4,11 @@ import { ApiError } from "@/lib/api";
 import { fetchAsUser } from "@/lib/server-api";
 
 /**
- * Busca de clientes para o seletor do formulário de cobrança.
+ * The customer search behind the billing form's picker.
  *
- * Existe como Route Handler porque quem consulta é código de browser, que não
- * tem o token — e carregar os cinco mil clientes num <select> não é opção.
- * O componente digita, isto busca, e só os primeiros resultados descem.
+ * It exists as a Route Handler because the caller is browser code, which does not have
+ * the token — and loading all five thousand customers into a <select> is not an option.
+ * The component types, this searches, and only the first results come down.
  */
 export async function GET(request: Request) {
   const search = new URL(request.url).searchParams.get("search") ?? "";

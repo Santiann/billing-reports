@@ -2,167 +2,168 @@ import { formatCurrency } from "@/lib/format";
 import type { DashboardMonth } from "@/types/dashboard";
 
 /**
- * Faturado por mês, dividido entre o que entrou e o que falta entrar.
+ * Billed per month, split between what came in and what is still to come.
  *
- * Coluna empilhada porque a pergunta é parte-todo ao longo do tempo: a altura
- * inteira é o faturado do mês, e o corte mostra quanto virou dinheiro. Duas
- * barras lado a lado responderiam "qual é maior", que não é a pergunta.
+ * A stacked column because the question is part-to-whole over time: the full
+ * height is the month's billed amount, and the cut shows how much of it turned
+ * into money. Two bars side by side would answer "which is bigger", which is not
+ * the question.
  *
- * SVG montado no servidor, sem JavaScript. O gráfico não tem estado — é uma
- * figura de doze números — e a interação que ele precisa (destacar a coluna sob
- * o cursor e mostrar o valor) o CSS resolve sozinho.
+ * The SVG is built on the server, with no JavaScript. The chart has no state — it
+ * is a figure of twelve numbers — and the interaction it needs (highlight the
+ * column under the cursor and show the value) CSS handles on its own.
  */
 
-const LARGURA = 760;
-const ALTURA = 260;
-const MARGEM = { topo: 16, direita: 8, baixo: 28, esquerda: 68 };
+const WIDTH = 760;
+const HEIGHT = 260;
+const MARGIN = { top: 16, right: 8, bottom: 28, left: 68 };
 
-/** Teto arredondado para cima, para o eixo ter número limpo. */
-function tetoRedondo(valor: number): number {
-  if (valor <= 0) {
+/** A cap rounded upwards, so the axis gets a clean number. */
+function roundCap(value: number): number {
+  if (value <= 0) {
     return 1;
   }
 
-  const ordem = 10 ** Math.floor(Math.log10(valor));
-  return Math.ceil(valor / (ordem / 2)) * (ordem / 2);
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  return Math.ceil(value / (magnitude / 2)) * (magnitude / 2);
 }
 
-function compacto(valor: number): string {
-  if (valor >= 1_000_000) {
-    return `${(valor / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+function compact(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
   }
 
-  if (valor >= 1_000) {
-    return `${Math.round(valor / 1_000).toLocaleString("pt-BR")} mil`;
+  if (value >= 1_000) {
+    return `${Math.round(value / 1_000).toLocaleString("pt-BR")} mil`;
   }
 
-  return valor.toLocaleString("pt-BR");
+  return value.toLocaleString("pt-BR");
 }
 
-export function MonthlyChart({ meses }: { meses: DashboardMonth[] }) {
-  const dados = meses.map((mes) => ({
-    ...mes,
-    faturado: Number(mes.original_amount),
-    recebido: Number(mes.received_amount),
+export function MonthlyChart({ months }: { months: DashboardMonth[] }) {
+  const data = months.map((month) => ({
+    ...month,
+    billed: Number(month.original_amount),
+    received: Number(month.received_amount),
   }));
 
-  const teto = tetoRedondo(Math.max(...dados.map((d) => d.faturado)));
-  const areaLargura = LARGURA - MARGEM.esquerda - MARGEM.direita;
-  const areaAltura = ALTURA - MARGEM.topo - MARGEM.baixo;
-  const base = MARGEM.topo + areaAltura;
+  const cap = roundCap(Math.max(...data.map((d) => d.billed)));
+  const areaWidth = WIDTH - MARGIN.left - MARGIN.right;
+  const areaHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
+  const base = MARGIN.top + areaHeight;
 
-  const banda = areaLargura / dados.length;
-  // Teto de 24px na coluna: o que sobra da banda é ar, de propósito.
-  const largura = Math.min(24, banda * 0.5);
+  const band = areaWidth / data.length;
+  // A 24px cap on the column: whatever is left of the band is air, on purpose.
+  const width = Math.min(24, band * 0.5);
 
-  const y = (valor: number) => base - (valor / teto) * areaAltura;
-  const marcas = [0, 0.25, 0.5, 0.75, 1].map((f) => teto * f);
+  const y = (value: number) => base - (value / cap) * areaHeight;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => cap * f);
 
   return (
     <figure className="m-0">
-      {/* Rola na horizontal em tela estreita, como as tabelas.
-          O SVG escala o desenho inteiro, rótulo incluído: em 360px o texto de
-          11px viraria 5px e o eixo ficaria ilegível. Melhor rolar o gráfico e
-          manter o rótulo do tamanho que se lê — e quem não quiser rolar tem a
-          tabela logo abaixo. */}
+      {/* Scrolls horizontally on a narrow screen, like the tables do.
+          The SVG scales the whole drawing, labels included: at 360px the 11px
+          text would become 5px and the axis would be unreadable. Better to
+          scroll the chart and keep the label at a size that reads — and whoever
+          would rather not scroll has the table right below. */}
       <div className="overflow-x-auto">
       <svg
-        viewBox={`0 0 ${LARGURA} ${ALTURA}`}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full min-w-[640px]"
         role="img"
         aria-label="Faturado e recebido por mês nos últimos doze meses"
       >
-        {/* Grade: fio de cabelo, sólido, recuado. Nunca tracejado. */}
-        {marcas.map((marca) => (
-          <g key={marca}>
+        {/* Gridlines: hairline, solid, inset. Never dashed. */}
+        {ticks.map((tick) => (
+          <g key={tick}>
             <line
-              x1={MARGEM.esquerda}
-              x2={LARGURA - MARGEM.direita}
-              y1={y(marca)}
-              y2={y(marca)}
+              x1={MARGIN.left}
+              x2={WIDTH - MARGIN.right}
+              y1={y(tick)}
+              y2={y(tick)}
               className="stroke-rule"
               strokeWidth="1"
             />
             <text
-              x={MARGEM.esquerda - 10}
-              y={y(marca) + 4}
+              x={MARGIN.left - 10}
+              y={y(tick) + 4}
               textAnchor="end"
               className="fill-ink-faint text-[11px]"
             >
-              {compacto(marca)}
+              {compact(tick)}
             </text>
           </g>
         ))}
 
-        {dados.map((mes, i) => {
-          const centro = MARGEM.esquerda + banda * i + banda / 2;
-          const x = centro - largura / 2;
+        {data.map((month, i) => {
+          const center = MARGIN.left + band * i + band / 2;
+          const x = center - width / 2;
 
-          const alturaRecebido = Math.max(base - y(mes.recebido), 0);
-          const topoPilha = y(mes.faturado);
-          // 2px de respiro NA COR DO FUNDO separam os dois segmentos. É o vão
-          // que separa, não um contorno — contorno acrescenta tinta que não é
-          // dado.
-          const alturaAReceber = Math.max(y(mes.recebido) - topoPilha - 2, 0);
+          const receivedHeight = Math.max(base - y(month.received), 0);
+          const stackTop = y(month.billed);
+          // 2px of breathing room IN THE BACKGROUND COLOUR separate the two
+          // segments. It is the gap that separates, not an outline — an outline
+          // adds ink that is not data.
+          const receivableHeight = Math.max(y(month.received) - stackTop - 2, 0);
 
           return (
-            <g key={mes.month} className="group">
-              {/* Alvo de hover da banda inteira, invisível: a coluna sozinha é
-                  estreita demais para ser mirada com o mouse. */}
+            <g key={month.month} className="group">
+              {/* An invisible hover target covering the whole band: the column
+                  alone is too narrow to aim at with a mouse. */}
               <rect
-                x={MARGEM.esquerda + banda * i}
-                y={MARGEM.topo}
-                width={banda}
-                height={areaAltura}
+                x={MARGIN.left + band * i}
+                y={MARGIN.top}
+                width={band}
+                height={areaHeight}
                 fill="transparent"
               />
 
-              {/* A receber, no topo. Ponta arredondada em 4px só aqui: é o fim
-                  do dado, e a base fica reta. */}
+              {/* Receivable, on top. A 4px rounded end only here: it is where the
+                  data ends, and the base stays square. */}
               <path
-                d={arredondadoNoTopo(x, topoPilha, largura, alturaAReceber, 4)}
+                d={roundedOnTop(x, stackTop, width, receivableHeight, 4)}
                 className="fill-chart-pending transition-opacity group-hover:opacity-80"
               />
 
-              {/* Recebido, ancorado na linha de base. */}
+              {/* Received, anchored on the baseline. */}
               <rect
                 x={x}
-                y={y(mes.recebido)}
-                width={largura}
-                height={alturaRecebido}
+                y={y(month.received)}
+                width={width}
+                height={receivedHeight}
                 className="fill-chart-received transition-opacity group-hover:opacity-80"
               />
 
               <text
-                x={centro}
-                y={ALTURA - 8}
+                x={center}
+                y={HEIGHT - 8}
                 textAnchor="middle"
                 className="fill-ink-faint text-[11px]"
               >
-                {mes.label}
+                {month.label}
               </text>
 
-              {/* Valor do mês sob o cursor. Rótulo em todo mês seria ilegível;
-                  este aparece um de cada vez. */}
+              {/* The value of the month under the cursor. A label on every month
+                  would be unreadable; this one appears one at a time. */}
               <text
-                x={centro}
-                y={topoPilha - 8}
+                x={center}
+                y={stackTop - 8}
                 textAnchor="middle"
                 className="fill-ink text-[11px] font-medium opacity-0 transition-opacity group-hover:opacity-100"
               >
-                {compacto(mes.faturado)}
+                {compact(month.billed)}
               </text>
 
               <title>
-                {`${mes.label}: ${formatCurrency(mes.original_amount)} faturado, ${formatCurrency(mes.received_amount)} recebido`}
+                {`${month.label}: ${formatCurrency(month.original_amount)} faturado, ${formatCurrency(month.received_amount)} recebido`}
               </title>
             </g>
           );
         })}
 
         <line
-          x1={MARGEM.esquerda}
-          x2={LARGURA - MARGEM.direita}
+          x1={MARGIN.left}
+          x2={WIDTH - MARGIN.right}
           y1={base}
           y2={base}
           className="stroke-rule-strong"
@@ -171,8 +172,8 @@ export function MonthlyChart({ meses }: { meses: DashboardMonth[] }) {
       </svg>
       </div>
 
-      {/* Legenda: obrigatória com duas séries. A cor mora no quadrado ao lado
-          do texto, nunca no texto — verde e âmbar não se leem como tinta. */}
+      {/* Legend: mandatory with two series. The colour lives in the square next
+          to the text, never in the text — green and amber do not read as ink. */}
       <figcaption className="mt-3 flex flex-wrap items-center gap-4 text-xs text-ink-muted">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-xs bg-chart-received" />
@@ -188,31 +189,31 @@ export function MonthlyChart({ meses }: { meses: DashboardMonth[] }) {
 }
 
 /**
- * Retângulo com os dois cantos de cima arredondados.
+ * A rectangle with the two top corners rounded.
  *
- * O SVG não tem raio por canto, e `rx` no `<rect>` arredondaria também a base —
- * onde o segmento encosta no de baixo. Altura zero vira caminho vazio.
+ * SVG has no per-corner radius, and `rx` on a `<rect>` would round the base too —
+ * where the segment meets the one below it. Zero height becomes an empty path.
  */
-function arredondadoNoTopo(
+function roundedOnTop(
   x: number,
   y: number,
-  largura: number,
-  altura: number,
-  raio: number,
+  width: number,
+  height: number,
+  radius: number,
 ): string {
-  if (altura <= 0) {
+  if (height <= 0) {
     return "";
   }
 
-  const r = Math.min(raio, altura, largura / 2);
+  const r = Math.min(radius, height, width / 2);
 
   return [
-    `M ${x} ${y + altura}`,
+    `M ${x} ${y + height}`,
     `L ${x} ${y + r}`,
     `Q ${x} ${y} ${x + r} ${y}`,
-    `L ${x + largura - r} ${y}`,
-    `Q ${x + largura} ${y} ${x + largura} ${y + r}`,
-    `L ${x + largura} ${y + altura}`,
+    `L ${x + width - r} ${y}`,
+    `Q ${x + width} ${y} ${x + width} ${y + r}`,
+    `L ${x + width} ${y + height}`,
     "Z",
   ].join(" ");
 }

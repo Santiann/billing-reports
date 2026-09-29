@@ -1,13 +1,13 @@
 import type { SessionResponse } from "@/types/auth";
 
 /**
- * Chamadas do browser aos Route Handlers do próprio Next.
+ * Browser calls to Next's own Route Handlers.
  *
- * Não passam por lib/api.ts de propósito: o destino aqui é a mesma origem, não
- * a API do Laravel. O browser não tem o token e por isso não pode falar com o
- * Laravel diretamente — quem anexa o Bearer é o servidor.
+ * They deliberately do not go through lib/api.ts: the target here is the same
+ * origin, not the Laravel API. The browser does not have the token and therefore
+ * cannot talk to Laravel directly — the server is what attaches the Bearer.
  *
- * Os componentes chamam estas funções em vez de montar fetch na mão.
+ * Components call these functions instead of building fetch by hand.
  */
 
 async function readMessage(response: Response, fallback: string) {

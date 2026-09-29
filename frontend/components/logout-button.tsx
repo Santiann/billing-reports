@@ -18,8 +18,8 @@ export function LogoutButton() {
       router.refresh();
       router.push("/login");
     } catch {
-      // O cookie é apagado pelo handler mesmo se a API falhar, então mandar
-      // para o login é a ação correta nos dois casos.
+      // The handler deletes the cookie even if the API fails, so sending the user
+      // to the login is the right action either way.
       router.push("/login");
     }
   }

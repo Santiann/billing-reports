@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
 /**
- * Superfície de conteúdo.
+ * A content surface.
  *
- * Régua em volta e sombra quase nula, de propósito: numa tela que empilha
- * filtro, totalizador e tabela, sombra em tudo vira ruído. A separação vem do
- * fio, como num formulário impresso.
+ * A rule around it and almost no shadow, on purpose: on a screen that stacks
+ * filters, totals and a table, shadow on everything becomes noise. The separation
+ * comes from the line, as on a printed form.
  */
 export function Card({
   children,
@@ -23,7 +23,7 @@ export function Card({
   );
 }
 
-/** Cabeçalho com fio embaixo, para o título não encostar no conteúdo. */
+/** A header with a line below it, so the title does not touch the content. */
 export function CardHeader({
   title,
   action,

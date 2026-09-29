@@ -10,7 +10,7 @@ import type { Customer } from "@/types/customer";
 import { DATE_FIELDS, REPORT_STATUSES } from "@/types/report";
 
 type ReportFiltersProps = {
-  /** Vem do servidor para o seletor reexibir o cliente já filtrado. */
+  /** Comes from the server so the picker can re-display the filtered customer. */
   selectedCustomer?: Customer;
 };
 
@@ -39,7 +39,7 @@ export function ReportFilters({ selectedCustomer }: ReportFiltersProps) {
       }
     }
 
-    // A ordenação é escolhida nos cabeçalhos da tabela, então é preservada.
+    // Sorting is chosen on the table headers, so it is preserved.
     for (const key of ["sort", "direction", "per_page"]) {
       const value = searchParams.get(key);
 
@@ -55,7 +55,7 @@ export function ReportFilters({ selectedCustomer }: ReportFiltersProps) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Período baseado em" htmlFor="date_field">
-          {/* Qual das três datas define o período é escolha do usuário. */}
+          {/* Which of the three dates defines the period is the user's choice. */}
           <Select
             id="date_field"
             name="date_field"

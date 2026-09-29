@@ -11,77 +11,77 @@ import type { ImportState } from "@/types/import";
 
 type ImportFormProps = {
   action: (state: ImportState, formData: FormData) => Promise<ImportState>;
-  /** Colunas do CSV, na ordem, para o cabeçalho de exemplo e a amostra. */
+  /** The CSV columns, in order, for the example header and the sample. */
   columns: ReadonlyArray<{ field: string; label: string }>;
   /**
-   * Campo que identifica a linha na tabela de erros.
+   * The field that identifies the row in the error table.
    *
-   * Cliente se reconhece pelo nome e cobrança pela descrição. Fixar "name"
-   * deixaria metade dos erros da importação de cobranças sem identificação.
+   * A customer is recognised by name and a billing by description. Hard-coding
+   * "name" would leave half the billing import's errors unidentified.
    */
   labelField: string;
   exampleCsv: string;
-  voltarHref: string;
+  backHref: string;
 };
 
 const INITIAL: ImportState = {};
 
 /**
- * Upload com prévia antes de confirmar.
+ * Upload with a preview before confirming.
  *
- * O fluxo tem duas etapas no mesmo formulário. "Analisar" manda o arquivo e
- * volta com o que aconteceria; "Confirmar" reenvia o MESMO arquivo — que ainda
- * está no input do browser — e grava. O botão de confirmar só existe depois da
- * prévia, e some de novo se o usuário trocar o arquivo, porque aí a prévia na
- * tela deixou de descrever o que está selecionado.
+ * The flow has two steps in the same form. "Analisar" sends the file and comes
+ * back with what would happen; "Confirmar" resends the SAME file — still sitting
+ * in the browser's input — and writes. The confirm button only exists after the
+ * preview, and disappears again if the user swaps the file, because at that point
+ * the preview on screen has stopped describing what is selected.
  */
 export function ImportForm({
   action,
   columns,
   labelField,
   exampleCsv,
-  voltarHref,
+  backHref,
 }: ImportFormProps) {
   const [state, formAction, isActionPending] = useActionState(action, INITIAL);
   const [isTransitionPending, startTransition] = useTransition();
 
   const isPending = isActionPending || isTransitionPending;
   const report = state.report;
-  const importado = state.mode === "import";
+  const imported = state.mode === "import";
 
   /*
-   * O envio passa por `onSubmit`, e não pelo `action` do <form>.
+   * Submitting goes through `onSubmit`, not through the <form>'s `action`.
    *
-   * Não é preferência: um formulário com `action` de função é RESETADO pelo
-   * React depois que a action termina, e o campo de arquivo volta a "nenhum
-   * arquivo selecionado". Como a confirmação reenvia o mesmo arquivo, a prévia
-   * apagava justamente o que o passo seguinte precisava — o botão de importar
-   * ficava sem arquivo e não gravava nada. Visto na tela antes de virar commit.
+   * This is not a preference: a form with a function `action` is RESET by React
+   * once the action finishes, and the file input goes back to "no file selected".
+   * Since confirming resends the same file, the preview was wiping exactly what
+   * the next step needed — the import button ended up with no file and wrote
+   * nothing. Seen on screen before it became a commit.
    *
-   * Chamando a action dentro de uma transição, o formulário não é tocado e o
-   * arquivo continua no input entre os dois passos.
+   * Calling the action inside a transition leaves the form untouched and the file
+   * stays in the input between the two steps.
    */
-  function enviar(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault();
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    const formulario = evento.currentTarget;
-    const dados = new FormData(formulario);
-    const botao = (evento.nativeEvent as SubmitEvent).submitter;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const button = (event.nativeEvent as SubmitEvent).submitter;
 
-    // Qual botão enviou decide se é prévia ou importação.
-    dados.set(
-      "acao",
-      botao instanceof HTMLButtonElement ? botao.value : "preview",
+    // Which button submitted decides whether this is a preview or an import.
+    data.set(
+      "step",
+      button instanceof HTMLButtonElement ? button.value : "preview",
     );
 
-    startTransition(() => formAction(dados));
+    startTransition(() => formAction(data));
   }
 
   return (
     <div className="flex flex-col gap-6">
       <Card>
         <CardBody className="p-6">
-          <form onSubmit={enviar} className="flex flex-col gap-5">
+          <form onSubmit={submit} className="flex flex-col gap-5">
             <Field
               label="Arquivo CSV"
               htmlFor="file"
@@ -111,24 +111,24 @@ export function ImportForm({
             <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-5">
               <Button
                 type="submit"
-                name="acao"
+                name="step"
                 value="preview"
-                variant={report && !importado ? "secondary" : "primary"}
+                variant={report && !imported ? "secondary" : "primary"}
                 disabled={isPending}
               >
                 {isPending ? "Lendo…" : "Analisar arquivo"}
               </Button>
 
-              {/* Confirmar só aparece depois de o usuário ver o que vai entrar. */}
-              {report && !importado && report.valid_count > 0 ? (
-                <Button type="submit" name="acao" value="import" disabled={isPending}>
+              {/* Confirm only appears after the user has seen what will go in. */}
+              {report && !imported && report.valid_count > 0 ? (
+                <Button type="submit" name="step" value="import" disabled={isPending}>
                   Importar {report.valid_count.toLocaleString("pt-BR")}{" "}
                   {report.valid_count === 1 ? "registro" : "registros"}
                 </Button>
               ) : null}
 
-              <Link href={voltarHref} className={buttonClasses({ variant: "ghost" })}>
-                {importado ? "Voltar" : "Cancelar"}
+              <Link href={backHref} className={buttonClasses({ variant: "ghost" })}>
+                {imported ? "Voltar" : "Cancelar"}
               </Link>
             </div>
           </form>
@@ -137,13 +137,13 @@ export function ImportForm({
 
       {report ? (
         <>
-          <Resumo state={state} />
+          <Summary state={state} />
 
           {report.errors.length > 0 ? (
             <Card>
               <CardHeader
                 title={
-                  importado
+                  imported
                     ? "Linhas que não entraram"
                     : "Linhas que não vão entrar"
                 }
@@ -155,24 +155,24 @@ export function ImportForm({
                   <TH>Motivo</TH>
                 </THead>
                 <TBody>
-                  {report.errors.map((erro) => (
-                    <TR key={erro.line}>
+                  {report.errors.map((errorRow) => (
+                    <TR key={errorRow.line}>
                       <TD numeric className="text-overdue">
-                        {erro.line}
+                        {errorRow.line}
                       </TD>
                       <TD className="text-ink-muted">
-                        {erro.values[labelField] || "—"}
-                        {erro.values.document ? (
+                        {errorRow.values[labelField] || "—"}
+                        {errorRow.values.document ? (
                           <span className="block font-mono text-xs">
-                            {erro.values.document}
+                            {errorRow.values.document}
                           </span>
                         ) : null}
                       </TD>
                       <TD>
                         <ul className="space-y-0.5">
-                          {erro.messages.map((mensagem) => (
-                            <li key={mensagem} className="text-overdue">
-                              {mensagem}
+                          {errorRow.messages.map((errorMessage) => (
+                            <li key={errorMessage} className="text-overdue">
+                              {errorMessage}
                             </li>
                           ))}
                         </ul>
@@ -191,21 +191,21 @@ export function ImportForm({
             </Card>
           ) : null}
 
-          {!importado && report.sample.length > 0 ? (
+          {!imported && report.sample.length > 0 ? (
             <Card>
               <CardHeader title="Amostra do que será importado" />
               <Table label="Amostra">
                 <THead>
-                  {columns.map((coluna) => (
-                    <TH key={coluna.field}>{coluna.label}</TH>
+                  {columns.map((column) => (
+                    <TH key={column.field}>{column.label}</TH>
                   ))}
                 </THead>
                 <TBody>
-                  {report.sample.map((linha, i) => (
+                  {report.sample.map((sampleRow, i) => (
                     <TR key={i}>
-                      {columns.map((coluna) => (
-                        <TD key={coluna.field} className="text-ink-muted">
-                          {linha[coluna.field] ?? "—"}
+                      {columns.map((column) => (
+                        <TD key={column.field} className="text-ink-muted">
+                          {sampleRow[column.field] ?? "—"}
                         </TD>
                       ))}
                     </TR>
@@ -233,20 +233,20 @@ export function ImportForm({
   );
 }
 
-/** O que aconteceu, em números. */
-function Resumo({ state }: { state: ImportState }) {
+/** What happened, in numbers. */
+function Summary({ state }: { state: ImportState }) {
   const report = state.report!;
-  const importado = state.mode === "import";
+  const imported = state.mode === "import";
 
-  const cartoes = [
+  const cards = [
     { label: "Linhas no arquivo", value: report.total_rows, tone: "text-ink" },
     {
-      label: importado ? "Importadas" : "Válidas",
-      value: importado ? report.imported_count : report.valid_count,
+      label: imported ? "Importadas" : "Válidas",
+      value: imported ? report.imported_count : report.valid_count,
       tone: "text-paid",
     },
     {
-      label: importado ? "Não importadas" : "Com erro",
+      label: imported ? "Não importadas" : "Com errorRow",
       value: report.error_count,
       tone: report.error_count > 0 ? "text-overdue" : "text-ink-muted",
     },
@@ -258,24 +258,24 @@ function Resumo({ state }: { state: ImportState }) {
         role="status"
         className={
           "mb-3 rounded-md border px-4 py-3 text-sm " +
-          (importado
+          (imported
             ? "border-paid/30 bg-paid-soft text-paid"
             : "border-accent/30 bg-accent-soft text-accent")
         }
       >
-        {importado
+        {imported
           ? `Importação concluída: ${report.imported_count.toLocaleString("pt-BR")} de ${report.total_rows.toLocaleString("pt-BR")} linhas entraram.`
           : "Nada foi gravado ainda. Confira abaixo e confirme para importar."}
       </p>
 
       <dl className="grid gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-3">
-        {cartoes.map((cartao) => (
-          <div key={cartao.label} className="bg-surface px-4 py-3">
+        {cards.map((card) => (
+          <div key={card.label} className="bg-surface px-4 py-3">
             <dt className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-              {cartao.label}
+              {card.label}
             </dt>
-            <dd className={`mt-1 text-2xl font-semibold ${cartao.tone}`}>
-              {cartao.value.toLocaleString("pt-BR")}
+            <dd className={`mt-1 text-2xl font-semibold ${card.tone}`}>
+              {card.value.toLocaleString("pt-BR")}
             </dd>
           </div>
         ))}

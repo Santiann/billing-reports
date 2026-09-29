@@ -1,87 +1,86 @@
 import type { DashboardMonth } from "@/types/dashboard";
 
 /**
- * Taxa de recebimento por mês: quanto do faturado virou dinheiro.
+ * Collection rate per month: how much of what was billed turned into money.
  *
- * Sai dos mesmos doze números do gráfico acima e não custa consulta nenhuma —
- * mas responde outra pergunta. O empilhado mostra volume; este mostra
- * eficiência de cobrança, que é o que não se enxerga quando o faturamento
- * cresce e o recebido cresce junto.
+ * It comes out of the same twelve numbers as the chart above and costs no extra
+ * query — but it answers a different question. The stacked chart shows volume;
+ * this one shows collection efficiency, which is what you cannot see when billing
+ * grows and received grows along with it.
  *
- * Linha, porque a leitura é tendência. Série única, então sem caixa de legenda:
- * o título já diz o que está plotado, e um quadradinho só repetiria o título.
+ * A line, because the reading is a trend. A single series, so no legend box: the
+ * title already says what is plotted, and a little square would only repeat it.
  */
 
-const LARGURA = 760;
-const ALTURA = 180;
-const MARGEM = { topo: 16, direita: 44, baixo: 28, esquerda: 44 };
+const WIDTH = 760;
+const HEIGHT = 180;
+const MARGIN = { top: 16, right: 44, bottom: 28, left: 44 };
 
-export function CollectionChart({ meses }: { meses: DashboardMonth[] }) {
-  const pontos = meses.map((mes) => {
-    const faturado = Number(mes.original_amount);
-    const recebido = Number(mes.received_amount);
+export function CollectionChart({ months }: { months: DashboardMonth[] }) {
+  const points = months.map((month) => {
+    const billed = Number(month.original_amount);
+    const received = Number(month.received_amount);
 
     return {
-      label: mes.label,
-      month: mes.month,
-      taxa: faturado > 0 ? (recebido / faturado) * 100 : 0,
+      label: month.label,
+      month: month.month,
+      rate: billed > 0 ? (received / billed) * 100 : 0,
     };
   });
 
-  const areaLargura = LARGURA - MARGEM.esquerda - MARGEM.direita;
-  const areaAltura = ALTURA - MARGEM.topo - MARGEM.baixo;
-  const base = MARGEM.topo + areaAltura;
+  const areaWidth = WIDTH - MARGIN.left - MARGIN.right;
+  const areaHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
+  const base = MARGIN.top + areaHeight;
 
-  // Escala fixa de 0 a 100: taxa de recebimento é porcentagem, e esticar o eixo
-  // para o intervalo dos dados transformaria variação de dois pontos numa
-  // montanha.
+  // A fixed 0 to 100 scale: the collection rate is a percentage, and stretching
+  // the axis to the data's range would turn a two-point swing into a mountain.
   const x = (i: number) =>
-    MARGEM.esquerda + (areaLargura / Math.max(pontos.length - 1, 1)) * i;
-  const y = (taxa: number) => base - (taxa / 100) * areaAltura;
+    MARGIN.left + (areaWidth / Math.max(points.length - 1, 1)) * i;
+  const y = (rate: number) => base - (rate / 100) * areaHeight;
 
-  const caminho = pontos
-    .map((ponto, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(ponto.taxa)}`)
+  const path = points
+    .map((point, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(point.rate)}`)
     .join(" ");
 
-  const ultimo = pontos[pontos.length - 1];
+  const last = points[points.length - 1];
 
   return (
     <figure className="m-0">
-      {/* Rola na horizontal em tela estreita, como as tabelas.
-          O SVG escala o desenho inteiro, rótulo incluído: em 360px o texto de
-          11px viraria 5px e o eixo ficaria ilegível. Melhor rolar o gráfico e
-          manter o rótulo do tamanho que se lê — e quem não quiser rolar tem a
-          tabela logo abaixo. */}
+      {/* Scrolls horizontally on a narrow screen, like the tables do.
+          The SVG scales the whole drawing, labels included: at 360px the 11px
+          text would become 5px and the axis would be unreadable. Better to
+          scroll the chart and keep the label at a size that reads — and whoever
+          would rather not scroll has the table right below. */}
       <div className="overflow-x-auto">
       <svg
-        viewBox={`0 0 ${LARGURA} ${ALTURA}`}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full min-w-[560px]"
         role="img"
         aria-label="Taxa de recebimento por mês nos últimos doze meses"
       >
-        {[0, 50, 100].map((marca) => (
-          <g key={marca}>
+        {[0, 50, 100].map((tick) => (
+          <g key={tick}>
             <line
-              x1={MARGEM.esquerda}
-              x2={LARGURA - MARGEM.direita}
-              y1={y(marca)}
-              y2={y(marca)}
+              x1={MARGIN.left}
+              x2={WIDTH - MARGIN.right}
+              y1={y(tick)}
+              y2={y(tick)}
               className="stroke-rule"
               strokeWidth="1"
             />
             <text
-              x={MARGEM.esquerda - 10}
-              y={y(marca) + 4}
+              x={MARGIN.left - 10}
+              y={y(tick) + 4}
               textAnchor="end"
               className="fill-ink-faint text-[11px]"
             >
-              {marca}%
+              {tick}%
             </text>
           </g>
         ))}
 
         <path
-          d={caminho}
+          d={path}
           fill="none"
           className="stroke-chart-received"
           strokeWidth="2"
@@ -89,39 +88,39 @@ export function CollectionChart({ meses }: { meses: DashboardMonth[] }) {
           strokeLinejoin="round"
         />
 
-        {pontos.map((ponto, i) => (
-          <g key={ponto.month}>
-            {/* Anel de 2px na cor da superfície: mantém o ponto legível onde
-                ele cruza a linha. */}
+        {points.map((point, i) => (
+          <g key={point.month}>
+            {/* A 2px ring in the surface colour: it keeps the point legible where
+                it crosses the line. */}
             <circle
               cx={x(i)}
-              cy={y(ponto.taxa)}
+              cy={y(point.rate)}
               r="4.5"
               className="fill-chart-received stroke-surface"
               strokeWidth="2"
             />
-            <title>{`${ponto.label}: ${ponto.taxa.toFixed(1)}% recebido`}</title>
+            <title>{`${point.label}: ${point.rate.toFixed(1)}% recebido`}</title>
           </g>
         ))}
 
-        {/* Rótulo direto só na ponta: valor em todo ponto vira ruído. */}
+        {/* A direct label only at the end: a value on every point becomes noise. */}
         <text
-          x={x(pontos.length - 1) + 10}
-          y={y(ultimo.taxa) + 4}
+          x={x(points.length - 1) + 10}
+          y={y(last.rate) + 4}
           className="fill-ink text-[11px] font-medium"
         >
-          {ultimo.taxa.toFixed(0)}%
+          {last.rate.toFixed(0)}%
         </text>
 
-        {pontos.map((ponto, i) => (
+        {points.map((point, i) => (
           <text
-            key={ponto.month}
+            key={point.month}
             x={x(i)}
-            y={ALTURA - 8}
+            y={HEIGHT - 8}
             textAnchor="middle"
             className="fill-ink-faint text-[11px]"
           >
-            {ponto.label}
+            {point.label}
           </text>
         ))}
       </svg>

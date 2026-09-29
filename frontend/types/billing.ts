@@ -5,7 +5,7 @@ export type BillingStatus = "pending" | "paid";
 export type Billing = {
   id: number;
   description: string;
-  /** Decimal como string: preserva o centavo que float perderia. */
+  /** Decimal as a string: it preserves the cent a float would lose. */
   original_amount: string;
   monthly_interest_rate: string;
   issue_date: string;
@@ -13,18 +13,18 @@ export type Billing = {
   payment_date: string | null;
   status: BillingStatus;
   status_label: string;
-  /** Vencida é derivada (pendente + vencimento passado), não gravada. */
+  /** Overdue is derived (pending + due date passed), not stored. */
   is_overdue: boolean;
   paid_amount: string | null;
   paid_interest_amount: string | null;
   /**
-   * Juros e valor atualizado calculados no backend.
+   * Interest and updated amount computed on the backend.
    *
-   * Na listagem vêm do próprio SELECT (face SQL do InterestCalculator); numa
-   * cobrança isolada, da face PHP. Há teste no backend afirmando que os dois
-   * caminhos dão o mesmo número até o centavo.
+   * In the listing they come from the SELECT itself (the SQL face of
+   * InterestCalculator); on a single billing, from the PHP face. There is a
+   * backend test asserting both paths give the same number down to the cent.
    *
-   * Para cobrança paga são os valores congelados, nunca recalculados.
+   * For a paid billing these are the frozen amounts, never recomputed.
    */
   interest_amount: string;
   updated_amount: string;

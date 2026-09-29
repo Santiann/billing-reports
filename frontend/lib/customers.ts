@@ -24,8 +24,8 @@ function toQueryString(params: CustomerListParams): string {
 }
 
 /**
- * Filtro, ordenação e paginação são repassados ao backend como parâmetros de
- * consulta. Nada é recortado aqui: o Next nunca recebe o conjunto inteiro.
+ * Filtering, sorting and pagination are passed through to the backend as query
+ * parameters. Nothing is narrowed here: Next never receives the whole set.
  */
 export async function listCustomers(
   params: CustomerListParams,
