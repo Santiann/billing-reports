@@ -1,46 +1,49 @@
-# Melhorias que ficariam para produção
+# Improvements that would be left for production
 
 [← README](../README.md)
 
-## Melhorias que ficariam para produção
+## Improvements that would be left for production
 
-Nenhuma foi aplicada na etapa 1: estão fora do que a especificação pede, e
-implementá-las aumentaria a superfície sem pontuar. A etapa 2 vai fechando os
-itens um a um, e cada item fechado sai daqui ou fica só com o que resta dele.
+None of these is in the codebase. They sit outside what the brief asks for, and
+building them would have widened the surface without answering it. Each one that
+does get closed leaves this file, or stays with only whatever is left of it.
 
-Ficam registradas porque são as que a medição deste projeto realmente indica,
-não uma lista genérica.
+They are recorded because they are the ones this project's measurements actually
+point at, not a generic list.
 
-**Materializar os totalizadores.** O cache por recorte [foi feito na etapa
-2](performance.md#cache-dos-totalizadores) e leva o recorte de um ano de 12,9 s para cerca de
-3 s nas consultas seguintes. Mas a primeira consulta de cada recorte, e a
-primeira depois de cada escrita, ainda pagam a agregação inteira — que é O(n)
-por natureza. Uma tabela de agregados atualizada por evento de cobrança tiraria
-esse custo também, com um cuidado que o cache não tem: os juros do que está
-pendente mudam com o dia, então a parte pendente precisaria de recálculo diário.
+**Materialise the totals.** The per-scope cache
+[was built](performance.md#cache-dos-totalizadores) and takes a one-year scope
+from 12.9 s down to around 3 s on subsequent queries. But the first query for
+each scope, and the first after each write, still pay the full aggregation —
+which is O(n) by nature. An aggregates table updated by billing events would
+remove that cost too, with one concern the cache does not have: the interest on
+what is pending changes with the day, so the pending portion would need a daily
+recompute.
 
-**Particionar `billings` por data.** Com o relatório sempre recortando por
-período, partições por ano ou trimestre tornariam a varredura de um recorte
-largo proporcional ao recorte, e não à tabela.
+**Partition `billings` by date.** With the report always scoping by period,
+partitions by year or quarter would make scanning a wide scope proportional to
+the scope, rather than to the table.
 
-**Índice FULLTEXT em `description`.** A busca usa `LIKE '%termo%'`, que não é
-indexável por ter curinga à esquerda. Aceitável na tela de CRUD, não numa base
-que cresce.
+**A FULLTEXT index on `description`.** The search uses `LIKE '%term%'`, which is
+not indexable because of the leading wildcard. Acceptable on a CRUD screen, not
+on a base that grows.
 
-**Ler linhas cruas na exportação CSV.** Medido: dos 55s de uma exportação de
-56.680 linhas, ~18s são banco e o resto é hidratar model Eloquent e instanciar
-Carbon. `DB::table()` com join troca a conveniência do domínio por velocidade.
+**Read raw rows in the CSV export.** Measured: of the 55s an export of 56,680
+rows takes, ~18s is the database and the rest is hydrating Eloquent models and
+instantiating Carbon. `DB::table()` with a join trades the domain's convenience
+for speed.
 
-**Trocar o renderizador de PDF se volume for requisito.** `FPDF` ou `TCPDF`
-emitem páginas incrementalmente e não montam a árvore inteira, o que removeria
-o teto. Custa estilização mais trabalhosa — a troca certa quando o volume manda.
+**Replace the PDF renderer if volume becomes a requirement.** `FPDF` or `TCPDF`
+emit pages incrementally and do not assemble the whole tree, which would remove
+the cap. It costs more laborious styling — the right trade when volume demands
+it.
 
-**Exportação assíncrona.** Acima de certo tamanho, gerar em fila e notificar o
-usuário com um link, em vez de segurar uma conexão HTTP por minutos.
+**Asynchronous export.** Above a certain size, generate it on a queue and notify
+the user with a link, rather than holding an HTTP connection open for minutes.
 
-**Réplica de leitura para o relatório.** Consultas analíticas competindo com a
-escrita transacional é o próximo gargalo depois do buffer pool.
+**A read replica for the report.** Analytical queries competing with
+transactional writes is the next bottleneck after the buffer pool.
 
-**Observabilidade.** Log de consultas lentas com o plano de execução — os três
-achados de performance deste projeto vieram de `EXPLAIN` rodado à mão, e isso
-não escala como prática.
+**Observability.** Slow query logging with the execution plan — this project's
+three performance findings all came from `EXPLAIN` run by hand, and that does not
+scale as a practice.

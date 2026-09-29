@@ -1,184 +1,189 @@
-# Frontend: fundação visual e telas
+# Frontend: visual foundation and screens
 
 [← README](../README.md)
 
-- [Fundação visual](#fundação-visual)
-- [Página pública](#página-pública)
-- [Estados de erro e carregamento](#estados-de-erro-e-carregamento)
+- [Visual foundation](#visual-foundation)
+- [Public page](#public-page)
+- [Error and loading states](#error-and-loading-states)
 
-## Fundação visual
+## Visual foundation
 
-Os tokens e os primitivos vivem em [`app/globals.css`](frontend/app/globals.css)
-e [`components/ui/`](frontend/components/ui/).
+The tokens and the primitives live in
+[`app/globals.css`](frontend/app/globals.css) and
+[`components/ui/`](frontend/components/ui/).
 
-**A direção é a de um livro-razão**: papel e tinta, régua em fio de cabelo no
-lugar de sombra, e número tabular em toda coluna de dinheiro. Não é gosto — é a
-forma que o domínio já tem. Quem confere cobrança lê coluna de valor, e coluna
-de valor só se lê alinhada: com algarismo de largura variável, `1.111,11` ocupa
-menos espaço que `8.888,88` e a comparação de relance se perde. Por isso o
-primitivo de tabela tem uma coluna `numeric` que é monoespaçada, tabular e
-alinhada à direita, em vez de deixar a decisão para cada tela.
+**The direction is a ledger's**: paper and ink, a hairline rule instead of a
+shadow, and tabular figures in every money column. That is not taste — it is the
+shape the domain already has. Whoever checks a billing reads a column of amounts,
+and a column of amounts can only be read aligned: with variable-width digits,
+`1.111,11` takes less room than `8.888,88` and the at-a-glance comparison is lost.
+That is why the table primitive has a `numeric` column that is monospaced,
+tabular and right aligned, rather than leaving the decision to each screen.
 
-### Tema escuro sem uma única classe `dark:`
+### A dark theme without a single `dark:` class
 
-Os tokens são **semânticos** — `--color-ink`, não `--color-slate-900` — e cada
-um declara os dois temas de uma vez:
+The tokens are **semantic** — `--color-ink`, not `--color-slate-900` — and each
+one declares both themes at once:
 
 ```css
 --color-paper: light-dark(#faf8f4, #121214);
 --color-overdue: light-dark(#9d2b1e, #e58a7c);
 ```
 
-`light-dark()` resolve pelo `color-scheme` do elemento, então trocar de tema é
-trocar uma propriedade no `<html>` — e nenhum componente precisa repetir cada
-cor com o prefixo `dark:`. O default segue o sistema operacional; `data-theme`
-com `light` ou `dark` sobrepõe, e os dois seletores já existem para que um
-futuro seletor de tema seja um atributo, e não uma reescrita da tabela de cores.
+`light-dark()` resolves by the element's `color-scheme`, so switching themes means
+switching one property on the `<html>` — and no component has to repeat every
+colour with a `dark:` prefix. The default follows the operating system;
+`data-theme` with `light` or `dark` overrides it, and both selectors already exist
+so that a theme switcher is an attribute rather than a rewrite of the colour
+table.
 
-A primeira versão deste arquivo fazia o caminho comum: repetia o bloco inteiro
-de tokens num `@media (prefers-color-scheme: dark)` e de novo num
-`[data-theme="dark"]`. Um valor saiu digitado errado na segunda cópia — que é
-exatamente o defeito que duplicar tabela de cor produz, e o argumento para não
-duplicar.
+The first version of this file took the common route: it repeated the whole token
+block inside a `@media (prefers-color-scheme: dark)` and again inside a
+`[data-theme="dark"]`. One value ended up mistyped in the second copy — which is
+exactly the defect duplicating a colour table produces, and the argument for not
+duplicating it.
 
-### Nenhuma biblioteca de componentes
+### No component library
 
-Sem shadcn/ui, sem Radix, sem Headless UI, sem Material. Os cinco primitivos —
-botão, campo, card, etiqueta e tabela — somam pouco mais de 300 linhas, e o que
-eles fazem é justamente o que uma biblioteca genérica não faria: a tabela sabe
-o que é coluna de dinheiro, a etiqueta conhece os três estados do domínio, e o
-botão trata `disabled` com fundo rebaixado em vez de opacidade.
+No shadcn/ui, no Radix, no Headless UI, no Material. The five primitives — button,
+field, card, badge and table — come to a little over 300 lines, and what they do
+is precisely what a generic library would not: the table knows what a money column
+is, the badge knows the domain's three states, and the button handles `disabled`
+with a sunken background rather than opacity.
 
-Não há aqui nada que peça o que essas bibliotecas resolvem bem — combobox
-acessível, diálogo com armadilha de foco, menu com navegação por teclado. A
-tela mais complexa deste projeto é uma tabela com filtros. Trazer Radix para
-isso seria adicionar uma dependência, um estilo a sobrescrever e uma camada de
-API para aprender, em troca de nada que o HTML nativo não entregue.
+There is nothing here that asks for what those libraries solve well — an accessible
+combobox, a dialog with a focus trap, a menu with keyboard navigation. This
+project's most complex screen is a table with filters. Bringing in Radix for that
+would add a dependency, a style to override and an API layer to learn, in exchange
+for nothing native HTML does not already give.
 
-O que existe de acessibilidade foi escrito à mão porque é onde ela costuma se
-perder: o `Field` amarra `label`, `id`, `aria-invalid` e `role="alert"` numa
-vez só, e o foco visível usa `:focus-visible` — o anel aparece para quem navega
-por Tab e some para quem clica.
+What accessibility there is was written by hand, because that is where it usually
+gets lost: `Field` ties `label`, `id`, `aria-invalid` and `role="alert"` together
+in one place, and the visible focus uses `:focus-visible` — the ring appears for
+whoever navigates by Tab and disappears for whoever clicks.
 
-### O seletor de tema é um formulário HTML
+### The theme switcher is an HTML form
 
-Três estados — sistema, claro, escuro — e "sistema" é uma escolha própria: sem
-ele, quem prefere acompanhar o sistema operacional não teria como voltar depois
-de tocar no seletor uma vez.
+Three states — system, light, dark — and "system" is a choice of its own: without
+it, whoever prefers to follow the operating system would have no way back after
+touching the switcher once.
 
-A preferência vai para um cookie e é **lida no layout raiz, no servidor**. É o
-que elimina o piscar: com `localStorage` a página renderiza no tema errado e
-troca depois da hidratação, e a saída comum para isso é um script inline no
-`<head>` que o bundler não enxerga. Lendo o cookie no servidor, o `<html>` já
-sai da primeira resposta com `data-theme` correto.
+The preference goes into a cookie and is **read in the root layout, on the
+server**. That is what eliminates the flash: with `localStorage` the page renders
+in the wrong theme and switches after hydration, and the common way out is an
+inline script in the `<head>` that the bundler cannot see. Reading the cookie on
+the server, the `<html>` leaves the very first response with the right
+`data-theme`.
 
-**O seletor posta para um Route Handler, não para uma Server Action** — e isso
-contraria a regra geral deste projeto, de que mutação usa Action. A exceção
-está na própria regra: Route Handler é para o que o browser precisa *navegar*.
+**The switcher posts to a Route Handler, not to a Server Action** — and that goes
+against this project's general rule that mutations use an Action. The exception is
+in the rule itself: Route Handlers are for what the browser needs to *navigate*
+to.
 
-A versão com Server Action foi escrita primeiro e não funciona aqui. O cookie
-era gravado e o servidor já respondia o tema novo, mas a tela continuava no
-tema antigo até alguém recarregar: numa atualização suave o React não
-reconcilia atributo do elemento `<html>`. Com `<form method="post">` o browser
-navega de verdade, o layout raiz roda no servidor e o `<html>` chega pronto —
-e o seletor passa a funcionar **sem JavaScript nenhum**.
+The Server Action version was written first and does not work here. The cookie was
+written and the server was already answering with the new theme, but the screen
+stayed on the old one until someone reloaded: on a soft update React does not
+reconcile attributes on the `<html>` element. With `<form method="post">` the
+browser really navigates, the root layout runs on the server and the `<html>`
+arrives ready — and the switcher works **with no JavaScript at all**.
 
-A primeira versão do handler também caiu numa armadilha que este projeto já
-tinha documentado em outro lugar: `NextResponse.redirect()` exige URL absoluta,
-e dentro do container `request.nextUrl.origin` resolve para o endereço de bind
-(`http://0.0.0.0:3000`), não para o host que o browser usou. O browser seguia
-para **outra origem**, não mandava o cookie de sessão junto, e o usuário caía no
-login a cada troca de tema. O `Location` agora é relativo, e o `Referer` só é
-aceito se o host bater com o header `Host` — que é o host que o browser usou de
-fato, e não o que o container acha que é.
+The handler's first version also fell into a trap this project had already
+documented elsewhere: `NextResponse.redirect()` requires an absolute URL, and
+inside the container `request.nextUrl.origin` resolves to the bind address
+(`http://0.0.0.0:3000`), not the host the browser used. The browser followed to
+**another origin**, did not send the session cookie along, and the user landed on
+the login on every theme switch. The `Location` is now relative, and the `Referer`
+is only accepted if its host matches the `Host` header — which is the host the
+browser actually used, and not the one the container thinks it is.
 
-### Tipografia
+### Typography
 
-| | Família | Papel |
+| | Family | Role |
 |---|---|---|
-| Título | Instrument Serif | dá cara ao produto |
-| Interface | IBM Plex Sans | humanista, boa em leitura densa |
-| Dado | IBM Plex Mono | id, documento e dinheiro alinhados |
+| Titles | Instrument Serif | gives the product a face |
+| Interface | IBM Plex Sans | humanist, good at dense reading |
+| Data | IBM Plex Mono | ids, documents and money aligned |
 
-Servidas por `next/font`, que baixa e hospeda no build: sem requisição a
-terceiro em runtime e sem salto de layout ao carregar.
+Served by `next/font`, which downloads and self-hosts at build time: no
+third-party request at runtime and no layout shift on load.
 
 ---
 
-## Página pública
+## Public page
 
-A raiz atende duas plateias. **Com sessão**, `/` é o dashboard, protegido como
-sempre. **Sem sessão**, ela mostra a apresentação do sistema em vez de empurrar
-para o login — quem chega pela primeira vez precisa saber o que é isto antes de
-ver um formulário de senha.
+The root serves two audiences. **With a session**, `/` is the dashboard, protected
+as always. **Without one**, it shows the system's introduction instead of pushing
+you to the login — whoever arrives for the first time needs to know what this is
+before seeing a password form.
 
-O middleware faz isso com **`rewrite`, não `redirect`**, e a diferença importa:
-o endereço continua `/`. Um redirect para `/apresentacao` mudaria a URL na barra
-e faria o botão "voltar" do browser brigar com o login.
+The middleware does that with **`rewrite`, not `redirect`**, and the difference
+matters: the address stays `/`. A redirect to `/apresentacao` would change the URL
+in the bar and make the browser's back button fight with the login.
 
-A tabela de roteamento, verificada:
+The routing table, verified:
 
-| Rota | Sem sessão | Com sessão |
+| Route | No session | With a session |
 |---|---|---|
-| `/` | 200, apresentação | 200, dashboard |
-| `/apresentacao` | 200 | 200 — é página pública |
-| `/login` | 200 | 307 para `/` |
-| `/clientes`, `/relatorio`, … | 307 para `/login?redirect=…` | 200 |
+| `/` | 200, the introduction | 200, the dashboard |
+| `/apresentacao` | 200 | 200 — it is a public page |
+| `/login` | 200 | 307 to `/` |
+| `/clientes`, `/relatorio`, … | 307 to `/login?redirect=…` | 200 |
 
-### Nenhum número da página é inventado
+### Not one of the page's numbers is invented
 
-A skill de copywriting é explícita sobre estatística fabricada, e aqui a regra é
-fácil de seguir porque a prova existe: não há depoimento de cliente nem logotipo
-de empresa, porque não há cliente nem empresa. O que a página afirma é o que foi
-medido — 2.000.000 de cobranças na base, 0,24s no recorte de um mês por cliente,
-0,84s para o painel, 293 testes — 283 no backend e 10 de ponta a ponta.
+The copywriting skill is explicit about fabricated statistics, and here the rule is
+easy to follow because the proof exists: there is no customer testimonial and no
+company logo, because there is no customer and no company. What the page claims is
+what was measured — 2,000,000 billings in the base, 0.24s for a one-month scope
+for one customer, 0.84s for the dashboard, 293 tests — 283 in the backend and 10
+end to end.
 
-A figura da dobra é o mesmo caso. Ela mostra uma cobrança de R$ 1.000,00 a 2% ao
-mês virando **R$ 1.061,21** em 90 dias, e os sete pontos da curva foram gerados
-pelo `InterestCalculator` do próprio sistema, não desenhados a olho. Inventar a
-curva seria mentir sobre a única coisa que a página tem para provar.
+The figure above the fold is the same case. It shows a billing of R$ 1,000.00 at
+2% a month becoming **R$ 1,061.21** in 90 days, and the curve's seven points were
+generated by the system's own `InterestCalculator`, not drawn by eye. Inventing the
+curve would be lying about the one thing the page has to prove.
 
-Também não há imagem gerada: a skill de landing page sugere hero com foto de
-pessoa satisfeita, e uma curva de juros real diz mais sobre este produto do que
-um banco de imagens diria — além de não acrescentar megabytes de binário ao
-repositório.
+There is no generated imagery either: the landing page skill suggests a hero with
+a photo of a satisfied person, and a real interest curve says more about this
+product than a stock library would — besides not adding megabytes of binary to the
+repository.
 
 ---
 
-## Estados de erro e carregamento
+## Error and loading states
 
-Quatro arquivos de convenção do App Router, e nenhum deles é decorativo.
+Four App Router convention files, and none of them is decorative.
 
-| Arquivo | Cobre |
+| File | Covers |
 |---|---|
-| `app/error.tsx` | Tudo que falha fora do grupo `(app)`: o `/login`, e a falha do próprio layout autenticado |
-| `app/not-found.tsx` | URL inexistente e o `notFound()` das telas de detalhe |
-| `app/(app)/error.tsx` | A área autenticada, preservando o cabeçalho |
-| `app/(app)/{clientes,cobrancas}/[id]/loading.tsx` | Esqueleto das telas de detalhe |
+| `app/error.tsx` | Everything that fails outside the `(app)` group: `/login`, and a failure of the authenticated layout itself |
+| `app/not-found.tsx` | A non-existent URL and the detail screens' `notFound()` |
+| `app/(app)/error.tsx` | The authenticated area, preserving the header |
+| `app/(app)/{clientes,cobrancas}/[id]/loading.tsx` | The detail screens' skeletons |
 
-**`retry`, não `reset`.** Esta é a parte que não se descobre lendo código. A
-fronteira de erro recebe os dois, e eles fazem coisas diferentes: `retry()`
-refaz o fetch e re-renderiza; `reset()` só limpa o estado de erro e
-reaproveita o payload que já falhou. Para queda de API — que é o caso real —
-`reset()` reexibe exatamente o mesmo erro, e o botão "Tentar de novo" vira
-enfeite.
+**`retry`, not `reset`.** This is the part you do not discover by reading code. The
+error boundary receives both, and they do different things: `retry()` redoes the
+fetch and re-renders; `reset()` only clears the error state and reuses the payload
+that already failed. For an API outage — which is the real case — `reset()` shows
+exactly the same error again, and the "Try again" button becomes an ornament.
 
-Foi assim que o defeito apareceu: com a tela aberta, `docker compose stop
-backend`, recarregar, religar o backend e clicar no botão. Com `reset`, nada
-acontecia. Com `retry`, a tela volta. Os dois arquivos de erro usam `retry`.
+That is how the defect surfaced: with the screen open, `docker compose stop
+backend`, reload, bring the backend back up and click the button. With `reset`,
+nothing happened. With `retry`, the screen comes back. Both error files use
+`retry`.
 
-**Altura `flex-1`, não `min-h-screen`.** O `app/not-found.tsx` renderiza em
-dois contextos: sozinho no layout raiz, quando a URL não existe, e **dentro do
-cabeçalho da aplicação**, quando uma tela de detalhe chama `notFound()`. No
-segundo caso, uma altura de viewport inteira abaixo do cabeçalho produz scroll
-vertical. Visto em 360px antes de virar commit.
+**Height `flex-1`, not `min-h-screen`.** `app/not-found.tsx` renders in two
+contexts: on its own in the root layout, when the URL does not exist, and **inside
+the application's header**, when a detail screen calls `notFound()`. In the second
+case, a full viewport height below the header produces vertical scrolling. Seen at
+360px before it became a commit.
 
-**Esqueleto próprio nas telas de detalhe.** Sem eles, o detalhe herdaria o
-`loading.tsx` da listagem — o esqueleto de uma tabela larga, que não se parece
-com a tela que vai aparecer. O salto de um layout para o outro é pior do que
-não ter esqueleto nenhum.
+**A skeleton of their own on the detail screens.** Without them, the detail would
+inherit the listing's `loading.tsx` — the skeleton of a wide table, which looks
+nothing like the screen that is about to appear. The jump from one layout to the
+other is worse than having no skeleton at all.
 
-O que fica de fora, e por quê: `global-error.tsx`. Ele cobriria erro lançado
-pelo layout raiz, mas precisa reconstruir `<html>` e `<body>` e não herda o
-CSS global. O layout raiz deste projeto monta a página e carrega a fonte, nada
-mais — o custo não se paga.
+What is left out, and why: `global-error.tsx`. It would cover an error thrown by
+the root layout, but it has to rebuild `<html>` and `<body>` and does not inherit
+the global CSS. This project's root layout assembles the page and loads the fonts,
+nothing more — the cost does not pay for itself.

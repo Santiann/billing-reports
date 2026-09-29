@@ -1,77 +1,76 @@
-# Arquitetura e decisões
+# Architecture and decisions
 
 [← README](../README.md)
 
-- [Serviços](#serviços)
-- [Autenticação](#autenticação)
-- [Modelagem](#modelagem)
-- [Cálculo de juros](#cálculo-de-juros)
-- [Decisões técnicas](#decisões-técnicas)
+- [Services](#services)
+- [Authentication](#authentication)
+- [Modelling](#modelling)
+- [Interest calculation](#interest-calculation)
+- [Technical decisions](#technical-decisions)
 
-## Serviços
+## Services
 
 ```
 docker compose ps
 ```
 
-| Serviço | Imagem / build | Porta no host | Papel |
+| Service | Image / build | Host port | Role |
 |---|---|---|---|
-| `mysql` | `mysql:8.0` | — | Banco. Volume nomeado `mysql_data`. |
-| `php` | `backend/Dockerfile` | — | PHP-FPM 8.3. Fala FastCGI na 9000. |
-| `backend` | `nginx:1.27-alpine` | **8000** | Serve o Laravel por HTTP. |
-| `frontend` | `frontend/Dockerfile` (target `dev`) | **3000** | Next.js em modo desenvolvimento. |
+| `mysql` | `mysql:8.0` | — | The database. Named volume `mysql_data`. |
+| `php` | `backend/Dockerfile` | — | PHP-FPM 8.3. Speaks FastCGI on 9000. |
+| `backend` | `nginx:1.27-alpine` | **8000** | Serves Laravel over HTTP. |
+| `frontend` | `frontend/Dockerfile` (target `dev`) | **3000** | Next.js in development mode. |
 
-### Por que o nginx se chama `backend` e o PHP se chama `php`
+### Why nginx is called `backend` and PHP is called `php`
 
-Essa é a decisão menos óbvia do arquivo, então ela fica explícita.
+This is the least obvious decision in the file, so it is made explicit.
 
-Dentro do Compose o Next tem duas origens de API e elas não são
-intercambiáveis:
+Inside Compose, Next has two API origins and they are not interchangeable:
 
-| Contexto | Base | Variável |
+| Context | Base | Variable |
 |---|---|---|
 | Server Components, Route Handlers, middleware | `http://backend` | `API_URL_INTERNAL` |
-| Código executando no browser | `http://localhost:8000` | `NEXT_PUBLIC_API_URL` |
+| Code running in the browser | `http://localhost:8000` | `NEXT_PUBLIC_API_URL` |
 
-O nome do serviço que atende `API_URL_INTERNAL` precisa ser o de **quem responde
-HTTP**. PHP-FPM não responde HTTP — ele fala FastCGI na porta 9000. Se o
-serviço php-fpm fosse chamado de `backend`, todo `fetch('http://backend/...')`
-de Server Component falharia, e falharia **só dentro do Docker**, que é a pior
-categoria de bug deste projeto.
+The name of the service that answers `API_URL_INTERNAL` has to be the one
+**that speaks HTTP**. PHP-FPM does not speak HTTP — it speaks FastCGI on port
+9000. If the php-fpm service were called `backend`, every
+`fetch('http://backend/...')` from a Server Component would fail, and it would
+fail **only inside Docker**, which is this project's worst category of bug.
 
-Chamar o nginx de `backend` mantém `API_URL_INTERNAL=http://backend`
-literalmente verdadeiro. Quem faz o trabalho de PHP se chama `php`.
+Calling nginx `backend` keeps `API_URL_INTERNAL=http://backend` literally true.
+Whatever does PHP's work is called `php`.
 
-### Bootstrap automático do backend
+### The backend's automatic bootstrap
 
-`vendor/` e `backend/.env` são gitignored, ou seja: num clone novo **nenhum dos
-dois existe**. Sem tratamento, `docker compose up -d` entregaria um Laravel
-quebrado e exigiria passos manuais — exatamente o que o teste proíbe.
+`vendor/` and `backend/.env` are gitignored, which means: on a fresh clone
+**neither exists**. Left alone, `docker compose up -d` would hand over a broken
+Laravel and demand manual steps — exactly what the brief rules out.
 
-O `backend/docker/entrypoint.sh` cobre isso a cada subida, de forma idempotente:
+`backend/docker/entrypoint.sh` covers that on every start, idempotently:
 
-1. Se `vendor/autoload.php` não existe, roda `composer install`. O bind mount do
-   Compose cobre o `/var/www/html` da imagem, então o vendor do build fica
-   invisível de qualquer jeito — instalar no entrypoint é o que dispensa ter
-   composer na máquina de quem avalia.
-2. Se `.env` não existe, copia de `.env.example`.
-3. Se `APP_KEY` está vazia, roda `php artisan key:generate`.
-4. Garante `storage/` e `bootstrap/cache/` com dono `www-data`.
-5. Roda `php artisan migrate --force`, com até 10 tentativas.
+1. If `vendor/autoload.php` does not exist, it runs `composer install`. Compose's
+   bind mount covers the image's `/var/www/html`, so the build's vendor is
+   invisible anyway — installing in the entrypoint is what removes the need for
+   composer on the host.
+2. If `.env` does not exist, it copies from `.env.example`.
+3. If `APP_KEY` is empty, it runs `php artisan key:generate`.
+4. It ensures `storage/` and `bootstrap/cache/` are owned by `www-data`.
+5. It runs `php artisan migrate --force`, with up to 10 attempts.
 
-O passo 5 tem retentativa porque o healthcheck do MySQL pode passar durante a
-fase de init, antes de o usuário da aplicação existir — `depends_on:
-service_healthy` reduz a janela, não a elimina. E a migration é necessária já
-nesta etapa: o Laravel está configurado com `SESSION_DRIVER=database` e
-`CACHE_STORE=database`, então sem as tabelas qualquer rota web responde 500.
+Step 5 retries because MySQL's healthcheck can pass during the init phase, before
+the application's user exists — `depends_on: service_healthy` narrows the window,
+it does not close it. And the migration is needed this early: Laravel is
+configured with `SESSION_DRIVER=database` and `CACHE_STORE=database`, so without
+the tables any web route answers 500.
 
-### Permissões de arquivo
+### File permissions
 
-O `backend/Dockerfile` aceita `UID`/`GID` como build args (default `1000`) e
-alinha o `www-data` a esses valores. É isso que permite ao Laravel escrever em
-`storage/` através do bind mount sem recorrer a `chmod 777`. Em Docker Desktop
-(macOS/Windows) o valor é irrelevante — o mount já traduz o dono. Em Linux com
-UID diferente de 1000:
+`backend/Dockerfile` accepts `UID`/`GID` as build args (defaulting to `1000`) and
+aligns `www-data` with those values. That is what lets Laravel write into
+`storage/` through the bind mount without resorting to `chmod 777`. On Docker
+Desktop (macOS/Windows) the value is irrelevant — the mount already translates
+ownership. On Linux with a UID other than 1000:
 
 ```bash
 UID=$(id -u) GID=$(id -g) docker compose up -d --build
@@ -79,12 +78,13 @@ UID=$(id -u) GID=$(id -g) docker compose up -d --build
 
 ---
 
-## Autenticação
+## Authentication
 
-Sanctum com token bearer no backend; no browser, **o token nunca aparece**.
+Sanctum with a bearer token on the backend; in the browser, **the token never
+appears**.
 
 ```
-browser                Next (servidor)              Laravel
+browser                Next (server)                Laravel
    |  POST /api/auth/login   |                          |
    |------------------------>|  POST /api/auth/login    |
    |                         |------------------------->|
@@ -93,261 +93,267 @@ browser                Next (servidor)              Laravel
    |    Set-Cookie: httpOnly |                          |
 ```
 
-O `POST /api/auth/login` que o formulário chama é um **Route Handler do
-Next**, não o Laravel. Ele recebe o token Sanctum, grava num cookie `httpOnly`
-e devolve só o usuário. Consequências:
+The `POST /api/auth/login` the form calls is a **Next Route Handler**, not
+Laravel. It receives the Sanctum token, writes it into an `httpOnly` cookie and
+returns only the user. The consequences:
 
-- Não há token em `localStorage`, então um XSS não tem o que roubar.
-- O browser não consegue chamar a API do Laravel diretamente — não tem
-  credencial. Quem anexa o `Authorization: Bearer` é sempre o servidor.
-- Por isso as exportações de PDF e CSV também vão passar por Route Handler,
-  nas etapas de relatório.
+- There is no token in `localStorage`, so an XSS has nothing to steal.
+- The browser cannot call Laravel's API directly — it has no credential. What
+  attaches the `Authorization: Bearer` is always the server.
+- That is why the PDF and CSV exports go through a Route Handler too.
 
-`middleware.ts` protege as rotas pela **presença** do cookie. Ele não valida o
-token: validar é trabalho do Laravel, em toda requisição de dado. Um cookie
-forjado não abre nada — a API responde 401 e o Server Component redireciona.
+`middleware.ts` protects the routes by the cookie's **presence**. It does not
+validate the token: validating is Laravel's job, on every data request. A forged
+cookie opens nothing — the API answers 401 and the Server Component redirects.
 
-### O cookie que sobrevive ao token
+### The cookie that outlives the token
 
-Se o cookie existe mas o token não vale mais (revogado, expirado, forjado), o
-caminho ingênuo entra em loop: o middleware vê cookie e manda para `/`, o
-Server Component recebe 401 e manda para `/login`, o middleware vê cookie de
-novo e manda para `/`.
+If the cookie exists but the token is no longer valid (revoked, expired, forged),
+the naive path loops: the middleware sees a cookie and sends you to `/`, the
+Server Component gets a 401 and sends you to `/login`, the middleware sees the
+cookie again and sends you to `/`.
 
-Por isso existe `GET /api/auth/expire`: ele apaga o cookie e só então
-redireciona para o login. Está fora do `matcher` do middleware, então responde
-mesmo com sessão aparente. Verificado: a cadeia termina em dois saltos.
+That is why `GET /api/auth/expire` exists: it deletes the cookie and only then
+redirects to the login. It sits outside the middleware's `matcher`, so it answers
+even with an apparent session. Verified: the chain ends in two hops.
 
-### Códigos de resposta
+### Response codes
 
-Credencial errada responde **401**, não 422. O payload é válido; o que falhou
-foi autenticar. E-mail inexistente e senha errada devolvem a **mesma**
-mensagem, para a resposta não revelar quais e-mails existem. Payload malformado
-(campo faltando) é que responde 422, com os erros por campo.
+Wrong credentials answer **401**, not 422. The payload is valid; what failed was
+authenticating. An unknown email and a wrong password return the **same** message,
+so the response does not reveal which emails exist. A malformed payload (a missing
+field) is what answers 422, with the errors per field.
 
-Tentativas demais respondem **429**, com `Retry-After` — ver
-[rate limit no login](operacao.md#rate-limit-no-login).
+Too many attempts answer **429**, with `Retry-After` — see
+[login rate limiting](operacao.md#rate-limit-no-login).
 
 ---
 
-## Modelagem
+## Modelling
 
 ### `customers`
 
-| Coluna | Tipo | Nota |
+| Column | Type | Note |
 |---|---|---|
-| `name` | varchar | indexado — a listagem ordena por nome |
-| `document` | varchar(14) **unique** | CPF/CNPJ só com dígitos, sem máscara |
+| `name` | varchar | indexed — the listing sorts by name |
+| `document` | varchar(14) **unique** | CPF/CNPJ, digits only, unformatted |
 | `email` | varchar | |
 | `status` | varchar(20) | `active` / `inactive` |
 
 ### `billings`
 
-| Coluna | Tipo | Nota |
+| Column | Type | Note |
 |---|---|---|
-| `customer_id` | FK **restrict** | cobrança é registro financeiro; apagar cliente não evapora histórico |
+| `customer_id` | FK **restrict** | a billing is a financial record; deleting a customer does not evaporate history |
 | `original_amount` | decimal(12,2) | |
-| `monthly_interest_rate` | decimal(6,4) | fração: `0.0200` = 2% ao mês |
-| `issue_date` · `due_date` · `payment_date` | date | as três datas que podem definir o período do relatório |
+| `monthly_interest_rate` | decimal(6,4) | a fraction: `0.0200` = 2% a month |
+| `issue_date` · `due_date` · `payment_date` | date | the three dates that can define the report's period |
 | `status` | varchar(20) | `pending` / `paid` |
-| `paid_amount` · `paid_interest_amount` | decimal(12,2) nulos | congelamento no ato do pagamento |
+| `paid_amount` · `paid_interest_amount` | decimal(12,2), nullable | frozen at the moment of payment |
 
-### "Vencida" não é um status armazenado
+### "Overdue" is not a stored status
 
-O enum gravado tem dois valores: `pending` e `paid`. Vencida é uma **condição
-derivável** — `status = 'pending' AND due_date < ?`, com a data de referência
-descendo do PHP e não vindo de `CURDATE()` (o porquê está em
-[armadilhas do cálculo](#três-armadilhas-que-o-desenho-precisou-resolver)).
+The stored enum has two values: `pending` and `paid`. Overdue is a **derivable
+condition** — `status = 'pending' AND due_date < ?`, with the reference date
+coming down from PHP rather than from `CURDATE()` (the reason is in
+[the traps the design had to solve](#three-traps-the-design-had-to-solve)).
 
-Armazenar "overdue" exigiria um job diário virando linhas de pendente para
-vencida. Entre duas execuções desse job a coluna estaria mentindo, e num
-relatório financeiro isso é pior do que o custo de derivar. A derivação é
-sempre correta, roda em SQL e é indexável pelo par `(status, due_date)`.
+Storing "overdue" would require a daily job flipping rows from pending to overdue.
+Between two runs of that job the column would be lying, and in a financial report
+that is worse than the cost of deriving. The derivation is always correct, runs in
+SQL and is indexable by the pair `(status, due_date)`.
 
-### Por que DECIMAL e não FLOAT
+### Why DECIMAL and not FLOAT
 
-Dinheiro em ponto flutuante acumula erro de arredondamento. O relatório soma
-juros sobre o conjunto filtrado inteiro — milhões de linhas — e o erro cresce
-com o número de parcelas somadas. Os casts do Eloquent são `decimal`, que
-devolve **string**, não float: é proposital, e há teste afirmando que
-`1234.56` volta do banco como `'1234.56'`.
+Money in floating point accumulates rounding error. The report sums interest over
+the entire filtered set — millions of rows — and the error grows with the number
+of terms summed. Eloquent's casts are `decimal`, which returns a **string**, not a
+float: that is intentional, and there is a test asserting `1234.56` comes back
+from the database as `'1234.56'`.
 
-### As colunas de congelamento
+### The freezing columns
 
-`paid_amount` e `paid_interest_amount` são gravadas no momento do pagamento e
-nunca recalculadas. Sem elas, uma cobrança paga com atraso mudaria de valor a
-cada dia que passasse, porque o cálculo de juros é função da data atual.
+`paid_amount` and `paid_interest_amount` are written at the moment of payment and
+never recomputed. Without them, a billing paid late would change value with every
+day that passed, because the interest calculation is a function of the current
+date.
 
 ---
 
-## Cálculo de juros
+## Interest calculation
 
-Juros **compostos**:
+**Compound** interest:
 
 ```
-valor_atualizado = valor_original x (1 + taxa_mensal) ^ (dias_atraso / 30)
+updated_amount = original_amount x (1 + monthly_rate) ^ (days_late / 30)
 ```
 
-Só acumula quem está **vencida e não paga**. Cobrança em dia tem juros zero;
-cobrança paga lê os valores congelados.
+Only what is **overdue and unpaid** accrues. A billing within term has zero
+interest; a paid billing reads the frozen values.
 
-### A regra tem uma fonte só, com duas faces
+### The rule has one source, with two faces
 
-`App\Domain\Billing\InterestCalculator` existe porque o relatório precisa
-**ordenar por valor atualizado** e **somar juros sobre o conjunto filtrado
-inteiro**. Se o cálculo vivesse só em PHP, qualquer uma dessas operações
-obrigaria a carregar o resultado inteiro em memória.
+`App\Domain\Billing\InterestCalculator` exists because the report needs to **sort
+by updated value** and **sum interest over the entire filtered set**. If the
+calculation lived only in PHP, either of those operations would force loading the
+whole result into memory.
 
-| Face | Onde é usada |
+| Face | Where it is used |
 |---|---|
-| `updatedAmountSql()` / `interestAmountSql()` | `selectRaw` na listagem e nas agregações |
-| `for(Billing)` | exibição de uma cobrança isolada |
+| `updatedAmountSql()` / `interestAmountSql()` | `selectRaw` in the listing and in the aggregations |
+| `for(Billing)` | displaying a single billing |
 
-Duas implementações da mesma regra divergem em silêncio. Por isso
-`InterestCalculatorTest` roda **a mesma matriz de 12 casos pelas duas faces** e
-afirma igualdade até o centavo — em dia, vencida por 1, 30, 281 e 400 dias,
-taxa zero, taxa alta, centavos quebrados, paga em dia e paga em atraso.
+Two implementations of the same rule drift apart in silence. That is why
+`InterestCalculatorTest` runs **the same matrix of 12 cases through both faces**
+and asserts equality down to the cent — within term, overdue by 1, 30, 281 and
+400 days, zero rate, high rate, broken cents, paid within term and paid late.
 
-### Três armadilhas que o desenho precisou resolver
+### Three traps the design had to solve
 
-**`travelTo()` não move o relógio do MySQL.** Se a face SQL usasse `CURDATE()`,
-o teste de consistência compararia PHP em tempo congelado contra SQL em tempo
-real e nunca fecharia. A data de referência desce do PHP como literal — gerada
-a partir de um Carbon, nunca vinda da requisição. É também o que permite
-calcular juros *na data do pagamento*, que é o que o congelamento exige.
+**`travelTo()` does not move MySQL's clock.** If the SQL face used `CURDATE()`,
+the consistency test would compare PHP on frozen time against SQL on real time
+and would never close. The reference date comes down from PHP as a literal —
+generated from a Carbon, never taken from the request. It is also what makes it
+possible to compute interest *at the payment date*, which is what freezing
+requires.
 
-**Divisão em MySQL devolve DECIMAL, não double.** `400 / 30` vira `13.3333`,
-truncado em quatro casas, enquanto em PHP é `13.333333…`. Expoentes diferentes,
-`POW` diferente, faces divergentes.
+**Division in MySQL returns a DECIMAL, not a double.** `400 / 30` becomes
+`13.3333`, truncated to four places, whereas in PHP it is `13.333333…`. Different
+exponents, a different `POW`, divergent faces.
 
-Isso não é teórico: um varrimento de 900 dias x 6 taxas x 3 valores encontrou
-**78 combinações** em que a truncagem muda o centavo. Uma delas está na matriz
-do teste — R$ 987.654,31 a 3,5% com 281 dias de atraso, onde DECIMAL dá
-`1363158.13` e double dá `1363158.14`. O `/ 30e0` do `compoundSql()` força a
-divisão a virar double, e removê-lo faz esse caso falhar.
+That is not theoretical: a sweep of 900 days x 6 rates x 3 amounts found **78
+combinations** in which the truncation changes the cent. One of them is in the
+test's matrix — R$ 987,654.31 at 3.5% with 281 days late, where DECIMAL gives
+`1363158.13` and double gives `1363158.14`. The `/ 30e0` in `compoundSql()` forces
+the division to become a double, and removing it makes that case fail.
 
-**PHP e MySQL desempatam o meio centavo em direções opostas.** Quando a conta
-cai exatamente sobre o meio centavo, `round()` do PHP arredonda meio para longe
-do zero e `ROUND()` do MySQL sobre `DOUBLE` arredonda meio para par:
+**PHP and MySQL break the half-cent tie in opposite directions.** When the
+arithmetic lands exactly on the half cent, PHP's `round()` rounds half away from
+zero and MySQL's `ROUND()` over a `DOUBLE` rounds half to even:
 
 ```
-4224,10 a 5% ao mês, 30 dias de atraso  ->  4435,305
-PHP   round(, 2)   4435,31     meio para longe do zero
-MySQL ROUND(, 2)   4435,30     meio para par, porque o argumento é DOUBLE
+4224.10 at 5% a month, 30 days late  ->  4435.305
+PHP   round(, 2)   4435.31     half away from zero
+MySQL ROUND(, 2)   4435.30     half to even, because the argument is a DOUBLE
 ```
 
-Em cobrança paga isso não aparece — as duas faces leem a coluna congelada. Em
-cobrança **pendente vencida** aparece: a tela de detalhe usa a face PHP e o
-relatório usa a face SQL, e as duas mostrariam valores diferentes para a mesma
-cobrança. É exatamente a inconsistência entre tela e relatório que o teste
-proíbe.
+On a paid billing this never shows — both faces read the frozen column. On a
+**pending overdue** billing it does: the detail screen uses the PHP face and the
+report uses the SQL face, and the two would show different values for the same
+billing. That is exactly the screen-against-report inconsistency the brief rules
+out.
 
-A frequência é baixa e foi medida, não estimada: **uma ocorrência em 200.000**
-combinações varridas, e uma na base de 2.000.000 (13.654 pagas em atraso). Só
-acontece quando o produto é exato o bastante para cair no empate, o que na
-prática quer dizer atraso múltiplo de 30 dias.
+The frequency is low and was measured, not estimated: **one occurrence in
+200,000** combinations swept, and one in the base of 2,000,000 (13,654 paid late).
+It only happens when the product is exact enough to land on the tie, which in
+practice means lateness that is a multiple of 30 days.
 
-A correção são **seis casas de guarda**: arredondar primeiro em seis casas e só
-então em duas. Na face PHP, `round(round($v, 6), 2)`; na face SQL, um `CAST`
-para `DECIMAL(20,6)` antes do `ROUND`. Nos dois motores o arredondamento final
-passa a operar sobre um decimal exato em vez de sobre o double, e o empate
-desempata para o mesmo lado. A varredura de 200.000 combinações que achava uma
-divergência passou a achar zero.
+The fix is **six guard digits**: round to six places first and only then to two.
+On the PHP face, `round(round($v, 6), 2)`; on the SQL face, a `CAST` to
+`DECIMAL(20,6)` before the `ROUND`. On both engines the final rounding then
+operates on an exact decimal rather than on the double, and the tie breaks the
+same way. The sweep of 200,000 combinations that used to find one divergence now
+finds zero.
 
-O ganho secundário justifica sozinho: as duas `pow()` rodam em containers
-diferentes e não compartilham a mesma libm, então uma diferença de 1 ULP entre
-elas é possível. As casas de guarda absorvem isso.
+The secondary gain justifies it on its own: the two `pow()` calls run in different
+containers and do not share the same libm, so a 1 ULP difference between them is
+possible. The guard digits absorb that.
 
-### Congelamento no pagamento
+### Freezing at payment
 
-`App\Domain\Billing\RegisterPayment` calcula os juros **na data do
-pagamento**, não em hoje: pagamento retroativo produz o valor daquele dia. A
-partir daí a cobrança para de acumular — o `InterestCalculator` devolve as
-colunas gravadas em vez de recalcular, nas duas faces.
+`App\Domain\Billing\RegisterPayment` computes the interest **at the payment
+date**, not at today: a backdated payment produces that day's value. From then on
+the billing stops accruing — `InterestCalculator` returns the stored columns
+instead of recomputing, on both faces.
 
-O valor efetivamente recebido pode diferir do calculado (acordo, desconto);
-quando não informado, assume-se o valor atualizado. Os juros calculados ficam
-registrados de qualquer forma.
+The amount actually received may differ from the computed one (a settlement, a
+discount); when not supplied, the updated value is assumed. The computed interest
+stays recorded either way.
 
-A factory usa **o mesmo serviço** nos states `paid()` e `paidLate()`. Escrever
-os valores congelados à mão na factory faria dela uma segunda implementação da
-regra, e os testes passariam a validar a cópia em vez do original.
+The factory uses **the same service** in its `paid()` and `paidLate()` states.
+Writing the frozen values by hand in the factory would make it a second
+implementation of the rule, and the tests would start validating the copy instead
+of the original.
 
 ---
 
-## Decisões técnicas
+## Technical decisions
 
-**Comentário responde POR QUE, nunca O QUE.** O código diz o que faz; quem lê
-consegue ler. O que não se recupera lendo é a alternativa que foi descartada, o
-número que decidiu um limite, ou a armadilha que já custou uma tarde. Por isso
-os comentários deste repositório são longos onde a decisão foi difícil —
-`InterestCalculator`, a migration dos índices, o teto do PDF — e ausentes onde o
-código é óbvio.
+**A comment answers WHY, never WHAT.** The code says what it does; a reader can
+read it. What cannot be recovered by reading is the alternative that was
+discarded, the number that decided a limit, or the trap that has already cost an
+afternoon. That is why the comments in this repository are long where the decision
+was hard — `InterestCalculator`, the index migration, the PDF cap — and absent
+where the code is obvious.
 
-A varredura que fechou a etapa passou por todos os comentários do backend, do
-frontend e dos testes. O que saiu foi boilerplate do skeleton do Laravel, que
-repetia a assinatura do método em inglês:
+A sweep over every comment in the backend, the frontend and the tests removed the
+Laravel skeleton's boilerplate, which repeated the method's signature:
 
 ```php
 /**
- * Run the migrations.          <- o método se chama up()
+ * Run the migrations.          <- the method is called up()
  */
 /**
- * Define the model's default state.    <- o método se chama definition()
+ * Define the model's default state.    <- the method is called definition()
  */
 ```
 
-Junto saíram os `//` de corpo vazio e um `use` comentado que o skeleton deixa no
-`User`. Cinquenta e uma linhas, nenhuma delas com informação.
+Out went the empty-bodied `//` lines too, and a commented-out `use` the skeleton
+leaves in `User`. Fifty-one lines, not one of them carrying information.
 
-Um comentário não foi removido, foi **corrigido**, e ele valia mais que todos os
-outros juntos: a migration de `billings` dizia que "vencida" se deriva com
-`due_date < CURDATE()`. É exatamente a função que a arquitetura deste projeto
-proíbe — a data de referência desce do PHP, senão o teste de consistência nunca
-fecha. Comentário errado é pior que comentário verboso: o verboso se ignora, o
-errado se acredita.
+One comment was not removed but **corrected**, and it was worth more than all the
+others put together: the `billings` migration said "overdue" is derived with
+`due_date < CURDATE()`. That is precisely the function this project's
+architecture rules out — the reference date comes down from PHP, otherwise the
+consistency test never closes. A wrong comment is worse than a verbose one: the
+verbose one gets ignored, the wrong one gets believed.
 
-**Nginx na frente do PHP-FPM, em vez de `artisan serve`.** O servidor embutido
-do Laravel é single-threaded e não representa nada do comportamento real sob
-carga. Como o projeto tem requisito explícito de exportação em streaming, o
-`default.conf` desliga `fastcgi_buffering` — com o buffer ligado o nginx
-seguraria o CSV inteiro antes de mandar a primeira linha, anulando o
-`StreamedResponse`.
+**nginx in front of PHP-FPM, rather than `artisan serve`.** Laravel's built-in
+server is single-threaded and represents nothing of real behaviour under load.
+Since the project has an explicit streaming-export requirement, `default.conf`
+turns `fastcgi_buffering` off — with buffering on, nginx would hold the whole CSV
+before sending the first line, undoing the `StreamedResponse`.
 
-**Dockerfile do frontend em multi-stage, com o Compose usando o target `dev`.**
-Os quatro stages são `deps` (npm ci), `dev` (HMR, usado pelo Compose), `build`
-(gera o bundle) e `runner` (imagem de produção). O `runner` depende de
-`output: "standalone"` no `next.config.ts`, que emite um `server.js` com apenas
-as dependências realmente usadas. O target de produção existe e é construível,
-mas não é o que o Compose sobe.
+**A multi-stage frontend Dockerfile, with Compose using the `dev` target.** The
+four stages are `deps` (npm ci), `dev` (HMR, used by Compose), `build` (produces
+the bundle) and `runner` (the production image). `runner` depends on
+`output: "standalone"` in `next.config.ts`, which emits a `server.js` with only
+the dependencies actually used. The production target exists and builds, but it is
+not what Compose starts.
 
-**`node_modules` e `.next` em volume anônimo.** O bind mount `./frontend:/app`
-esconderia os do container, e os binários nativos (`@next/swc`,
-`lightningcss`) compilados para o host não são os do Alpine.
+**`node_modules` and `.next` in anonymous volumes.** The `./frontend:/app` bind
+mount would hide the container's copies, and the native binaries (`@next/swc`,
+`lightningcss`) compiled for the host are not Alpine's.
 
-**Porta do MySQL não publicada.** Nada no critério de aceite precisa dela, e
-publicá-la é a forma mais fácil de colidir com um MySQL já rodando na máquina
-de quem avalia. Para inspecionar o banco:
+**MySQL's port is not published.** Nothing in the acceptance criteria needs it,
+and publishing it is the easiest way to collide with a MySQL already running on
+the host. To inspect the database:
 
 ```bash
 docker compose exec mysql mysql -u billing -psecret billing
 ```
 
-**Tailwind CSS no frontend.** Veio no scaffold padrão do `create-next-app`. A
-interface não precisa de design avançado, mas precisa ser responsiva e
-componentizada, e o utilitário resolve isso sem introduzir uma biblioteca de
-componentes que não foi pedida.
+**Tailwind CSS on the frontend.** It came with `create-next-app`'s default
+scaffold. The interface does not need advanced design, but it does need to be
+responsive and componentised, and the utility layer solves that without
+introducing a component library nobody asked for.
 
-**Sem rate limit no login.** Deixado de fora de propósito nesta entrega: o
-`throttle` do Laravel resolveria, mas escolher um limite que não deixe a
-própria suíte intermitente exige cuidado que não agrega ao que o teste avalia.
-Fica registrado como melhoria de produção, junto das demais.
+**Login rate limiting lives in the domain, not in the `throttle` middleware.**
+There are two counts per minute — five wrong attempts on the same account from the
+same IP, and twenty from the same IP across every account — because they are two
+different attacks, and a single count would let one of them through. It is
+`App\Domain\Auth\LoginThrottle` rather than the framework's middleware because the
+controller needs three operations, not one: ask, count, and CLEAR on a successful
+login. Clearing requires the same key, and the one the middleware derives
+internally is a framework implementation detail. The whole thing, including why
+the per-credential limit includes the IP, is in
+[login rate limiting](operacao.md#rate-limit-no-login).
 
-**`UserResource` em vez de devolver o model.** Define desde já o formato da
-resposta e evita que um campo novo na tabela vaze para a API sem alguém
-decidir. Mesmo padrão que clientes e cobranças vão seguir.
+**`UserResource` rather than returning the model.** It fixes the response's shape
+from the start and stops a new column on the table from leaking into the API
+without someone deciding. The same pattern customers and billings follow.
 
-**Credenciais em claro no `docker-compose.yml` e no `.env.example`.** É um
-ambiente de avaliação local, e o critério de aceite exige que subir não dependa
-de preencher segredo nenhum. Os valores do serviço `mysql` espelham os de
-`backend/.env.example`; mudar um exige mudar o outro.
+**Credentials in plain text in `docker-compose.yml` and `.env.example`.** This is
+a local development environment, and the acceptance criteria require that starting
+it does not depend on filling in any secret. The `mysql` service's values mirror
+those in `backend/.env.example`; changing one requires changing the other.

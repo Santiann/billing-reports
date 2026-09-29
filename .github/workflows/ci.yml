@@ -1,26 +1,26 @@
-# Integração contínua: a mesma verificação que `make lint` e `make test` fazem
-# na máquina, rodando a cada push.
+# Continuous integration: the same checks `make lint` and `make test` run
+# locally, on every push.
 #
-# Dois jobs em paralelo, porque backend e frontend não dependem um do outro
-# para serem verificados — e porque assim o typecheck não espera os minutos da
-# suíte para falhar.
+# Two jobs in parallel, because the backend and the frontend do not depend on
+# each other to be checked — and because this way the typecheck does not wait
+# out the suite's minutes to fail.
 name: CI
 
-# `push` cobre o caso deste projeto: o PR sai de um fork, e é no fork que o
-# workflow roda. `pull_request` cobre a verificação a partir do repositório
-# base, quando ela for habilitada lá.
+# `push` covers the everyday case: the workflow runs on the branch being worked
+# on. `pull_request` covers the check from the base repository, for a PR that
+# arrives from elsewhere.
 on:
   push:
   pull_request:
 
-# Push novo no mesmo ref cancela a execução anterior: o resultado dela já não
-# descreve o código atual.
+# A new push on the same ref cancels the previous run: its result no longer
+# describes the current code.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Só leitura. Nada aqui escreve no repositório, e o default de um token com
-# escrita é superfície que este workflow não precisa.
+# Read only. Nothing here writes to the repository, and defaulting to a token
+# with write access is surface this workflow does not need.
 permissions:
   contents: read
 
@@ -29,14 +29,14 @@ jobs:
     name: Backend — Pint e suíte
     runs-on: ubuntu-latest
 
-    # A suíte roda em MySQL de propósito (ver README): a regra central do
-    # projeto é que o valor atualizado seja calculável em SQL, e o teste de
-    # consistência compara a face SQL do cálculo com a face PHP. Em SQLite ele
-    # validaria outro motor.
+    # The suite runs on MySQL on purpose (see the README): the project's central
+    # rule is that the updated value be computable in SQL, and the consistency
+    # test compares the calculation's SQL face against its PHP face. On SQLite it
+    # would be validating a different engine.
     #
-    # O nome do banco e as credenciais são os que o phpunit.xml espera.
-    # `MYSQL_DATABASE` cria o banco no primeiro boot, o que dispensa aqui o
-    # script de init que o Compose usa.
+    # The database name and the credentials are the ones phpunit.xml expects.
+    # `MYSQL_DATABASE` creates the database on first boot, which removes the need
+    # here for the init script Compose uses.
     services:
       mysql:
         image: mysql:8.0
@@ -45,13 +45,13 @@ jobs:
           MYSQL_DATABASE: billing_test
           MYSQL_USER: billing
           MYSQL_PASSWORD: secret
-        # O job roda no runner, não dentro de um container, então a porta
-        # precisa ser publicada: o rótulo `mysql` só resolve entre containers
-        # da mesma rede do Docker.
+        # The job runs on the runner, not inside a container, so the port has to
+        # be published: the `mysql` label only resolves between containers on the
+        # same Docker network.
         ports:
           - 3306:3306
-        # Sem healthcheck, o primeiro passo tentaria conectar antes de o MySQL
-        # terminar o init.
+        # Without a healthcheck, the first step would try to connect before MySQL
+        # finished its init.
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
           --health-interval=10s
@@ -59,11 +59,11 @@ jobs:
           --health-retries=15
 
     env:
-      # Esta variável VENCE o `<env name="DB_HOST" value="mysql"/>` do
-      # phpunit.xml, porque o PHPUnit não sobrescreve variável de ambiente que
-      # já existe — só com `force="true"`. Conferido nesta instalação antes de
-      # escrever o workflow, não assumido: com a variável presente, a suíte
-      # tentou 127.0.0.1 e o erro de conexão nomeou o host.
+      # This variable WINS over phpunit.xml's `<env name="DB_HOST" value="mysql"/>`,
+      # because PHPUnit does not overwrite an environment variable that already
+      # exists — only with `force="true"`. Checked on this installation before
+      # writing the workflow rather than assumed: with the variable present, the
+      # suite tried 127.0.0.1 and the connection error named the host.
       DB_HOST: 127.0.0.1
 
     defaults:
@@ -77,13 +77,13 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          # As mesmas extensões que o Dockerfile compila. `pcov` fica fora:
-          # aqui não se mede cobertura, e ele instrumenta o código.
+          # The same extensions the Dockerfile compiles. `pcov` is left out:
+          # coverage is not measured here, and it instruments the code.
           extensions: pdo_mysql, bcmath
           coverage: none
 
-      # O diretório de cache vem do próprio Composer, em vez de um caminho
-      # chutado: ele muda com a plataforma e com a versão.
+      # The cache directory comes from Composer itself, rather than a guessed
+      # path: it changes with the platform and with the version.
       - name: Onde o Composer guarda cache
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
@@ -99,14 +99,14 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: .env e APP_KEY
-        # O .env é gitignored, como em qualquer Laravel. O entrypoint do
-        # container faz isto na subida; aqui é o mesmo passo, explícito.
+        # The .env is gitignored, as in any Laravel. The container's entrypoint
+        # does this on start-up; here it is the same step, made explicit.
         run: |
           cp .env.example .env
           php artisan key:generate
 
-      # Pint antes da suíte: ele leva segundos, a suíte leva minutos, e
-      # descobrir formatação errada depois de esperar a suíte é desperdício.
+      # Pint before the suite: it takes seconds, the suite takes minutes, and
+      # discovering wrong formatting after waiting out the suite is waste.
       - name: Pint
         run: ./vendor/bin/pint --test
 
@@ -124,27 +124,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Node 22, a mesma versão do Dockerfile do frontend. O cache de npm sai
-      # da própria ação, que é o que a documentação recomenda para gerenciador
-      # suportado.
+      # Node 22, the same version as the frontend's Dockerfile. The npm cache
+      # comes from the action itself, which is what the documentation recommends
+      # for a supported package manager.
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # `npm ci` e não `npm install`: instala exatamente o lockfile e falha se
-      # ele divergir do package.json.
+      # `npm ci` and not `npm install`: it installs exactly the lockfile and
+      # fails if it diverges from package.json.
       - name: Dependências
         run: npm ci
 
-      # Sem isto o typecheck falha num checkout limpo, e foi o CI que
-      # mostrou: o Next GERA os tipos de rota — `LayoutProps`, `PageProps` — em
-      # `.next/types`, e o tsconfig os inclui. Na máquina eles já existiam,
-      # criados pelo servidor de desenvolvimento; aqui não havia ninguém para
-      # criá-los, e o tsc não encontrava `LayoutProps`.
+      # Without this the typecheck fails on a clean checkout, and CI is what
+      # surfaced it: Next GENERATES the route types — `LayoutProps`, `PageProps` —
+      # into `.next/types`, and tsconfig includes them. Locally they already
+      # existed, created by the development server; here there was nobody to
+      # create them, and tsc could not find `LayoutProps`.
       #
-      # `typegen` gera só as definições, sem o build inteiro.
+      # `typegen` produces only the definitions, without the whole build.
       - name: Tipos de rota do Next
         run: npx next typegen
 

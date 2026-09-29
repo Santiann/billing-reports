@@ -1,87 +1,88 @@
-# Uso de inteligência artificial
+# Use of artificial intelligence
 
 [← README](../README.md)
 
-## Uso de inteligência artificial
+## Use of artificial intelligence
 
-O desenvolvimento foi conduzido com **Claude Code**. Os arquivos que orientam o
-agente estão no repositório, como o teste exige:
+Development was carried out with **Claude Code**. The files that steer the agent
+are in the repository, as the brief requires:
 
-| Arquivo | Papel |
+| File | Role |
 |---|---|
-| `CLAUDE.md` | Instruções de projeto: stack, a regra que governa a arquitetura, as duas origens de API, autenticação, limites de performance, ordem de commits |
-| `.claude/skills/laravel-report-tests/SKILL.md` | Skill acionada em tarefa de teste, com as armadilhas específicas deste projeto |
-| `.claude/skills/agent-browser/SKILL.md` | Automação de browser: navegar as telas, tirar screenshot e iterar sobre o que se está construindo |
-| `.claude/skills/github-actions-docs/SKILL.md` | Sintaxe de workflow do GitHub Actions ancorada na documentação oficial, em vez de memória |
-| `.claude/skills/vulnerability-scanner/SKILL.md` | Roteiro de análise de vulnerabilidade — OWASP, cadeia de suprimentos, superfície de ataque |
-| `.claude/skills/crafting-effective-readmes/SKILL.md` | Como escrever README por público: contribuidor, revisor, o próprio autor daqui a um ano |
-| `.claude/skills/find-skills/SKILL.md` | Descoberta e instalação de skills do ecossistema aberto |
-| `skills-lock.json` | Origem e hash de cada skill instalada do ecossistema |
+| `CLAUDE.md` | Project instructions: the stack, the rule that governs the architecture, the two API origins, authentication, performance limits, commit order |
+| `.claude/skills/laravel-report-tests/SKILL.md` | A skill triggered on testing work, carrying this project's specific traps |
+| `.claude/skills/agent-browser/SKILL.md` | Browser automation: navigating the screens, taking screenshots and iterating on what is being built |
+| `.claude/skills/github-actions-docs/SKILL.md` | GitHub Actions workflow syntax anchored in the official documentation rather than in memory |
+| `.claude/skills/vulnerability-scanner/SKILL.md` | A vulnerability analysis routine — OWASP, supply chain, attack surface |
+| `.claude/skills/crafting-effective-readmes/SKILL.md` | How to write a README per audience: a contributor, a reviewer, the author themselves a year from now |
+| `.claude/skills/find-skills/SKILL.md` | Discovering and installing skills from the open ecosystem |
+| `skills-lock.json` | The origin and hash of each skill installed from the ecosystem |
 
-As três do meio vieram prontas de outro projeto e foram copiadas sem alteração:
-skill é conteúdo versionado, e reescrever uma na importação é perder a versão
-que já foi exercitada em outro lugar.
+The middle three arrived ready from another project and were copied without
+changes: a skill is versioned content, and rewriting one on import means losing
+the version that has already been exercised elsewhere.
 
-As duas últimas vêm de repositórios públicos — `softaworks/agent-toolkit` e
-`vercel-labs/skills` — e por isso existe o `skills-lock.json`, que grava a
-origem e o hash do conteúdo de cada uma. É o mesmo motivo de um `composer.lock`:
-uma dependência sem versão fixada não é uma dependência, é uma aposta. A
-diferença é que aqui ela entra no contexto de quem escreve o código.
+The last two come from public repositories — `softaworks/agent-toolkit` and
+`vercel-labs/skills` — and that is why `skills-lock.json` exists, recording the
+origin and the content hash of each one. It is the same reason a `composer.lock`
+exists: a dependency with no pinned version is not a dependency, it is a bet. The
+difference is that here it lands in the context of whoever writes the code.
 
-Outras skills guiaram commits específicos **sem estar no repositório**: elas
-vivem no ambiente de quem desenvolve. Ficam declaradas aqui porque a especificação
-pede transparência sobre o uso de IA, e porque em cada caso é possível apontar
-onde elas mudaram o resultado.
+Other skills guided specific commits **without being in the repository**: they
+live in the developer's environment. They are declared here because the brief asks
+for transparency about AI usage, and because in each case it is possible to point
+at where they changed the outcome.
 
-| Skill | Onde mudou o resultado |
+| Skill | Where it changed the outcome |
 |---|---|
-| `dataviz` | Reprovou a primeira paleta do gráfico do dashboard por contraste insuficiente entre séries adjacentes — [ΔE 14,6 contra um piso de 15](performance.md#dashboard) — e corrigiu o uso de `tabular-nums`: figura proporcional para valor isolado, tabular só em coluna que alinha na vertical |
-| `frontend-design` | A [fundação visual](frontend.md#fundação-visual): tipografia com personalidade, tokens semânticos e a decisão de não usar uma única classe `dark:` |
-| `landing-page-design` e `copywriting` | A [página pública](frontend.md#página-pública): estrutura acima da dobra, e a recusa explícita de estatística fabricada — [nenhum número dela é inventado](frontend.md#nenhum-número-da-página-é-inventado) |
-| `vercel-react-best-practices` | Padrões de Server Component, e o paralelismo de busca na ficha da cobrança, onde a trilha e a cobrança são buscadas juntas em vez de em sequência |
+| `dataviz` | Rejected the dashboard chart's first palette for insufficient contrast between adjacent series — [ΔE 14.6 against a floor of 15](performance.md#dashboard) — and corrected the use of `tabular-nums`: proportional figures for an isolated value, tabular only in a column that aligns vertically |
+| `frontend-design` | The [visual foundation](frontend.md#fundação-visual): typography with personality, semantic tokens and the decision not to use a single `dark:` class |
+| `landing-page-design` and `copywriting` | The [public page](frontend.md#página-pública): the structure above the fold, and the explicit refusal of fabricated statistics — [not one of its numbers is invented](frontend.md#nenhum-número-da-página-é-inventado) |
+| `vercel-react-best-practices` | Server Component patterns, and the fetch parallelism on the billing detail page, where the trail and the billing are fetched together rather than in sequence |
 
-### O que a configuração efetivamente evitou
+### What the configuration actually prevented
 
-Vale mais mostrar onde ela mudou o resultado do que descrevê-la:
+It is worth more to show where it changed the outcome than to describe it:
 
-- **Tempo congelado.** A skill exige `travelTo()` em todo teste que toca juros.
-  Sem isso, "vencida há 30 dias" mudaria de significado a cada dia e a suíte
-  passaria a falhar sozinha.
-- **`streamedContent()`.** A skill avisa que `assertSee` e `getContent()` não
-  funcionam em `StreamedResponse`. Os testes de CSV nasceram certos.
-- **Nada sobre o binário do PDF.** A skill delimita o que é verificável —
-  status, content-type, e sobretudo o teto.
-- **Totalizadores contra a página.** A skill descreve exatamente o erro fácil:
-  montar cenário com mais registros do que cabe numa página e afirmar que os
-  totais cobrem o conjunto. O teste existe nessa forma.
-- **Teste antes do código.** Em toda etapa de regra de negócio o teste foi
-  escrito primeiro e visto falhar. Foi o que fez o `InterestCalculator` nascer
-  com o teste de consistência entre as duas faces, que é o teste mais
-  importante do projeto.
-- **Fonte única da regra.** O state `paidLate()` da factory ficou
-  deliberadamente incompleto por duas etapas, em vez de repetir a fórmula de
-  juros, até o `RegisterPayment` existir para preenchê-lo.
+- **Frozen time.** The skill requires `travelTo()` in every test that touches
+  interest. Without it, "overdue by 30 days" would change meaning every day and
+  the suite would start failing on its own.
+- **`streamedContent()`.** The skill warns that `assertSee` and `getContent()` do
+  not work on a `StreamedResponse`. The CSV tests were born correct.
+- **Nothing about the PDF's binary.** The skill bounds what is verifiable — the
+  status, the content type, and above all the cap.
+- **Totals against the page.** The skill describes the easy mistake exactly: build
+  a scenario with more records than fit on one page and assert the totals cover
+  the set. The test exists in that shape.
+- **The test before the code.** On every business rule the test was written first
+  and watched to fail. That is what made `InterestCalculator` be born with the
+  consistency test between its two faces, which is the project's most important
+  test.
+- **A single source for the rule.** The factory's `paidLate()` state was
+  deliberately left incomplete for two steps, rather than repeating the interest
+  formula, until `RegisterPayment` existed to fill it in.
 
-### Onde as instruções estavam erradas
+### Where the instructions were wrong
 
-Isto importa tanto quanto o resto: instrução de agente não é verdade revelada,
-e três delas não sobreviveram ao contato com a medição.
+This matters as much as the rest: an agent's instructions are not revealed truth,
+and three of them did not survive contact with measurement.
 
-- **O teto do PDF era 5.000.** Os testes passavam, porque testes usam poucas
-  linhas. A exportação contra a base real estourou a memória com 3.577. A curva
-  medida mostrou que 5.000 precisaria de mais de 3 GB. O teto virou 1.000, e a
-  medição ficou registrada ao lado do valor.
-- **O nome do serviço `backend`.** O `CLAUDE.md` fixa
-  `API_URL_INTERNAL=http://backend`, e o plano de infra chamava de `backend` o
-  php-fpm — que fala FastCGI, não HTTP. Todo fetch de Server Component
-  falharia, e só dentro do Docker. O nginx passou a se chamar `backend` e o
-  `CLAUDE.md` ganhou a nota de que o nome é load-bearing.
-- **O `make lint` não provava o que dizia provar.** Ele passava na máquina de
-  quem desenvolve porque o servidor de desenvolvimento havia gerado os tipos de
-  rota do Next; num clone limpo, o typecheck falha. Quem mostrou foi o
-  [CI](operacao.md#integração-contínua), no primeiro push. O passo que faltava entrou no
-  alvo e no workflow, e a regra — verificação que depende de artefato gerado
-  precisa gerá-lo — voltou para o `CLAUDE.md`.
+- **The PDF cap was 5,000.** The tests passed, because tests use few rows. The
+  export against the real base blew the memory at 3,577. The measured curve showed
+  5,000 would need more than 3 GB. The cap became 1,000, and the measurement was
+  recorded beside the value.
+- **The `backend` service name.** `CLAUDE.md` pins
+  `API_URL_INTERNAL=http://backend`, and the infrastructure plan called php-fpm
+  `backend` — which speaks FastCGI, not HTTP. Every Server Component fetch would
+  have failed, and only inside Docker. nginx became `backend` and `CLAUDE.md`
+  gained the note that the name is load-bearing.
+- **`make lint` did not prove what it claimed to prove.** It passed on the
+  developer's machine because the development server had generated Next's route
+  types; on a clean clone the typecheck fails. What surfaced it was
+  [CI](operacao.md#integração-contínua), on the first push. The missing step went
+  into the target and the workflow, and the rule — a check that depends on a
+  generated artefact has to generate it — went back into `CLAUDE.md`.
 
-Ambas as correções voltaram para o `CLAUDE.md`, que é o ponto: a configuração é
-mantida junto do código e corrigida quando o código prova que ela está errada.
+All of those corrections went back into `CLAUDE.md`, which is the point: the
+configuration is kept alongside the code and corrected when the code proves it
+wrong.

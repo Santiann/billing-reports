@@ -1,29 +1,29 @@
-# Testes
+# Tests
 
 [← README](../README.md)
 
-- [Testes](#testes)
-- [Testes de ponta a ponta](#testes-de-ponta-a-ponta)
+- [Tests](#tests)
+- [End-to-end tests](#end-to-end-tests)
 
-## Testes
+## Tests
 
 ```bash
 make test                                   # docker compose exec php php artisan test
 ```
 
-A suíte roda **dentro do container** porque roda em **MySQL**, não em SQLite.
-O skeleton do Laravel vem apontado para `sqlite/:memory:`, e isso seria um
-problema grave neste projeto: a regra central é que o valor atualizado de uma
-cobrança seja calculável em SQL, e o teste de consistência obrigatório compara
-a face SQL do `InterestCalculator` com a face PHP. Em SQLite ele estaria
-validando outro motor — `POW()` nem existe por padrão, e `DATEDIFF()` e a
-precisão de `DECIMAL` divergem.
+The suite runs **inside the container** because it runs on **MySQL**, not SQLite.
+Laravel's skeleton arrives pointed at `sqlite/:memory:`, and that would be a
+serious problem in this project: the central rule is that a billing's updated
+value be computable in SQL, and the mandatory consistency test compares
+`InterestCalculator`'s SQL face against its PHP face. On SQLite it would be
+validating a different engine — `POW()` does not even exist by default, and
+`DATEDIFF()` and `DECIMAL` precision both diverge.
 
 ```
 OK (283 tests, 1070 assertions)
 ```
 
-### Cobertura
+### Coverage
 
 ```bash
 make coverage                               # docker compose exec php php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text
@@ -31,94 +31,96 @@ make coverage                               # docker compose exec php php -d pco
 
 | | |
 |---|---|
-| **Linhas** | **97,44%** (1333/1368) |
-| Métodos | 90,87% (189/208) |
-| Classes | 81,36% (48/59) |
+| **Lines** | **97.44%** (1333/1368) |
+| Methods | 90.87% (189/208) |
+| Classes | 81.36% (48/59) |
 
-Usa **pcov**, não xdebug: ele existe só para cobertura e custa uma fração do
-tempo. Fica desligado por padrão (`pcov.enabled = 0`) para não pesar na
-execução normal, e é ligado na linha de comando.
+It uses **pcov**, not xdebug: pcov exists only for coverage and costs a fraction
+of the time. It stays off by default (`pcov.enabled = 0`) so it does not weigh on
+normal runs, and is switched on from the command line.
 
-O `-d` precisa ir direto no `phpunit` porque `artisan test --coverage` roda o
-PHPUnit em subprocesso e a flag não propaga — ele responde
-"No code coverage driver available" mesmo com a extensão carregada.
+The `-d` has to go directly on `phpunit` because `artisan test --coverage` runs
+PHPUnit in a subprocess and the flag does not propagate — it answers "No code
+coverage driver available" even with the extension loaded.
 
-A etapa 1 fechou com 99,84% de linhas sobre 628. A etapa 2 triplicou o código
-coberto — 1.368 linhas — e a cobertura caiu 2,4 pontos. As 35 linhas
-descobertas não estão espalhadas: elas se concentram nas classes novas, e quase
-todas são **ramos de defesa**.
+An earlier point in the project closed at 99.84% of lines over 628. The code under
+coverage then tripled — 1,368 lines — and coverage dropped 2.4 points. The 35
+uncovered lines are not scattered: they concentrate in the newer classes, and
+almost all of them are **defensive branches**.
 
-| Classe | Linhas |
+| Class | Lines |
 |---|---|
-| `IdempotentRequest` | 83,02% (44/53) |
-| `IdempotencyStore` | 85,45% (47/55) |
-| `CsvReader` | 90,20% (46/51) |
-| `BillingAudit` | 91,67% (11/12) |
-| `ExplainReportCommand` | 95,37% (103/108) |
-| `BillingAuditObserver` | 95,45% (21/22) |
-| `BillingAuditResource` | 96,15% (25/26) |
-| `BillingCsvImport` | 98,00% (98/100) |
-| `DashboardQuery` | 98,55% (68/69) |
-| `BillingReportCsvExport` | 98,63% (72/73) |
+| `IdempotentRequest` | 83.02% (44/53) |
+| `IdempotencyStore` | 85.45% (47/55) |
+| `CsvReader` | 90.20% (46/51) |
+| `BillingAudit` | 91.67% (11/12) |
+| `ExplainReportCommand` | 95.37% (103/108) |
+| `BillingAuditObserver` | 95.45% (21/22) |
+| `BillingAuditResource` | 96.15% (25/26) |
+| `BillingCsvImport` | 98.00% (98/100) |
+| `DashboardQuery` | 98.55% (68/69) |
+| `BillingReportCsvExport` | 98.63% (72/73) |
 
-O que está descoberto, nomeado:
+What is uncovered, named:
 
-- **A devolução da chave de idempotência no erro 500.** Cobri-la exigiria
-  forçar um erro de servidor no meio de uma requisição com chave — encenação
-  que testaria o teste, não o sistema.
-- **A limpeza das chaves vencidas por sorteio.** Ela roda numa chance em
-  duzentas, de propósito; um teste que a force teria de fixar o sorteio, e aí
-  afirma sobre a fixação.
-- **O `deleted()` dos observers.** Nada no sistema apaga cobrança. O gancho
-  existe para o dia em que apagar, e é isso que o deixa descoberto.
-- **A guarda de resposta em stream e o teto de 255 caracteres da chave.** Duas
-  defesas para uso futuro do middleware de idempotência, que hoje vale para
-  duas rotas que não exportam arquivo.
-- **O rótulo de campo desconhecido na trilha.** Aparece só se uma coluna nova
-  chegar sem rótulo — existe para a trilha não perder a alteração em silêncio.
-- **O `flush()` da exportação CSV**, a cada 500 linhas escritas: exigiria criar
-  500 cobranças para afirmar um efeito colateral sem resultado observável.
+- **Giving the idempotency key back on a 500.** Covering it would require forcing
+  a server error in the middle of a request carrying a key — staging that would
+  test the test, not the system.
+- **The lottery-based cleanup of expired keys.** It runs on a one-in-two-hundred
+  chance, on purpose; a test that forced it would have to pin the draw, and would
+  then be asserting about the pinning.
+- **The observers' `deleted()`.** Nothing in the system deletes a billing. The
+  hook exists for the day something does, and that is what leaves it uncovered.
+- **The streamed-response guard and the key's 255-character cap.** Two defences
+  for future use of the idempotency middleware, which today applies to two routes
+  that do not export files.
+- **The unknown field label in the trail.** It only appears if a new column
+  arrives without a label — it exists so the trail does not lose the change in
+  silence.
+- **The CSV export's `flush()`**, every 500 rows written: it would require
+  creating 500 billings to assert a side effect with no observable result.
 
-É a mesma decisão da etapa 1, com mais casos: perseguir o último ponto
-percentual aqui produziria testes que provam encenação. O que esses ramos têm
-em comum é serem o caminho do erro — e o caminho do erro que importa, aquele em
-que o sistema **recusa** a operação, tem teste: [sem trilha não há
-alteração](modulos.md#atômica-sem-trilha-sem-alteração), [chave repetida devolve o
-primeiro resultado](modulos.md#idempotência-no-pagamento), [perfil de consulta não
-escreve](modulos.md#a-barreira-é-o-backend-não-a-tela).
+It is the same decision throughout, with more cases: chasing the last percentage
+point here would produce tests that prove staging. What those branches have in
+common is being the error path — and the error path that matters, the one where
+the system **refuses** the operation, does have tests:
+[without the trail there is no change](modulos.md#atômica-sem-trilha-sem-alteração),
+[a repeated key returns the first result](modulos.md#idempotência-no-pagamento),
+[the read-only role does not write](modulos.md#a-barreira-é-o-backend-não-a-tela).
 
-O relatório de cobertura foi o que expôs três lacunas reais, que já estão
-fechadas: o filtro `status=pending` do relatório nunca era exercitado (os
-testes usavam `paid` e `overdue` e pulavam o terceiro), três rótulos de
-cabeçalho da exportação nunca eram gerados, e o ramo defensivo do calculador
-para cobrança paga sem data de pagamento não tinha teste.
+The coverage report is what exposed three real gaps, all since closed: the
+report's `status=pending` filter was never exercised (the tests used `paid` and
+`overdue` and skipped the third), three of the export's header labels were never
+generated, and the calculator's defensive branch for a paid billing with no
+payment date had no test.
 
-### O teste do seeder não emite DDL
+### The seeder's test emits no DDL
 
-`BillingVolumeSeederTest` roda o seeder de verdade sobre uma amostra de 600
-cobranças e não limpa nada depois: quem desfaz é o rollback do
-`RefreshDatabase`. Limpar com `TRUNCATE` seria o caminho óbvio e custaria caro.
+`BillingVolumeSeederTest` runs the real seeder over a sample of 600 billings and
+cleans nothing up afterwards: what undoes it is `RefreshDatabase`'s rollback.
+Cleaning up with `TRUNCATE` would be the obvious route and would cost dearly.
 
-`TRUNCATE` é DDL, e em MySQL DDL faz **commit implícito**. O Laravel percebe
-que a transação do teste sumiu e marca `RefreshDatabaseState::$migrated =
-false` — o que dispara um `migrate:fresh` inteiro antes de **cada teste
-seguinte**, e não só dos desta classe. O código está em
-`RefreshDatabase.php:158`, e o efeito foi medido aqui:
+`TRUNCATE` is DDL, and in MySQL DDL performs an **implicit commit**. Laravel
+notices the test's transaction is gone and marks
+`RefreshDatabaseState::$migrated = false` — which triggers a full `migrate:fresh`
+before **every following test**, not just this class's. The code is at
+`RefreshDatabase.php:158`, and the effect was measured here:
 
-| | duração da classe |
+| | class duration |
 |---|---|
-| Com `TRUNCATE` no teardown | 360s (6 testes, ~50s de `migrate:fresh` cada) |
-| Sem DDL nenhum | 62s (60s do `migrate:fresh` único + 0,3s por teste) |
+| With `TRUNCATE` in the teardown | 360s (6 tests, ~50s of `migrate:fresh` each) |
+| With no DDL at all | 62s (60s for the single `migrate:fresh` + 0.3s per test) |
 
-É a mesma razão pela qual o seeder sai cedo quando não há o que truncar: em
-tabela vazia, o `TRUNCATE` só teria o custo.
+It is the same reason the seeder bails out early when there is nothing to
+truncate: on an empty table, the `TRUNCATE` would be all cost.
 
-### Banco de testes
+### The test database
 
-O banco da suíte é o `billing_test`, separado do de desenvolvimento porque
-`RefreshDatabase` derruba e recria o schema a cada execução. Ele é criado no
-first-init do MySQL por `docker/mysql/init/01-create-test-database.sql`. Em um
-volume que já existe, o init script não roda — aplique o arquivo à mão:
+The suite's database is `billing_test`, kept apart from the development one
+because `RefreshDatabase` drops and recreates the schema on every run. It is
+created on MySQL's first init by
+`docker/mysql/init/01-create-test-database.sql`. On a volume that already exists
+the init script does not run — apply the file by hand:
 
 ```bash
 docker compose exec -T mysql mysql -u root -proot < docker/mysql/init/01-create-test-database.sql
@@ -126,82 +128,82 @@ docker compose exec -T mysql mysql -u root -proot < docker/mysql/init/01-create-
 
 ---
 
-## Testes de ponta a ponta
+## End-to-end tests
 
 ```bash
 make e2e          # docker compose --profile e2e run --rm e2e
 ```
 
-Playwright cobrindo o que a especificação pede como diferencial de frontend: login,
-cadastro de cliente, registro de pagamento — mais o estorno — e exportação.
-**10 testes, 3,4 minutos.**
+Playwright covering what the brief asks for as a frontend differentiator: login,
+creating a customer, recording a payment — plus the reversal — and exporting.
+**10 tests, 3.4 minutes.**
 
-Eles rodam contra a **stack do Compose**, e não contra um servidor que o
-Playwright sobe. É deliberado: o que se quer provar é a aplicação como ela é
-entregue — o Next falando com o nginx pelo nome do serviço, a sessão num cookie
-httpOnly, o MySQL de verdade. Um `webServer` do Playwright subiria um Next
-isolado, sem backend, e os fluxos de cadastro e pagamento não existiriam.
+They run against the **Compose stack**, and not against a server Playwright
+brings up. That is deliberate: what we want to prove is the application as it is
+delivered — Next talking to nginx by service name, the session in an httpOnly
+cookie, a real MySQL. A Playwright `webServer` would start an isolated Next with
+no backend, and the creation and payment flows would not exist.
 
-| Decisão | Por quê |
+| Decision | Why |
 |---|---|
-| Serviço no Compose com perfil `e2e` | `docker compose up -d` não sobe o que roda e termina |
-| Imagem oficial do Playwright | a do frontend é Alpine, e os navegadores do projeto são compilados contra glibc |
-| Um worker, sem paralelismo | os testes escrevem no MESMO banco; dois cadastros ao mesmo tempo disputariam a unique do documento |
-| Sufixo único por execução | o banco não é limpo entre execuções, e sem isso a segunda rodada do dia falharia por conflito |
-| Fora do CI | exigiria subir MySQL, php-fpm, nginx e Next no runner; o CI roda a suíte e o lint |
+| A Compose service behind the `e2e` profile | `docker compose up -d` should not start something that runs and exits |
+| The official Playwright image | the frontend's is Alpine, and the project's browsers are compiled against glibc |
+| One worker, no parallelism | the tests write to the SAME database; two creations at once would contend over the document's unique index |
+| A unique suffix per run | the database is not cleaned between runs, and without it the day's second round would fail on a conflict |
+| Outside CI | it would require MySQL, php-fpm, nginx and Next on the runner; CI runs the suite and the lint |
 
-Dois testes rodam numa viewport de **360px** e afirmam a ausência de rolagem
-horizontal — nas telas públicas e nas autenticadas. É o critério de aceite da
-especificação para telas pequenas, verificado por teste em vez de por captura.
+Two tests run in a **360px** viewport and assert the absence of horizontal
+scrolling — on the public screens and on the authenticated ones. It is the brief's
+acceptance criterion for small screens, verified by a test rather than by a
+screenshot.
 
-### Quatro problemas reais que ele encontrou
+### Four real problems it found
 
-Esta é a parte que justifica a suíte. Na primeira execução, **8 dos 10 testes
-falharam** — e nenhum por causa do Playwright.
+This is the part that justifies the suite. On the first run, **8 of the 10 tests
+failed** — and none of them because of Playwright.
 
-**1. O Next bloqueava a hidratação, e o log dizia isso.** Os testes chegam por
-`http://frontend:3000`, o nome do serviço. O Next recusa requisições a recursos
-de desenvolvimento vindas de host diferente daquele em que subiu, o HMR era
-negado, a hidratação não concluía e **nenhum formulário respondia a clique**. O
-container imprimia a opção pelo nome — `allowedDevOrigins` — e eu não havia
-lido o log. Corrigido no `next.config.ts`, que vale só em desenvolvimento.
+**1. Next was blocking hydration, and the log said so.** The tests arrive via
+`http://frontend:3000`, the service name. Next refuses requests for development
+resources coming from a host other than the one it started on, HMR was denied,
+hydration never completed and **no form responded to a click**. The container
+printed the option by name — `allowedDevOrigins` — and I had not read the log.
+Fixed in `next.config.ts`, where it applies in development only.
 
-**2. O botão de pagar estava morto fora do `localhost`.** `crypto.randomUUID()`,
-usado para sortear a chave de idempotência, existe **apenas em contexto
-seguro**: HTTPS, ou `localhost` por exceção do browser. Servida por HTTP simples
-em qualquer outro host — um IP na rede interna, o nome de um serviço —, a função
-é `undefined`, o handler morria com `TypeError` antes de enviar e a tela não
-dava aviso nenhum. Medido no container: `isSecureContext: false`,
-`randomUUID: undefined`, `getRandomValues: function`. A correção monta o UUID v4
-com `getRandomValues`, que não tem a restrição, e mantém aleatoriedade
-criptográfica nos dois caminhos.
+**2. The pay button was dead outside `localhost`.** `crypto.randomUUID()`, used to
+draw the idempotency key, exists **only in a secure context**: HTTPS, or
+`localhost` by browser exception. Served over plain HTTP on any other host — an IP
+on the internal network, a service name — the function is `undefined`, the handler
+died with a `TypeError` before submitting and the screen gave no warning at all.
+Measured in the container: `isSecureContext: false`, `randomUUID: undefined`,
+`getRandomValues: function`. The fix builds the v4 UUID with `getRandomValues`,
+which carries no such restriction, and keeps cryptographic randomness on both
+paths.
 
-Este é o tipo de defeito que nenhum teste de unidade acha e nenhum clique em
-`localhost` revela.
+This is the kind of defect no unit test finds and no click on `localhost` reveals.
 
-**3. A tela mostrava a mensagem de sucesso errada.** O código `sucesso=criado`
-servia a cliente e a cobrança, e as duas listas renderizam o mesmo componente
-de aviso: cadastrar uma **cobrança** exibia *"Cliente cadastrado com sucesso"*.
-Agora são dois códigos, e `editado` continua servindo aos dois porque a mensagem
-dele não nomeia entidade.
+**3. The screen showed the wrong success message.** The code `sucesso=criado`
+served both the customer and the billing, and both listings render the same alert
+component: creating a **billing** displayed *"Cliente cadastrado com sucesso"*.
+There are two codes now, and `editado` still serves both because its message names
+no entity.
 
-**4. A espera certa não é tempo, é hidratação.** O formulário de login é
-controlado (`value` + `onChange`). Antes de o React assumir, preencher grava no
-DOM um valor que a hidratação descarta, e clicar dispara o **envio nativo** do
-formulário, que recarrega a página limpa — era exatamente o que o retrato de
-falha mostrava. Os testes esperam pela chave que o React DOM pendura no nó
-(`__reactProps$`) quando passa a tratar os eventos dele. É API interna do React,
-e por isso só aparece no teste; a alternativa era `waitForTimeout`, que troca
-uma corrida por uma aposta.
+**4. The right thing to wait for is not time, it is hydration.** The login form is
+controlled (`value` + `onChange`). Before React takes over, filling it writes a
+value into the DOM that hydration discards, and clicking fires the form's
+**native** submit, which reloads the page clean — which is exactly what the
+failure screenshot showed. The tests wait for the key React DOM hangs on the node
+(`__reactProps$`) once it starts handling its events. It is React internal API,
+which is why it only appears in the tests; the alternative was `waitForTimeout`,
+which trades a race for a bet.
 
-### Duas coisas que a suíte exigiu do ambiente
+### Two things the suite demanded of the environment
 
-**Aquecimento das rotas.** O alvo é o servidor de desenvolvimento, que compila
-cada rota na primeira visita — e a primeira visita é justamente o que estes
-testes fazem. Três testes falharam por tempo, com o botão "Entrando…" ainda
-desabilitado no retrato. Um `globalSetup` entra uma vez e visita as telas antes
-da suíte, então cada teste mede a aplicação em vez do compilador.
+**Warming up the routes.** The target is the development server, which compiles
+each route on first visit — and the first visit is precisely what these tests
+make. Three tests failed on time, with the "Entrando…" button still disabled in
+the screenshot. A `globalSetup` signs in once and visits the screens before the
+suite, so each test measures the application rather than the compiler.
 
-**Ignorar a saída do Playwright no ESLint.** O relatório em HTML embute um
-bundle minificado, e o `eslint` passou a analisá-lo: 3.054 problemas em código
-que não é nosso.
+**Ignoring Playwright's output in ESLint.** The HTML report embeds a minified
+bundle, and `eslint` started analysing it: 3,054 problems in code that is not
+ours.
