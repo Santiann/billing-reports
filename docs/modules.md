@@ -597,7 +597,7 @@ billing changed without a record in the trail is the hole a trail cannot have.
 
 The test simulates the failure on the trail model's own `creating` event, and not by
 renaming the table: DDL mid-test would end `RefreshDatabase`'s transaction through an
-implicit commit — [the trap that already cost 50 seconds per test](testes.md#the-seeders-test-emits-no-ddl).
+implicit commit — [the trap that already cost 50 seconds per test](testing.md#the-seeders-test-emits-no-ddl).
 
 ### Immutable: a wrong record is corrected with another record
 
@@ -710,7 +710,7 @@ cheque.
 `ReversePayment` only clears the payment columns and returns the status to pending. The
 interest starts running again with no line in the calculation, because `InterestCalculator`
 only reads the frozen columns when the billing is paid — on both faces. It is
-[the rule that governs the architecture](arquitetura.md#interest-calculation) paying off
+[the rule that governs the architecture](architecture.md#interest-calculation) paying off
 again: if the updated value depended on something written at payment time beyond those
 columns, the reversal would have to undo it in two places.
 
@@ -804,5 +804,5 @@ Each request's transactions, one by one:
 Loosening durability (`innodb_flush_log_at_trx_commit = 2`) would remove most of that time,
 trading it for up to a second of payments confirmed to the customer and lost in a server
 crash. For a money write that is the wrong trade, and tuning MySQL's configuration belongs to
-the [pending list](producao.md#improvements-that-would-be-left-for-production), with a
+the [pending list](production.md#improvements-that-would-be-left-for-production), with a
 measurement of its own — not to a feature commit.

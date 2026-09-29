@@ -35,7 +35,7 @@ docker compose exec php php artisan db:seed
 
 There is no `.env` to copy and no `composer install` to run by hand: the backend's
 entrypoint handles both (see
-[automatic bootstrap](arquitetura.md#the-backends-automatic-bootstrap)).
+[automatic bootstrap](architecture.md#the-backends-automatic-bootstrap)).
 
 | Role | Email | Password |
 |---|---|---|
@@ -43,7 +43,7 @@ entrypoint handles both (see
 | Read-only | `consulta@billing.test` | `password` |
 
 The second user exists so the read-only role can be seen working (see
-[access roles](modulos.md#access-roles)).
+[access roles](modules.md#access-roles)).
 
 ### The Makefile's targets
 
@@ -216,7 +216,7 @@ To follow along: `docker compose logs -f mysql`.
 ## API documentation
 
 The specification lives in
-[`backend/resources/openapi.yaml`](backend/resources/openapi.yaml) — **OpenAPI
+[`backend/resources/openapi.yaml`](../backend/resources/openapi.yaml) — **OpenAPI
 3.1**, written by hand, covering the 15 endpoints with their parameters, responses,
 examples and error codes.
 
@@ -393,7 +393,7 @@ through GitHub's API rather than from memory — `checkout v7`, `setup-node v7`,
 Coverage stays out of CI: `pcov` instruments the code and the report belongs to
 `make coverage`, run when you want to look at it. And the suite runs on MySQL in CI
 for the same reason it runs on it in Compose — [on SQLite it would be validating a
-different engine](testes.md#the-test-database).
+different engine](testing.md#the-test-database).
 
 ---
 ## Structured logging
@@ -451,7 +451,7 @@ identifier header, which only exists once the middleware has run.
 ### What goes into the log, and what does not
 
 The log answers "what happened in this request". What happened to the **data** is
-the [audit trail](modulos.md#audit-trail), which is a table and not text.
+the [audit trail](modules.md#audit-trail), which is a table and not text.
 
 From the login go the three transitions that matter to an investigator:
 `login.failed`, `login.blocked` and `login.ok`. The first two carry the **attempted
@@ -597,7 +597,7 @@ through a remote image and no PHP execution inside the template.
 **Access to another user's record.** Any authenticated user sees any billing. There
 is no concept of an owning customer nor of an organisation in the brief, and
 inventing one would be extra scope; what exists is the
-[read-only role](modulos.md#access-roles), which separates reading from writing. It is
+[read-only role](modules.md#access-roles), which separates reading from writing. It is
 recorded as a known limit, not as an oversight.
 
 **`APP_DEBUG=true` and example passwords.** They are the local environment the brief

@@ -18,6 +18,15 @@ recorded with its `EXPLAIN` alongside in
 [docs/performance.md](docs/performance.md) — and what was discarded is there too,
 with the number that justified discarding it.
 
+**The code is in English and the interface is in Portuguese, on purpose.**
+Identifiers, comments and documentation are English because that is who reads
+them. Everything a user reads stays in pt-BR because the product is for the
+Brazilian market, and that is what decides the rest: CPF and CNPJ as the
+customer's identity, the CSV written with a semicolon and a comma decimal so it
+opens correctly in Excel in Portuguese, validation messages field by field, and
+the routes the user sees in the address bar. None of that is a translation
+someone forgot.
+
 ---
 
 ## Running it
@@ -46,7 +55,7 @@ the migrations.
 
 To generate measurement volume: `make seed-volume`. How long a clean install
 takes, phase by phase, is in
-[docs/operacao.md](docs/operacao.md#how-long-a-clean-start-takes), along with
+[docs/operations.md](docs/operations.md#how-long-a-clean-start-takes), along with
 the eleven Makefile targets and what each one does.
 
 ## Testing it
@@ -64,7 +73,7 @@ the end-to-end tests stay outside it because they would require bringing the
 whole stack up on the runner.
 
 Details, coverage and the traps the suite had to solve:
-[docs/testes.md](docs/testes.md).
+[docs/testing.md](docs/testing.md).
 
 ---
 
@@ -93,7 +102,7 @@ Almost everything else in the project follows from that:
   past, and the same condition exists on both faces.
 
 The full design — modelling, authentication, Next's two API origins, service
-naming — is in [docs/arquitetura.md](docs/arquitetura.md).
+naming — is in [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -109,18 +118,18 @@ automated suite.
 | | |
 |---|---|
 | [Dashboard](docs/performance.md#dashboard) | The month's indicators and a twelve-month series, in two aggregations |
-| [CSV import](docs/modulos.md#csv-import) | Customers and billings, with a preview before writing and errors row by row |
-| [Access roles](docs/modulos.md#access-roles) | Administrator and read-only, with the barrier in the backend |
-| [Payment idempotency](docs/modulos.md#payment-idempotency) | Eight simultaneous requests produce one payment |
-| [Audit trail](docs/modulos.md#audit-trail) | Who changed what and when, in the change's own transaction |
-| [Payment reversal](docs/modulos.md#payment-reversal) | Back to pending with interest running from the original due date |
+| [CSV import](docs/modules.md#csv-import) | Customers and billings, with a preview before writing and errors row by row |
+| [Access roles](docs/modules.md#access-roles) | Administrator and read-only, with the barrier in the backend |
+| [Payment idempotency](docs/modules.md#payment-idempotency) | Eight simultaneous requests produce one payment |
+| [Audit trail](docs/modules.md#audit-trail) | Who changed what and when, in the change's own transaction |
+| [Payment reversal](docs/modules.md#payment-reversal) | Back to pending with interest running from the original due date |
 | [Totals cache](docs/performance.md#totals-cache) | A one-year scope from 12.9s to ~3s, without ever serving a stale number |
 | [`report:explain`](docs/performance.md#the-execution-plan-as-a-tool) | A command that prints the plan of the report's queries |
-| [Rate limiting and structured logging](docs/operacao.md#login-rate-limiting) | Two counts on the login; JSON logs with an id that crosses nginx |
-| [Health check](docs/operacao.md#health-check) | An honest 503 when a dependency goes down |
-| [Continuous integration](docs/operacao.md#continuous-integration) | Two parallel jobs: the suite and the lint |
-| [End-to-end tests](docs/testes.md#end-to-end-tests) | Playwright covering login, creation, payment, export and 360px |
-| [Security review](docs/operacao.md#security-review) | Seven fixes, and a record of what was discarded |
+| [Rate limiting and structured logging](docs/operations.md#login-rate-limiting) | Two counts on the login; JSON logs with an id that crosses nginx |
+| [Health check](docs/operations.md#health-check) | An honest 503 when a dependency goes down |
+| [Continuous integration](docs/operations.md#continuous-integration) | Two parallel jobs: the suite and the lint |
+| [End-to-end tests](docs/testing.md#end-to-end-tests) | Playwright covering login, creation, payment, export and 360px |
+| [Security review](docs/operations.md#security-review) | Seven fixes, and a record of what was discarded |
 | [Visual foundation](docs/frontend.md#visual-foundation) and [public page](docs/frontend.md#public-page) | Semantic tokens, light and dark themes, and no invented numbers |
 
 ---
@@ -152,15 +161,15 @@ before it became code. All three are recounted in
 
 | Document | What is in it |
 |---|---|
-| [docs/arquitetura.md](docs/arquitetura.md) | The interest rule in detail, modelling, authentication, services and the cross-cutting technical decisions |
-| [docs/modulos.md](docs/modulos.md) | Customers, billings, importing, the report, roles, idempotency, the trail and reversals |
+| [docs/architecture.md](docs/architecture.md) | The interest rule in detail, modelling, authentication, services and the cross-cutting technical decisions |
+| [docs/modules.md](docs/modules.md) | Customers, billings, importing, the report, roles, idempotency, the trail and reversals |
 | [docs/performance.md](docs/performance.md) | Dashboard, indexes, cache, `report:explain`, the exports and volume generation — with the `EXPLAIN`s |
 | [docs/frontend.md](docs/frontend.md) | The visual foundation, the public page and the error and loading states |
-| [docs/operacao.md](docs/operacao.md) | Running it, the Makefile, API documentation, CI, logging, health, rate limiting and security |
-| [docs/testes.md](docs/testes.md) | The suite, coverage named line by line, and the end-to-end tests |
-| [docs/ia.md](docs/ia.md) | AI usage: the skills, what they prevented, and where the instructions were wrong |
-| [docs/producao.md](docs/producao.md) | What would be left for production, with a number beside each item |
-| [docs/requisitos.md](docs/requisitos.md) | The scope the project answers, summarised |
+| [docs/operations.md](docs/operations.md) | Running it, the Makefile, API documentation, CI, logging, health, rate limiting and security |
+| [docs/testing.md](docs/testing.md) | The suite, coverage named line by line, and the end-to-end tests |
+| [docs/ai.md](docs/ai.md) | AI usage: the skills, what they prevented, and where the instructions were wrong |
+| [docs/production.md](docs/production.md) | What would be left for production, with a number beside each item |
+| [docs/scope.md](docs/scope.md) | The scope the project answers, summarised |
 
 ## Use of AI
 
@@ -172,11 +181,11 @@ in the interest tests, and **two instructions that did not survive measurement**
 and went back into `CLAUDE.md` corrected.
 
 The full list, with the skills used and the effect of each one:
-[docs/ia.md](docs/ia.md).
+[docs/ai.md](docs/ai.md).
 
 ## What would be left for production
 
 Materialised totals, partitioning by date, a FULLTEXT index on the description,
 asynchronous exports and a read replica. Each item is in
-[docs/producao.md](docs/producao.md) with the measurement that justifies it — a
+[docs/production.md](docs/production.md) with the measurement that justifies it — a
 pending item is only worth recording if it comes with a number.

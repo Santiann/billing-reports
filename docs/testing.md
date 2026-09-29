@@ -84,9 +84,9 @@ It is the same decision throughout, with more cases: chasing the last percentage
 point here would produce tests that prove staging. What those branches have in
 common is being the error path — and the error path that matters, the one where
 the system **refuses** the operation, does have tests:
-[without the trail there is no change](modulos.md#atomic-without-the-trail-no-change),
-[a repeated key returns the first result](modulos.md#payment-idempotency),
-[the read-only role does not write](modulos.md#the-barrier-is-the-backend-not-the-screen).
+[without the trail there is no change](modules.md#atomic-without-the-trail-no-change),
+[a repeated key returns the first result](modules.md#payment-idempotency),
+[the read-only role does not write](modules.md#the-barrier-is-the-backend-not-the-screen).
 
 The coverage report is what exposed three real gaps, all since closed: the
 report's `status=pending` filter was never exercised (the tests used `paid` and

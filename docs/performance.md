@@ -280,7 +280,7 @@ idle: **12.1 to 14.0 s**. Query by query, from the query log:
 | the page's customers | 1 – 2 ms |
 
 Part of the growth has an author and a number: the
-[guard digits](arquitetura.md#three-traps-the-design-had-to-solve) that made the two
+[guard digits](architecture.md#three-traps-the-design-had-to-solve) that made the two
 faces agree on the half cent. An A/B of the aggregation straight in MySQL, the same
 query with and without the `CAST(... AS DECIMAL(20, 6))`:
 
@@ -682,7 +682,7 @@ accumulated from previous runs would say nothing.
 One exception: it **does not truncate an already empty table**. `TRUNCATE` is DDL and
 costs ~7s per table on this base even with nothing to delete, and there is a side effect
 worse than the time — described in
-[Tests](testes.md#the-seeders-test-emits-no-ddl).
+[Tests](testing.md#the-seeders-test-emits-no-ddl).
 
 ### Indexes deferred during the load
 
@@ -704,7 +704,7 @@ what justifies the choice. B's first measurement, still recreating the indexes i
 ALTER, gave 51min06s — the difference is just below.
 
 A second run of B, inside the
-[clean install](operacao.md#how-long-a-clean-start-takes), gave **49min16s**: 2.9 s to
+[clean install](operations.md#how-long-a-clean-start-takes), gave **49min16s**: 2.9 s to
 drop, 32min46s of customers and loading, 16min27s to recreate. That is 7% above the first,
 and this one did not have the machine idle from start to finish — it ran alongside light
 monitoring queries and a 107 MB download. The range worth quoting is 46 to 49 minutes.
@@ -752,7 +752,7 @@ Four concerns the strategy required:
 - **Only above 100,000 rows.** On a small load the trade does not pay off, and there is a
   stronger reason: the seeder's test seeds a sample, and DDL inside a test ends
   `RefreshDatabase`'s transaction —
-  [the trap that cost 50 seconds per test](testes.md#the-seeders-test-emits-no-ddl). A test
+  [the trap that cost 50 seconds per test](testing.md#the-seeders-test-emits-no-ddl). A test
   asserts that a small load emits no DDL at all. The tests that genuinely need DDL live in a
   class of their own, outside `RefreshDatabase`, and only touch the structure of an empty
   table.

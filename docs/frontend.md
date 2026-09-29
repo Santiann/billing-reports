@@ -9,8 +9,8 @@
 ## Visual foundation
 
 The tokens and the primitives live in
-[`app/globals.css`](frontend/app/globals.css) and
-[`components/ui/`](frontend/components/ui/).
+[`app/globals.css`](../frontend/app/globals.css) and
+[`components/ui/`](../frontend/components/ui/).
 
 **The direction is a ledger's**: paper and ink, a hairline rule instead of a
 shadow, and tabular figures in every money column. That is not taste — it is the

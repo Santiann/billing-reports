@@ -26,8 +26,8 @@ updated value; show totals over the entire filtered set; export to CSV and PDF.
 for tables in the millions of rows, with a way to generate that volume for
 testing rather than committing it. That single requirement is why the interest
 calculation is expressed in SQL as well as in PHP — see
-[arquitetura.md](arquitetura.md) for what follows from it, and
+[architecture.md](architecture.md) for what follows from it, and
 [performance.md](performance.md) for the measurements.
 
 Documentation of AI usage was also part of the brief, and lives in
-[ia.md](ia.md).
+[ai.md](ai.md).

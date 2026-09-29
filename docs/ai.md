@@ -79,7 +79,7 @@ and three of them did not survive contact with measurement.
 - **`make lint` did not prove what it claimed to prove.** It passed on the
   developer's machine because the development server had generated Next's route
   types; on a clean clone the typecheck fails. What surfaced it was
-  [CI](operacao.md#continuous-integration), on the first push. The missing step went
+  [CI](operations.md#continuous-integration), on the first push. The missing step went
   into the target and the workflow, and the rule — a check that depends on a
   generated artefact has to generate it — went back into `CLAUDE.md`.
 

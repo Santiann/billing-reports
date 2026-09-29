@@ -155,129 +155,37 @@ red on the PR.
 Small, semantic, one per responsibility — the history is part of the work. One
 commit at a time, and the project goes up after each one.
 
-### Stage 1 — delivered
+Three conventions that hold for every commit and are not reopened:
 
-```
-chore: scaffold laravel and next apps
-chore: add docker environment
-chore: add ai agent configuration
-feat: add authentication structure
-feat: create database schema and factories
-feat: create customers module
-feat: create billing module
-feat: add overdue interest calculation
-feat: create billing report filters
-feat: add report indexes
-feat: add csv report export
-feat: add pdf report export
-test: add billing interest tests
-docs: update project instructions
-```
+- **Everything on `main`.** No branch per piece of work: the project grows on top
+  of what is already there.
+- **History is not rewritten.** Every commit carries the `Co-Authored-By`
+  trailer, and nothing that has been pushed gets a rebase, a squash or an amend.
+- **What is delivered is the foundation, not a draft.** It only changes when a
+  commit asks for it — and then the change is that commit's subject.
 
-### Stage 2 — extras and polish
+Each commit stops, shows the diff and waits.
 
-Three decisions hold for the whole stage and are not reopened at each commit:
-
-- **The same branch.** Everything goes to `main`. No branch per block: the stage
-  grows on top of what is already delivered.
-- **History preserved.** Stage 1's 14 commits are not rewritten: they keep the
-  `Co-Authored-By` trailer, and the new ones carry it too. No rebase, squash or
-  amend over what has already been pushed.
-- **Stage 1 is the foundation, not a draft.** What is already delivered only
-  changes when this stage's commit calls for it — and then the change is the
-  commit's subject.
-
-Order in blocks. One block does not run into the next: each commit stops, shows the
-diff and waits.
-
-**Blocks A to F — delivered.** The list below is what happened, not what was
-planned: four commits were not in the plan and came out of findings during the
-stage, and they are marked.
-
-```
-A — foundation
-docs: plan stage two
-chore: add project skills
-fix: seed paid billings with frozen interest
-fix: agree on the half cent in both faces          <- finding: 1 divergence in 13,654
-feat: add global error and loading boundaries
-chore: add makefile
-refactor: trim excessive comments
-
-B — API documentation
-feat: add openapi specification
-feat: serve api documentation at root
-
-C — visual rework
-feat: add design system foundation
-refactor: restyle authentication and app shell
-refactor: restyle customers and billings
-refactor: restyle billing report
-feat: add dashboard
-chore: add readme and skill discovery skills
-
-D — importing and the landing page
-feat: add customer csv import
-feat: add billing csv import
-feat: add public landing page
-
-E — technical extras
-feat: add role based access control
-feat: add payment idempotency
-feat: add billing audit trail
-feat: add payment reversal
-feat: cache report totals
-feat: add report explain command
-feat: add rate limiting and structured logging
-ci: add continuous integration pipeline
-fix: generate next route types before the typecheck <- finding: CI caught what
-                                                      passed locally
-
-F — quality
-test: add end to end frontend tests
-fix: make payment and reversal work outside localhost <- finding: the E2E caught
-                                                        crypto.randomUUID
-chore: apply security review
-docs: update project documentation
-```
-
-**Blocks G and H — remaining.**
-
-```
-G — a timed start from scratch
-perf: build report indexes after bulk seed
-docs: document clean install timing
-
-H — empty the pending list (docs/producao.md)
-perf: size the innodb buffer pool
-perf: add fulltext index for billing description
-perf: export csv from raw rows
-feat: replace pdf renderer with incremental writer
-feat: add asynchronous export for large reports
-perf: evaluate partitioning billings by date
-feat: add read replica for report queries
-docs: empty the pending list
-```
-
-Block H closes `docs/producao.md`. A pending item dies in one of two ways, and both
-count: implemented, or measured and discarded with the number that justified
-discarding it. What does not count is staying listed as an intention.
+**What is left is in [`docs/production.md`](docs/production.md), and only there.** That
+file is the single source for the pending list, so it cannot drift from a copy
+kept here. A pending item dies in one of two ways, and both count: implemented,
+or measured and discarded with the number that justified discarding it. What does
+not count is staying listed as an intention.
 
 ---
 
 ## How to work in this repository
 
-- One stage at a time, in the order above. Do not run ahead of the stages and do
-  not chain modules together.
-- When a stage is finished, stop and present the diff before moving on.
+- One commit at a time. Do not chain modules together and do not run ahead.
+- When a commit is finished, stop and present the diff before moving on.
 - No technical decision lives only in the code: if a reasonable alternative exists,
   the choice and the reason go into the documentation. The README is the front door
   and stays short — the detail lives in `docs/`, by subject. A new decision goes
   into its subject's document, and only moves up to the README if it changes what a
   reader needs to know in the first three minutes.
-- Do not build anything beyond what the brief asks for. Extra scope widens the
-  surface for mistakes. In stage 2, "what the brief asks for" includes the brief's
-  list of extras — and nothing outside the commit at hand.
+- Do not build anything beyond what the brief asks for, including its list of
+  extras. Extra scope widens the surface for mistakes — and nothing outside the
+  commit at hand.
 - Do not swap a library or a pattern without recording the decision in `docs/`.
 - **Measure against the real base, not against the suite.** The PDF cap passed
   every test with a value an order of magnitude above what was possible, because
@@ -304,7 +212,7 @@ discarding it. What does not count is staying listed as an intention.
   number comes out optimistic with no warning at all.
 - **A measured number has copies.** When a measurement changes, look for the old
   number across the whole repository. The 2 million load dropped from 51 to 46
-  minutes in the README and in `docs/performance.md`, and `docs/producao.md` went on
+  minutes in the README and in `docs/performance.md`, and `docs/production.md` went on
   saying 51 for a whole commit.
 - **A tweak that speeds up reads can slow down writes.** The 1 GB buffer pool made
   the report's queries 1.5 to 2 times faster and the 2 million load 34% slower on

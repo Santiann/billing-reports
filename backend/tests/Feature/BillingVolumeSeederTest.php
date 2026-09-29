@@ -151,8 +151,8 @@ class BillingVolumeSeederTest extends TestCase
     }
 
     /**
-     * The block's acceptance criterion, seen from where a reviewer will look: the report filtered
-     * by paid has to show interest received, not zero.
+     * The rule seen from the screen that reads it: the report filtered by paid has to show
+     * interest received, not zero.
      */
     public function test_the_paid_report_shows_the_interest_received(): void
     {

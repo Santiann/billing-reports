@@ -1,115 +1,114 @@
-# Atalhos para o ciclo de vida do projeto.
+# Shortcuts for the project's lifecycle.
 #
-# Nada aqui esconde o docker compose: cada alvo é praticamente uma linha, e o
-# README mostra o comando equivalente logo abaixo de cada um. Quem prefere
-# digitar o caminho completo não perde nada — e quem clonou o repositório sem
-# ter make instalado também não.
+# Nothing here hides docker compose: each target is practically one line, and the
+# README shows the equivalent command right beside it. Whoever would rather type
+# the full path loses nothing — and neither does whoever cloned the repository
+# without make installed.
 #
-# `install` usa `up -d` e não `up -d --build`, e isso é deliberado: numa
-# máquina limpa não há imagem, então o compose constrói de qualquer forma, e o
-# `--build` só acrescentaria um caminho a mais para dar errado. Ele exige
-# resolver `docker/dockerfile:1` no registry, o que passa pelo helper de
-# credenciais do Docker — que no WSL com Docker Desktop é um `.exe` e pode
-# falhar com "exec format error" mesmo com a stack inteira funcionando.
-# Para reconstruir de propósito depois de mexer num Dockerfile:
+# `install` uses `up -d` and not `up -d --build`, and that is deliberate: on a
+# clean machine there is no image, so Compose builds anyway, and `--build` would
+# only add one more way to go wrong. It has to resolve `docker/dockerfile:1` from
+# the registry, which goes through Docker's credential helper — which on WSL with
+# Docker Desktop is an `.exe` and can fail with "exec format error" with the whole
+# stack working. To rebuild deliberately after touching a Dockerfile:
 # `docker compose up -d --build`.
 
 COMPOSE := docker compose
 
-# Dois prefixos para o mesmo container, e a diferença importa: `-T` desliga a
-# alocação de TTY. Sem ele, alvo rodando fora de um terminal — CI, pipe,
-# subshell — morre com "the input device is not a TTY". Com ele, um shell
-# interativo fica sem eco de teclado. Por isso `shell` e `logs` usam a versão
-# sem `-T`, e todo o resto usa a com.
+# Two prefixes for the same container, and the difference matters: `-T` turns off
+# TTY allocation. Without it, a target running outside a terminal — CI, a pipe, a
+# subshell — dies with "the input device is not a TTY". With it, an interactive
+# shell loses keyboard echo. That is why `shell` and `logs` use the version
+# without `-T`, and everything else uses the one with it.
 PHP := $(COMPOSE) exec -T php
 FRONTEND := $(COMPOSE) exec -T frontend
 
 .DEFAULT_GOAL := help
 .PHONY: help install up down logs shell test coverage e2e seed seed-volume fresh lint explain wait-migrations
 
-help: ## Lista os alvos disponíveis
-	@printf '\n  \033[1mGerador de Relatórios\033[0m — alvos disponíveis\n\n'
+help: ## Lists the available targets
+	@printf '\n  \033[1mBilling Reports\033[0m — available targets\n\n'
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z][a-z-]*:.*## / {printf "    \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf '\n'
 
-install: ## Do clone à aplicação usável, em um comando só
+install: ## From clone to a usable application, in one command
 	$(COMPOSE) up -d
 	@$(MAKE) --no-print-directory wait-migrations
 	$(PHP) php artisan db:seed --force
-	@printf '\n  \033[1mPronto.\033[0m\n\n'
-	@printf '    Aplicação   http://localhost:3000\n'
-	@printf '    API         http://localhost:8000\n'
-	@printf '    Acesso      admin@billing.test / password\n\n'
-	@printf '  Para gerar volume de medição: make seed-volume\n\n'
+	@printf '\n  \033[1mReady.\033[0m\n\n'
+	@printf '    Application   http://localhost:3000\n'
+	@printf '    API           http://localhost:8000\n'
+	@printf '    Access        admin@billing.test / password\n\n'
+	@printf '  To generate measurement volume: make seed-volume\n\n'
 
-up: ## Sobe os serviços já construídos
+up: ## Starts the already built services
 	$(COMPOSE) up -d
 
-down: ## Derruba os serviços, preservando o banco
+down: ## Stops the services, preserving the database
 	$(COMPOSE) down
 
-logs: ## Acompanha os logs de todos os serviços
+logs: ## Follows every service's logs
 	$(COMPOSE) logs -f
 
-shell: ## Abre um shell no container do PHP
+shell: ## Opens a shell in the PHP container
 	$(COMPOSE) exec php sh
 
-test: ## Roda a suíte do backend
+test: ## Runs the backend suite
 	$(PHP) php artisan test
 
-coverage: ## Roda a suíte com relatório de cobertura
+coverage: ## Runs the suite with a coverage report
 	$(PHP) php -d pcov.enabled=1 vendor/bin/phpunit --coverage-text
 
-# Passa opções pelo ARGS, porque o make não repassa flags soltas:
+# Options go through ARGS, because make does not pass loose flags along:
 # make explain ARGS="--start=2026-01-01 --end=2026-12-31 --analyze"
-explain: ## EXPLAIN das consultas do relatório (use ARGS="--analyze")
+explain: ## EXPLAIN of the report's queries (use ARGS="--analyze")
 	$(PHP) php artisan report:explain $(ARGS)
 
-# `run --rm` e não `up`: o serviço roda até terminar, e assim o código de saída
-# do Playwright vira o código de saída do make. A primeira execução baixa a
-# imagem oficial do Playwright, que é grande.
-e2e: ## Testes de ponta a ponta (Playwright) contra a stack em execução
+# `run --rm` and not `up`: the service runs to completion, so Playwright's exit
+# code becomes make's exit code. The first run downloads Playwright's official
+# image, which is large.
+e2e: ## End-to-end tests (Playwright) against the running stack
 	$(COMPOSE) --profile e2e run --rm e2e
 
-seed: ## Cria o usuário de acesso
+seed: ## Creates the access user
 	$(PHP) php artisan db:seed --force
 
-seed-volume: ## Gera 2.000.000 de cobranças para medição (demorado)
+seed-volume: ## Generates 2,000,000 billings for measurement (slow)
 	$(PHP) php artisan db:seed --class=BillingVolumeSeeder --force
 
-fresh: ## Recria o schema do zero e semeia o usuário
+fresh: ## Recreates the schema from scratch and seeds the user
 	$(PHP) php artisan migrate:fresh --seed --force
 
-# O `next typegen` existe aqui porque os tipos de rota do Next — LayoutProps,
-# PageProps — são GERADOS, e o tsconfig os inclui. Num clone novo ninguém os
-# criou ainda e o typecheck falha; na máquina de quem desenvolve eles já
-# existem, criados pelo servidor de desenvolvimento, e o furo fica invisível.
-# Foi o CI que mostrou. (Comentário fora da receita: dentro dela o make ecoaria
-# cada linha.)
-lint: ## Pint no backend, typecheck e ESLint no frontend
+# `next typegen` is here because Next's route types — LayoutProps, PageProps —
+# are GENERATED, and tsconfig includes them. On a fresh clone nobody has created
+# them yet and the typecheck fails; on the developer's machine they already exist,
+# created by the development server, and the hole stays invisible. CI is what
+# surfaced it. (The comment sits outside the recipe: inside it, make would echo
+# every line.)
+lint: ## Pint on the backend, typecheck and ESLint on the frontend
 	$(PHP) ./vendor/bin/pint --test
 	$(FRONTEND) npx next typegen
 	$(FRONTEND) npx tsc --noEmit
 	$(FRONTEND) npx eslint
 
-# Alvo interno, sem `##` para não aparecer no help.
+# An internal target, with no `##` so it does not appear in the help.
 #
-# `up -d` devolve o controle assim que os containers sobem, mas o entrypoint do
-# php roda as migrations DEPOIS disso. Semear sem esperar falharia com "table
-# users doesn't exist" — e falharia justamente na primeira subida, que é a
-# única em que `make install` importa.
+# `up -d` hands control back as soon as the containers start, but php's entrypoint
+# runs the migrations AFTER that. Seeding without waiting would fail with "table
+# users doesn't exist" — and it would fail precisely on the first start, which is
+# the only one where `make install` matters.
 #
-# A espera é longa de propósito: no first-init o MySQL leva ~10min para criar o
-# datadir em disco lento, e o entrypoint fica retentando a migration nesse
-# intervalo.
+# The wait is long on purpose: on the first init MySQL takes ~10min to create the
+# datadir on a slow disk, and the entrypoint keeps retrying the migration during
+# that interval.
 wait-migrations:
-	@printf '  esperando as migrations do entrypoint'
+	@printf '  waiting for the entrypoint migrations'
 	@attempt=1; \
 	until status=$$($(PHP) php artisan migrate:status 2>/dev/null) \
 		&& printf '%s' "$$status" | grep -q 'Ran' \
 		&& ! printf '%s' "$$status" | grep -q 'Pending'; do \
 		if [ $$attempt -ge 180 ]; then \
-			printf '\n  as migrations não concluíram; veja `make logs`\n'; \
+			printf '\n  the migrations did not finish; see `make logs`\n'; \
 			exit 1; \
 		fi; \
 		printf '.'; \
