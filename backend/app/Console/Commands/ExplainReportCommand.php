@@ -37,28 +37,28 @@ final class ExplainReportCommand extends Command
     protected $description = 'Roda EXPLAIN nas consultas do relatório de faturamento e imprime o plano';
 
     /** Colunas do EXPLAIN que dizem algo; as outras só alargam a tabela. */
-    private const COLUNAS = [
+    private const COLUMNS = [
         'select_type', 'table', 'type', 'possible_keys', 'key', 'rows', 'filtered', 'Extra',
     ];
 
     /** @var array<int, array{sql: string, bindings: array<int, mixed>, time: float}> */
-    private array $capturadas = [];
+    private array $captured = [];
 
     public function handle(BillingReportQuery $report): int
     {
-        $filtros = $this->filtros();
+        $filters = $this->filters();
 
-        if ($filtros === null) {
+        if ($filters === null) {
             return self::FAILURE;
         }
 
-        $this->cabecalho($filtros);
+        $this->header($filters);
 
-        DB::listen(function ($consulta): void {
-            $this->capturadas[] = [
-                'sql' => $consulta->sql,
-                'bindings' => $consulta->bindings,
-                'time' => $consulta->time,
+        DB::listen(function ($query): void {
+            $this->captured[] = [
+                'sql' => $query->sql,
+                'bindings' => $query->bindings,
+                'time' => $query->time,
             ];
         });
 
@@ -68,11 +68,11 @@ final class ExplainReportCommand extends Command
          * que esta ferramenta não pode enxergar — senão a consulta mais cara do
          * relatório desapareceria da ferramenta feita para olhá-la.
          */
-        $report->rows($filtros)->paginate($this->paginaTamanho());
-        $report->computeTotals($filtros);
+        $report->rows($filters)->paginate($this->pageSize());
+        $report->computeTotals($filters);
 
-        foreach ($this->capturadas as $consulta) {
-            $this->explicar($consulta);
+        foreach ($this->captured as $query) {
+            $this->explain($query);
         }
 
         $this->newLine();
@@ -80,37 +80,37 @@ final class ExplainReportCommand extends Command
         return self::SUCCESS;
     }
 
-    private function cabecalho(BillingReportFilters $filtros): void
+    private function header(BillingReportFilters $filters): void
     {
         $this->newLine();
         $this->line('  <options=bold>Relatório de faturamento — plano de execução</>');
         $this->newLine();
-        $this->line('  Base da data   '.$filtros->dateField);
-        $this->line('  Período        '.($filtros->startDate ?? 'sem início').' a '.($filtros->endDate ?? 'sem fim'));
-        $this->line('  Cliente        '.($filtros->customerId ?? 'todos'));
-        $this->line('  Status         '.($filtros->status ?? 'todos'));
-        $this->line('  Ordenação      '.$filtros->sort.' '.$filtros->direction);
-        $this->line('  Por página     '.$this->paginaTamanho());
+        $this->line('  Base da data   '.$filters->dateField);
+        $this->line('  Período        '.($filters->startDate ?? 'sem início').' a '.($filters->endDate ?? 'sem fim'));
+        $this->line('  Cliente        '.($filters->customerId ?? 'todos'));
+        $this->line('  Status         '.($filters->status ?? 'todos'));
+        $this->line('  Ordenação      '.$filters->sort.' '.$filters->direction);
+        $this->line('  Por página     '.$this->pageSize());
     }
 
     /**
-     * @param  array{sql: string, bindings: array<int, mixed>, time: float}  $consulta
+     * @param  array{sql: string, bindings: array<int, mixed>, time: float}  $query
      */
-    private function explicar(array $consulta): void
+    private function explain(array $query): void
     {
         $this->newLine();
-        $this->line('  <fg=yellow>── '.$this->rotulo($consulta['sql']).'</>');
+        $this->line('  <fg=yellow>── '.$this->label($query['sql']).'</>');
         $this->newLine();
-        $this->line('  '.$consulta['sql']);
-        $this->line(sprintf('  <fg=gray>executada em %.1f ms</>', $consulta['time']));
+        $this->line('  '.$query['sql']);
+        $this->line(sprintf('  <fg=gray>executada em %.1f ms</>', $query['time']));
 
         // Explicar um SELECT na tabela de cache ou de versão seria ruído: o
         // assunto é o plano sobre as cobranças.
-        if (! str_contains($consulta['sql'], '`billings`')) {
+        if (! str_contains($query['sql'], '`billings`')) {
             return;
         }
 
-        $this->plano($consulta['sql'], $consulta['bindings']);
+        $this->plan($query['sql'], $query['bindings']);
 
         if (! $this->option('literals')) {
             return;
@@ -124,48 +124,48 @@ final class ExplainReportCommand extends Command
          * otimizador do MySQL enxerga o valor no segundo caso e pode escolher
          * outro plano. Se escolher, a diferença aparece aqui lado a lado.
          */
-        $literal = $this->comLiterais($consulta['sql'], $consulta['bindings']);
+        $literal = $this->withLiterals($query['sql'], $query['bindings']);
 
         $this->newLine();
         $this->line('  <fg=yellow>   o mesmo SQL, com os valores embutidos</>');
         $this->newLine();
         $this->line('  '.$literal);
-        $this->plano($literal, []);
+        $this->plan($literal, []);
     }
 
     /** @param  array<int, mixed>  $bindings */
-    private function plano(string $sql, array $bindings): void
+    private function plan(string $sql, array $bindings): void
     {
         if ($this->option('analyze')) {
-            $arvore = (array) DB::selectOne('EXPLAIN ANALYZE '.$sql, $bindings);
+            $tree = (array) DB::selectOne('EXPLAIN ANALYZE '.$sql, $bindings);
 
             $this->newLine();
-            $this->line('  '.str_replace("\n", "\n  ", trim((string) reset($arvore))));
+            $this->line('  '.str_replace("\n", "\n  ", trim((string) reset($tree))));
 
             return;
         }
 
-        $linhas = array_map(
-            fn (object $linha): array => array_map(
-                fn (string $coluna): string => $this->encurtar(((array) $linha)[$coluna] ?? null),
-                array_combine(self::COLUNAS, self::COLUNAS),
+        $rows = array_map(
+            fn (object $row): array => array_map(
+                fn (string $column): string => $this->shorten(((array) $row)[$column] ?? null),
+                array_combine(self::COLUMNS, self::COLUMNS),
             ),
             DB::select('EXPLAIN '.$sql, $bindings),
         );
 
-        $this->table(self::COLUNAS, $linhas);
+        $this->table(self::COLUMNS, $rows);
     }
 
-    private function encurtar(mixed $valor): string
+    private function shorten(mixed $value): string
     {
-        $texto = $valor === null ? '—' : (string) $valor;
+        $text = $value === null ? '—' : (string) $value;
 
         // `possible_keys` lista todos os índices candidatos e estoura a
         // largura do terminal sem acrescentar informação.
-        return mb_strlen($texto) > 40 ? mb_substr($texto, 0, 39).'…' : $texto;
+        return mb_strlen($text) > 40 ? mb_substr($text, 0, 39).'…' : $text;
     }
 
-    private function rotulo(string $sql): string
+    private function label(string $sql): string
     {
         return match (true) {
             str_contains($sql, 'count(*) as `aggregate`') => 'Contagem da paginação',
@@ -181,14 +181,14 @@ final class ExplainReportCommand extends Command
      *
      * @param  array<int, mixed>  $bindings
      */
-    private function comLiterais(string $sql, array $bindings): string
+    private function withLiterals(string $sql, array $bindings): string
     {
-        foreach ($bindings as $valor) {
+        foreach ($bindings as $value) {
             $literal = match (true) {
-                $valor === null => 'NULL',
-                is_bool($valor) => $valor ? '1' : '0',
-                is_int($valor), is_float($valor) => (string) $valor,
-                default => DB::getPdo()->quote((string) $valor),
+                $value === null => 'NULL',
+                is_bool($value) => $value ? '1' : '0',
+                is_int($value), is_float($value) => (string) $value,
+                default => DB::getPdo()->quote((string) $value),
             };
 
             // Callback, e não string de substituição: um valor com `$` seria
@@ -199,7 +199,7 @@ final class ExplainReportCommand extends Command
         return $sql;
     }
 
-    private function paginaTamanho(): int
+    private function pageSize(): int
     {
         return max(1, (int) $this->option('per-page'));
     }
@@ -213,7 +213,7 @@ final class ExplainReportCommand extends Command
      * no default em silêncio faria alguém medir um recorte que não é o que
      * pediu, e concluir a coisa errada.
      */
-    private function filtros(): ?BillingReportFilters
+    private function filters(): ?BillingReportFilters
     {
         $dateField = (string) $this->option('date-field');
         $sort = (string) $this->option('sort');
@@ -251,11 +251,11 @@ final class ExplainReportCommand extends Command
             return null;
         }
 
-        foreach (['start', 'end'] as $opcao) {
-            $data = (string) $this->option($opcao);
+        foreach (['start', 'end'] as $option) {
+            $data = (string) $this->option($option);
 
-            if ($data !== '' && ! $this->dataValida($data)) {
-                $this->error("Data inválida em --{$opcao}: {$data}. Use AAAA-MM-DD.");
+            if ($data !== '' && ! $this->validDate($data)) {
+                $this->error("Data inválida em --{$option}: {$data}. Use AAAA-MM-DD.");
 
                 return null;
             }
@@ -280,10 +280,10 @@ final class ExplainReportCommand extends Command
      * A volta com `format` existe porque 31/02 rola para março em vez de
      * falhar.
      */
-    private function dataValida(string $valor): bool
+    private function validDate(string $value): bool
     {
-        $data = DateTimeImmutable::createFromFormat('Y-m-d', $valor);
+        $data = DateTimeImmutable::createFromFormat('Y-m-d', $value);
 
-        return $data !== false && $data->format('Y-m-d') === $valor;
+        return $data !== false && $data->format('Y-m-d') === $value;
     }
 }

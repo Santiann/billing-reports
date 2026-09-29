@@ -21,7 +21,7 @@ use Carbon\CarbonInterface;
 final class BillingAuditObserver
 {
     /** Carimbos do próprio Eloquent: mudam em toda gravação e não dizem nada. */
-    private const IGNORADOS = ['created_at', 'updated_at'];
+    private const IGNORED = ['created_at', 'updated_at'];
 
     /**
      * `updated`, e não `updating`: aqui o id existe e a gravação já passou pelo
@@ -33,20 +33,20 @@ final class BillingAuditObserver
      */
     public function updated(Billing $billing): void
     {
-        $mudancas = [];
+        $changes = [];
 
-        foreach (array_keys($billing->getChanges()) as $campo) {
-            if (in_array($campo, self::IGNORADOS, true)) {
+        foreach (array_keys($billing->getChanges()) as $field) {
+            if (in_array($field, self::IGNORED, true)) {
                 continue;
             }
 
-            $mudancas[$campo] = [
-                'from' => $this->escalar($billing->getOriginal($campo)),
-                'to' => $this->escalar($billing->getAttribute($campo)),
+            $changes[$field] = [
+                'from' => $this->toScalar($billing->getOriginal($field)),
+                'to' => $this->toScalar($billing->getAttribute($field)),
             ];
         }
 
-        if ($mudancas === []) {
+        if ($changes === []) {
             return;
         }
 
@@ -58,7 +58,7 @@ final class BillingAuditObserver
                 $billing->getOriginal('status'),
                 $billing->status,
             ),
-            'changes' => $mudancas,
+            'changes' => $changes,
         ]);
     }
 
@@ -69,12 +69,12 @@ final class BillingAuditObserver
      * faz "1000" e "1000.00" serem o mesmo número: o Eloquent só marca como
      * alterado o que o cast considera diferente.
      */
-    private function escalar(mixed $valor): string|int|float|null
+    private function toScalar(mixed $value): string|int|float|null
     {
         return match (true) {
-            $valor instanceof BackedEnum => $valor->value,
-            $valor instanceof CarbonInterface => $valor->toDateString(),
-            default => $valor,
+            $value instanceof BackedEnum => $value->value,
+            $value instanceof CarbonInterface => $value->toDateString(),
+            default => $value,
         };
     }
 }

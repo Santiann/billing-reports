@@ -38,23 +38,23 @@ class ReportTotalsCacheTest extends TestCase
         $this->travelTo(self::HOJE);
         Sanctum::actingAs(User::factory()->create());
 
-        DB::listen(function ($consulta): void {
-            if (str_contains($consulta->sql, 'total_count')) {
+        DB::listen(function ($query): void {
+            if (str_contains($query->sql, 'total_count')) {
                 $this->agregacoes++;
             }
         });
     }
 
-    private function cliente(string $documento = '12345678000190'): Customer
+    private function customer(string $documento = '12345678000190'): Customer
     {
         return Customer::factory()->create(['document' => $documento]);
     }
 
     /** Vencida há 30 dias a 2% ao mês: 1.020,00 hoje. */
-    private function cobranca(?Customer $cliente = null): Billing
+    private function billing(?Customer $cliente = null): Billing
     {
         return Billing::factory()->create([
-            'customer_id' => ($cliente ?? $this->cliente())->id,
+            'customer_id' => ($cliente ?? $this->customer())->id,
             'original_amount' => '1000.00',
             'monthly_interest_rate' => '0.0200',
             'issue_date' => '2026-04-16',
@@ -65,32 +65,32 @@ class ReportTotalsCacheTest extends TestCase
     /**
      * Totais do relatório, e quantas agregações a chamada disparou.
      *
-     * @param  array<string, mixed>  $filtros
+     * @param  array<string, mixed>  $filters
      * @return array{0: array<string, mixed>, 1: int}
      */
-    private function totais(array $filtros = []): array
+    private function totals(array $filters = []): array
     {
-        $antes = $this->agregacoes;
+        $before = $this->agregacoes;
 
-        $totais = $this->getJson('/api/reports/billings?'.http_build_query($filtros))
+        $totals = $this->getJson('/api/reports/billings?'.http_build_query($filters))
             ->assertOk()
             ->json('totals');
 
-        return [$totais, $this->agregacoes - $antes];
+        return [$totals, $this->agregacoes - $before];
     }
 
     // --- o cache serve ------------------------------------------------
 
     public function test_a_second_query_with_the_same_filters_does_not_recompute(): void
     {
-        $this->cobranca();
+        $this->billing();
 
-        [$primeira, $calculos1] = $this->totais();
-        [$segunda, $calculos2] = $this->totais();
+        [$firstOne, $calculos1] = $this->totals();
+        [$segunda, $calculos2] = $this->totals();
 
         $this->assertSame(1, $calculos1);
         $this->assertSame(0, $calculos2);
-        $this->assertSame($primeira, $segunda);
+        $this->assertSame($firstOne, $segunda);
     }
 
     /**
@@ -100,24 +100,24 @@ class ReportTotalsCacheTest extends TestCase
      */
     public function test_sorting_and_paginating_reuse_the_totals(): void
     {
-        $this->cobranca();
-        $this->totais();
+        $this->billing();
+        $this->totals();
 
-        [, $calculos] = $this->totais(['sort' => 'original_amount', 'direction' => 'asc', 'page' => 2]);
+        [, $calculos] = $this->totals(['sort' => 'original_amount', 'direction' => 'asc', 'page' => 2]);
 
         $this->assertSame(0, $calculos);
     }
 
     public function test_different_filters_do_not_share_totals(): void
     {
-        $a = $this->cliente('11111111000111');
-        $b = $this->cliente('22222222000122');
-        $this->cobranca($a);
-        $this->cobranca($b);
-        $this->cobranca($b);
+        $a = $this->customer('11111111000111');
+        $b = $this->customer('22222222000122');
+        $this->billing($a);
+        $this->billing($b);
+        $this->billing($b);
 
-        [$totaisA] = $this->totais(['customer_id' => $a->id]);
-        [$totaisB, $calculos] = $this->totais(['customer_id' => $b->id]);
+        [$totaisA] = $this->totals(['customer_id' => $a->id]);
+        [$totaisB, $calculos] = $this->totals(['customer_id' => $b->id]);
 
         $this->assertSame(1, $calculos);
         $this->assertSame(1, $totaisA['count']);
@@ -127,14 +127,14 @@ class ReportTotalsCacheTest extends TestCase
     /** O que sai do cache é exatamente o que a consulta calcularia. */
     public function test_the_cached_totals_match_the_queried_ones(): void
     {
-        $this->cobranca();
+        $this->billing();
         Billing::factory()->paidLate(45)->create();
 
-        [$doCache] = $this->totais();
-        [$outraVez] = $this->totais();
+        [$doCache] = $this->totals();
+        [$outraVez] = $this->totals();
 
         Cache::flush();
-        [$recalculados, $calculos] = $this->totais();
+        [$recalculados, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
         $this->assertSame($recalculados, $doCache);
@@ -145,74 +145,74 @@ class ReportTotalsCacheTest extends TestCase
 
     public function test_a_payment_invalidates_the_totals(): void
     {
-        $cobranca = $this->cobranca();
-        [$antes] = $this->totais();
+        $billing = $this->billing();
+        [$before] = $this->totals();
 
-        $this->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
+        $this->postJson("/api/billings/{$billing->id}/payment")->assertOk();
 
-        [$depois, $calculos] = $this->totais();
+        [$after, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame('0.00', $antes['paid_amount']);
-        $this->assertSame('1020.00', $depois['paid_amount']);
+        $this->assertSame('0.00', $before['paid_amount']);
+        $this->assertSame('1020.00', $after['paid_amount']);
     }
 
     public function test_a_reversal_invalidates_the_totals(): void
     {
-        $cobranca = $this->cobranca();
-        $this->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
-        [$antes] = $this->totais();
+        $billing = $this->billing();
+        $this->postJson("/api/billings/{$billing->id}/payment")->assertOk();
+        [$before] = $this->totals();
 
-        $this->postJson("/api/billings/{$cobranca->id}/reversal")->assertOk();
+        $this->postJson("/api/billings/{$billing->id}/reversal")->assertOk();
 
-        [$depois, $calculos] = $this->totais();
+        [$after, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame('1020.00', $antes['paid_amount']);
-        $this->assertSame('0.00', $depois['paid_amount']);
+        $this->assertSame('1020.00', $before['paid_amount']);
+        $this->assertSame('0.00', $after['paid_amount']);
     }
 
     public function test_an_edit_invalidates_the_totals(): void
     {
-        $cobranca = $this->cobranca();
-        $this->totais();
+        $billing = $this->billing();
+        $this->totals();
 
-        $this->putJson("/api/billings/{$cobranca->id}", [
-            'customer_id' => $cobranca->customer_id,
-            'description' => $cobranca->description,
+        $this->putJson("/api/billings/{$billing->id}", [
+            'customer_id' => $billing->customer_id,
+            'description' => $billing->description,
             'original_amount' => '2000.00',
             'monthly_interest_rate' => '0.0200',
             'issue_date' => '2026-04-16',
             'due_date' => '2026-05-16',
         ])->assertOk();
 
-        [$depois, $calculos] = $this->totais();
+        [$after, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame('2000.00', $depois['original_amount']);
+        $this->assertSame('2000.00', $after['original_amount']);
     }
 
     /** Alteração fora de requisição também invalida: ela passa pela trilha. */
     public function test_a_change_from_the_console_invalidates_the_totals(): void
     {
-        $cobranca = $this->cobranca();
-        $this->totais();
+        $billing = $this->billing();
+        $this->totals();
 
-        $cobranca->update(['original_amount' => '3000.00']);
+        $billing->update(['original_amount' => '3000.00']);
 
-        [$depois, $calculos] = $this->totais();
+        [$after, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame('3000.00', $depois['original_amount']);
+        $this->assertSame('3000.00', $after['original_amount']);
     }
 
     public function test_creating_invalidates_the_totals(): void
     {
-        $cobranca = $this->cobranca();
-        $this->totais();
+        $billing = $this->billing();
+        $this->totals();
 
         $this->postJson('/api/billings', [
-            'customer_id' => $cobranca->customer_id,
+            'customer_id' => $billing->customer_id,
             'description' => 'Nova cobrança',
             'original_amount' => '500.00',
             'monthly_interest_rate' => '0.0100',
@@ -220,33 +220,33 @@ class ReportTotalsCacheTest extends TestCase
             'due_date' => '2026-07-01',
         ])->assertCreated();
 
-        [$depois, $calculos] = $this->totais();
+        [$after, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame(2, $depois['count']);
+        $this->assertSame(2, $after['count']);
     }
 
     /** A importação grava por insert em lote, sem passar pelo Eloquent. */
     public function test_an_import_invalidates_the_totals(): void
     {
-        $cliente = $this->cliente('33333333000133');
-        $this->cobranca($cliente);
-        $this->totais();
+        $cliente = $this->customer('33333333000133');
+        $this->billing($cliente);
+        $this->totals();
 
-        $arquivo = UploadedFile::fake()->createWithContent(
+        $file = UploadedFile::fake()->createWithContent(
             'cobrancas.csv',
             "documento;descricao;valor;emissao;vencimento\n"
             ."33333333000133;Importada;750,00;01/06/2026;01/07/2026\n",
         );
 
-        $this->post('/api/billings/import', ['file' => $arquivo], ['Accept' => 'application/json'])
+        $this->post('/api/billings/import', ['file' => $file], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('imported_count', 1);
 
-        [$depois, $calculos] = $this->totais();
+        [$after, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame(2, $depois['count']);
+        $this->assertSame(2, $after['count']);
     }
 
     /**
@@ -257,15 +257,15 @@ class ReportTotalsCacheTest extends TestCase
      */
     public function test_the_day_rolling_over_recomputes_the_interest(): void
     {
-        $this->cobranca();
-        [$hoje] = $this->totais();
+        $this->billing();
+        [$today] = $this->totals();
 
         $this->travelTo('2026-06-16 09:30:00');
 
-        [$amanha, $calculos] = $this->totais();
+        [$amanha, $calculos] = $this->totals();
 
         $this->assertSame(1, $calculos);
-        $this->assertSame('20.00', $hoje['interest_amount']);
+        $this->assertSame('20.00', $today['interest_amount']);
         $this->assertSame('20.67', $amanha['interest_amount']);
     }
 
@@ -274,13 +274,13 @@ class ReportTotalsCacheTest extends TestCase
     /** O CSV imprime os totais no rodapé, e aproveita os que a tela já calculou. */
     public function test_the_csv_export_reuses_the_totals_from_the_screen(): void
     {
-        $this->cobranca();
-        $this->totais();
+        $this->billing();
+        $this->totals();
 
-        $antes = $this->agregacoes;
+        $before = $this->agregacoes;
 
         $this->get('/api/reports/billings/csv')->assertOk()->streamedContent();
 
-        $this->assertSame($antes, $this->agregacoes);
+        $this->assertSame($before, $this->agregacoes);
     }
 }

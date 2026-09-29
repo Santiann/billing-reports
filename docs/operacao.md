@@ -403,7 +403,7 @@ motor](testes.md#banco-de-testes).
 Uma linha de log é um objeto JSON, em `stderr`:
 
 ```json
-{"message":"login.falhou","level_name":"WARNING","context":{
+{"message":"login.failed","level_name":"WARNING","context":{
   "user_id":null,"request_id":"5903634cb4dbf38c8aba4a1464858b4f",
   "method":"POST","path":"api/auth/login","ip":"172.20.0.1",
   "email":"descartavel@billing.test"}}
@@ -428,7 +428,7 @@ encontrarem:
 
 ```
 nginx   req_id=caf4414de833cec75d085738f392eab2 rt=0.024
-laravel {"message":"login.bloqueado", …, "request_id":"caf4414de833cec75d085738f392eab2", "retry_after":56}
+laravel {"message":"login.blocked", …, "request_id":"caf4414de833cec75d085738f392eab2", "retry_after":56}
 ```
 
 ### Um processador, e não `Log::withContext()`
@@ -456,8 +456,8 @@ identificador, que só existe quando o middleware passou.
 O log responde "o que aconteceu nesta requisição". O que aconteceu com o **dado**
 é a [trilha de auditoria](modulos.md#trilha-de-auditoria), que é tabela e não texto.
 
-Do login vão as três transições que interessam a quem investiga: `login.falhou`,
-`login.bloqueado` e `login.ok`. As duas primeiras levam o **e-mail tentado** —
+Do login vão as três transições que interessam a quem investiga: `login.failed`,
+`login.blocked` e `login.ok`. As duas primeiras levam o **e-mail tentado** —
 sem ele não há como distinguir alguém que errou a senha de uma varredura de
 contas, que é exatamente a pergunta que se faz. É dado pessoal num log, e a
 troca fica registrada aqui: o benefício é investigar tentativa de invasão em

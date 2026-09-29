@@ -6,78 +6,81 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Limite de tentativas de login, em duas contagens.
+ * Login attempt limiting, as two separate counts.
  *
- * São dois ataques diferentes, e uma contagem só deixaria um deles passar:
+ * These are two different attacks, and a single count would let one of them
+ * through:
  *
- *   por e-mail + IP  força bruta contra uma conta
- *   por IP           varredura de e-mails, uma tentativa em cada
+ *   per email + IP  brute force against one account
+ *   per IP          sweeping emails, one attempt at each
  *
- * O limite por credencial inclui o IP de propósito. Contar só por e-mail
- * deixaria qualquer pessoa trancar a conta de outra de fora, errando a senha
- * cinco vezes — negação de serviço disfarçada de segurança.
+ * The per-credential limit includes the IP on purpose. Counting by email alone
+ * would let anyone lock someone else's account from outside by getting the
+ * password wrong five times — denial of service dressed up as security.
  *
- * Mora aqui, e não no middleware `throttle`, porque o controller precisa das
- * três operações: perguntar, contar e ZERAR no login correto. Zerar exige a
- * mesma chave, e a que o middleware usa internamente é derivada do nome do
- * limitador — detalhe de implementação do framework para depender.
+ * This lives here rather than in the `throttle` middleware because the
+ * controller needs all three operations: ask, count and CLEAR on a successful
+ * login. Clearing requires the same key, and the one the middleware uses
+ * internally is derived from the limiter name — a framework implementation
+ * detail to depend on.
  */
 final class LoginThrottle
 {
-    /** Tentativas erradas na mesma conta, a partir do mesmo IP. */
-    public const POR_CREDENCIAL = 5;
+    /** Wrong attempts on the same account, from the same IP. */
+    public const PER_CREDENTIAL = 5;
 
     /**
-     * Tentativas do mesmo IP, somando todas as contas.
+     * Attempts from the same IP, across every account.
      *
-     * Folgado em relação ao outro de propósito: escritório com IP único faz
-     * login legítimo de várias pessoas, e o que se quer pegar aqui é a
-     * varredura, que passa das dezenas.
+     * Deliberately looser than the other one: an office behind a single IP has
+     * several people logging in legitimately, and what this is meant to catch
+     * is the sweep, which runs into the dozens.
      */
-    public const POR_IP = 20;
+    public const PER_IP = 20;
 
-    private const JANELA_SEGUNDOS = 60;
+    private const WINDOW_SECONDS = 60;
 
-    /** Segundos até poder tentar de novo, ou nulo quando não está bloqueado. */
-    public function bloqueadoPor(Request $request): ?int
+    /** Seconds until the next attempt is allowed, or null when not blocked. */
+    public function blockedFor(Request $request): ?int
     {
-        foreach ($this->limites($request) as $chave => $maximo) {
-            if (RateLimiter::tooManyAttempts($chave, $maximo)) {
-                return RateLimiter::availableIn($chave);
+        foreach ($this->limits($request) as $key => $max) {
+            if (RateLimiter::tooManyAttempts($key, $max)) {
+                return RateLimiter::availableIn($key);
             }
         }
 
         return null;
     }
 
-    public function registrar(Request $request): void
+    public function record(Request $request): void
     {
-        foreach (array_keys($this->limites($request)) as $chave) {
-            RateLimiter::hit($chave, self::JANELA_SEGUNDOS);
+        foreach (array_keys($this->limits($request)) as $key) {
+            RateLimiter::hit($key, self::WINDOW_SECONDS);
         }
     }
 
     /**
-     * Zera a contagem da credencial — e só dela.
+     * Clears the credential count — and only that one.
      *
-     * Um login correto prova que aquela conta não está sob força bruta. Não
-     * prova nada sobre o IP: quem varre e-mails pode ter acertado o próprio.
+     * A successful login proves that account is not under brute force. It
+     * proves nothing about the IP: whoever is sweeping emails may have hit
+     * their own.
      */
-    public function limpar(Request $request): void
+    public function clear(Request $request): void
     {
-        RateLimiter::clear($this->chaveDaCredencial($request));
+        RateLimiter::clear($this->credentialKey($request));
     }
 
     /** @return array<string, int> */
-    private function limites(Request $request): array
+    private function limits(Request $request): array
     {
         return [
-            $this->chaveDaCredencial($request) => self::POR_CREDENCIAL,
-            'login-ip:'.sha1((string) $request->ip()) => self::POR_IP,
+            $this->credentialKey($request) => self::PER_CREDENTIAL,
+            'login-ip:'.sha1((string) $request->ip()) => self::PER_IP,
         ];
     }
 
-    private function chaveDaCredencial(Request $request): string
+    private function credentialKey(Request $request): string
     {
         $email = mb_strtolower(trim((string) $request->input('email')));
 

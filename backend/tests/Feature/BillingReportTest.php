@@ -177,12 +177,12 @@ class BillingReportTest extends TestCase
             'original_amount' => '900.00', 'monthly_interest_rate' => '0.1000',
         ]);
 
-        $valores = $this->getJson('/api/reports/billings?sort=updated_amount&direction=desc')
+        $values = $this->getJson('/api/reports/billings?sort=updated_amount&direction=desc')
             ->assertOk()
             ->json('data.*.updated_amount');
 
-        $this->assertGreaterThan((float) $valores[1], (float) $valores[0]);
-        $this->assertGreaterThan(900.0, (float) $valores[0]);
+        $this->assertGreaterThan((float) $values[1], (float) $values[0]);
+        $this->assertGreaterThan(900.0, (float) $values[0]);
     }
 
     public function test_sorting_by_an_arbitrary_column_is_rejected(): void

@@ -27,7 +27,7 @@ class DocumentationController extends Controller
 
         return view('documentation', [
             'spec' => $spec,
-            'grupos' => $this->agruparPorTag($spec),
+            'grupos' => $this->groupByTag($spec),
         ]);
     }
 
@@ -39,13 +39,13 @@ class DocumentationController extends Controller
     public function raw(): Response
     {
         return response(
-            (string) file_get_contents($this->caminho()),
+            (string) file_get_contents($this->path()),
             200,
             ['Content-Type' => 'application/yaml'],
         );
     }
 
-    private function caminho(): string
+    private function path(): string
     {
         return resource_path('openapi.yaml');
     }
@@ -61,7 +61,7 @@ class DocumentationController extends Controller
      */
     private function spec(): array
     {
-        return Yaml::parseFile($this->caminho());
+        return Yaml::parseFile($this->path());
     }
 
     /**
@@ -75,103 +75,103 @@ class DocumentationController extends Controller
      * @param  array<string, mixed>  $spec
      * @return array<string, array<int, array<string, mixed>>>
      */
-    private function agruparPorTag(array $spec): array
+    private function groupByTag(array $spec): array
     {
-        $grupos = [];
+        $groups = [];
 
         foreach ($spec['tags'] ?? [] as $tag) {
-            $grupos[$tag['name']] = [];
+            $groups[$tag['name']] = [];
         }
 
-        foreach ($spec['paths'] as $caminho => $entrada) {
-            $doPath = $entrada['parameters'] ?? [];
+        foreach ($spec['paths'] as $path => $input) {
+            $doPath = $input['parameters'] ?? [];
 
-            foreach ($entrada as $metodo => $operacao) {
-                if ($metodo === 'parameters') {
+            foreach ($input as $method => $operation) {
+                if ($method === 'parameters') {
                     continue;
                 }
 
-                $tag = $operacao['tags'][0] ?? 'Outros';
+                $tag = $operation['tags'][0] ?? 'Outros';
 
-                $grupos[$tag][] = [
-                    'metodo' => strtoupper($metodo),
-                    'caminho' => $caminho,
-                    'ancora' => $operacao['operationId'] ?? md5($metodo.$caminho),
-                    'resumo' => $operacao['summary'] ?? '',
-                    'descricao' => $operacao['description'] ?? null,
+                $groups[$tag][] = [
+                    'metodo' => strtoupper($method),
+                    'caminho' => $path,
+                    'ancora' => $operation['operationId'] ?? md5($method.$path),
+                    'resumo' => $operation['summary'] ?? '',
+                    'descricao' => $operation['description'] ?? null,
                     // `security: []` na operação declara rota pública.
-                    'publica' => ($operacao['security'] ?? null) === [],
-                    'parametros' => $this->parametros($spec, array_merge($doPath, $operacao['parameters'] ?? [])),
-                    'corpo' => $this->corpo($spec, $operacao['requestBody'] ?? null),
-                    'respostas' => $this->respostas($spec, $operacao['responses'] ?? []),
+                    'publica' => ($operation['security'] ?? null) === [],
+                    'parametros' => $this->parameters($spec, array_merge($doPath, $operation['parameters'] ?? [])),
+                    'corpo' => $this->body($spec, $operation['requestBody'] ?? null),
+                    'respostas' => $this->responses($spec, $operation['responses'] ?? []),
                 ];
             }
         }
 
-        return array_filter($grupos);
+        return array_filter($groups);
     }
 
     /**
      * @param  array<string, mixed>  $spec
-     * @param  array<int, array<string, mixed>>  $parametros
+     * @param  array<int, array<string, mixed>>  $parameters
      * @return array<int, array<string, mixed>>
      */
-    private function parametros(array $spec, array $parametros): array
+    private function parameters(array $spec, array $parameters): array
     {
-        return array_map(function (array $parametro) use ($spec) {
-            $parametro = $this->resolver($spec, $parametro);
-            $schema = $this->resolver($spec, $parametro['schema'] ?? []);
+        return array_map(function (array $parameter) use ($spec) {
+            $parameter = $this->resolve($spec, $parameter);
+            $schema = $this->resolve($spec, $parameter['schema'] ?? []);
 
             return [
-                'nome' => $parametro['name'] ?? '',
-                'local' => $parametro['in'] ?? '',
-                'obrigatorio' => (bool) ($parametro['required'] ?? false),
-                'tipo' => $this->tipo($schema),
-                'padrao' => $parametro['schema']['default'] ?? $schema['default'] ?? null,
-                'descricao' => $parametro['description'] ?? null,
+                'nome' => $parameter['name'] ?? '',
+                'local' => $parameter['in'] ?? '',
+                'obrigatorio' => (bool) ($parameter['required'] ?? false),
+                'tipo' => $this->type($schema),
+                'padrao' => $parameter['schema']['default'] ?? $schema['default'] ?? null,
+                'descricao' => $parameter['description'] ?? null,
             ];
-        }, $parametros);
+        }, $parameters);
     }
 
     /**
      * @param  array<string, mixed>  $spec
-     * @param  array<string, mixed>|null  $corpo
+     * @param  array<string, mixed>|null  $body
      * @return array<string, mixed>|null
      */
-    private function corpo(array $spec, ?array $corpo): ?array
+    private function body(array $spec, ?array $body): ?array
     {
-        if ($corpo === null) {
+        if ($body === null) {
             return null;
         }
 
-        $corpo = $this->resolver($spec, $corpo);
+        $body = $this->resolve($spec, $body);
 
         return [
-            'obrigatorio' => (bool) ($corpo['required'] ?? false),
-            'exemplos' => $this->exemplos($corpo['content'] ?? []),
+            'obrigatorio' => (bool) ($body['required'] ?? false),
+            'exemplos' => $this->examples($body['content'] ?? []),
         ];
     }
 
     /**
      * @param  array<string, mixed>  $spec
-     * @param  array<int|string, mixed>  $respostas
+     * @param  array<int|string, mixed>  $responses
      * @return array<int, array<string, mixed>>
      */
-    private function respostas(array $spec, array $respostas): array
+    private function responses(array $spec, array $responses): array
     {
-        $resolvidas = [];
+        $resolved = [];
 
-        foreach ($respostas as $status => $resposta) {
-            $resposta = $this->resolver($spec, $resposta);
+        foreach ($responses as $status => $response) {
+            $response = $this->resolve($spec, $response);
 
-            $resolvidas[] = [
+            $resolved[] = [
                 'status' => (string) $status,
-                'descricao' => $resposta['description'] ?? '',
-                'exemplos' => $this->exemplos($resposta['content'] ?? []),
+                'descricao' => $response['description'] ?? '',
+                'exemplos' => $this->examples($response['content'] ?? []),
             ];
         }
 
-        return $resolvidas;
+        return $resolved;
     }
 
     /**
@@ -184,29 +184,29 @@ class DocumentationController extends Controller
      * @param  array<string, mixed>  $content
      * @return array<int, array{tipo: string, exemplo: string}>
      */
-    private function exemplos(array $content): array
+    private function examples(array $content): array
     {
-        $exemplos = [];
+        $examples = [];
 
-        foreach ($content as $tipo => $conteudo) {
-            if (! isset($conteudo['example'])) {
+        foreach ($content as $type => $entry) {
+            if (! isset($entry['example'])) {
                 continue;
             }
 
-            $exemplo = $conteudo['example'];
+            $example = $entry['example'];
 
-            $exemplos[] = [
-                'tipo' => $tipo,
-                'exemplo' => is_string($exemplo)
-                    ? $exemplo
+            $examples[] = [
+                'tipo' => $type,
+                'exemplo' => is_string($example)
+                    ? $example
                     : (string) json_encode(
-                        $exemplo,
+                        $example,
                         JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
                     ),
             ];
         }
 
-        return $exemplos;
+        return $examples;
     }
 
     /**
@@ -214,20 +214,20 @@ class DocumentationController extends Controller
      *
      * @param  array<string, mixed>  $schema
      */
-    private function tipo(array $schema): string
+    private function type(array $schema): string
     {
-        $tipo = $schema['type'] ?? 'string';
-        $tipo = is_array($tipo) ? implode(' | ', $tipo) : $tipo;
+        $type = $schema['type'] ?? 'string';
+        $type = is_array($type) ? implode(' | ', $type) : $type;
 
         if (isset($schema['format'])) {
-            $tipo .= " ({$schema['format']})";
+            $type .= " ({$schema['format']})";
         }
 
         if (isset($schema['enum'])) {
-            $tipo .= ' — '.implode(', ', $schema['enum']);
+            $type .= ' — '.implode(', ', $schema['enum']);
         }
 
-        return $tipo;
+        return $type;
     }
 
     /**
@@ -240,18 +240,18 @@ class DocumentationController extends Controller
      * @param  array<string, mixed>  $item
      * @return array<string, mixed>
      */
-    private function resolver(array $spec, array $item): array
+    private function resolve(array $spec, array $item): array
     {
         if (! isset($item['$ref'])) {
             return $item;
         }
 
-        $alvo = $spec;
+        $target = $spec;
 
         foreach (explode('/', ltrim($item['$ref'], '#/')) as $segmento) {
-            $alvo = $alvo[$segmento] ?? [];
+            $target = $target[$segmento] ?? [];
         }
 
-        return is_array($alvo) ? $alvo : [];
+        return is_array($target) ? $target : [];
     }
 }

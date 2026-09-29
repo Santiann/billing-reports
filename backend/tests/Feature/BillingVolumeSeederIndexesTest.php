@@ -39,7 +39,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
     /** @return array<string, array<int, string>> */
     private function indicesDeBillings(): array
     {
-        $linhas = DB::select(
+        $rows = DB::select(
             'SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS '
             .'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? '
             .'ORDER BY INDEX_NAME, SEQ_IN_INDEX',
@@ -48,8 +48,8 @@ class BillingVolumeSeederIndexesTest extends TestCase
 
         $indices = [];
 
-        foreach ($linhas as $linha) {
-            $indices[$linha->INDEX_NAME][] = $linha->COLUMN_NAME;
+        foreach ($rows as $row) {
+            $indices[$row->INDEX_NAME][] = $row->COLUMN_NAME;
         }
 
         unset($indices['PRIMARY']);
@@ -91,11 +91,11 @@ class BillingVolumeSeederIndexesTest extends TestCase
 
     public function test_after_the_load_the_structure_is_back_to_what_it_was(): void
     {
-        $antes = $this->indicesDeBillings();
+        $before = $this->indicesDeBillings();
 
         (new BillingVolumeSeeder())->withDeferredIndexes(fn () => null);
 
-        $this->assertEqualsCanonicalizing($antes, $this->indicesDeBillings());
+        $this->assertEqualsCanonicalizing($before, $this->indicesDeBillings());
         $this->assertArrayNotHasKey(ReportIndexes::FOREIGN_KEY_SUPPORT, $this->indicesDeBillings());
     }
 
@@ -106,7 +106,7 @@ class BillingVolumeSeederIndexesTest extends TestCase
      */
     public function test_the_indexes_come_back_even_if_the_load_fails(): void
     {
-        $antes = $this->indicesDeBillings();
+        $before = $this->indicesDeBillings();
 
         try {
             (new BillingVolumeSeeder())->withDeferredIndexes(function (): void {
@@ -114,10 +114,10 @@ class BillingVolumeSeederIndexesTest extends TestCase
             });
 
             $this->fail('A exceção da carga deveria ter subido.');
-        } catch (RuntimeException $erro) {
-            $this->assertSame('Carga interrompida no meio.', $erro->getMessage());
+        } catch (RuntimeException $error) {
+            $this->assertSame('Carga interrompida no meio.', $error->getMessage());
         }
 
-        $this->assertEqualsCanonicalizing($antes, $this->indicesDeBillings());
+        $this->assertEqualsCanonicalizing($before, $this->indicesDeBillings());
     }
 }

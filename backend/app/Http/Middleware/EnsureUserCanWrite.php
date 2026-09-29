@@ -25,9 +25,9 @@ class EnsureUserCanWrite
         // A ausência de usuário é problema do `auth:sanctum`, que roda antes e
         // responde 401. Chegar aqui sem usuário significaria middleware fora de
         // ordem, e responder 403 esconderia esse erro.
-        $usuario = $request->user();
+        $user = $request->user();
 
-        if ($usuario !== null && ! $usuario->role->canWrite()) {
+        if ($user !== null && ! $user->role->canWrite()) {
             return response()->json([
                 'message' => 'Seu perfil é de consulta e não permite esta operação.',
             ], 403);

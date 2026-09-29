@@ -27,46 +27,46 @@ class IdempotentRequest
 
     public function handle(Request $request, Closure $next): Response
     {
-        $chave = trim((string) $request->header(IdempotencyStore::HEADER, ''));
-        $usuario = $request->user();
+        $key = trim((string) $request->header(IdempotencyStore::HEADER, ''));
+        $user = $request->user();
 
         // Sem chave, ou sem usuário — este segundo caso é do `auth`, que roda
         // antes e responde 401; chegar aqui sem usuário seria middleware fora
         // de ordem, e inventar uma resposta aqui esconderia isso.
-        if ($chave === '' || $usuario === null) {
+        if ($key === '' || $user === null) {
             return $next($request);
         }
 
-        if (mb_strlen($chave) > 255) {
-            return $this->recusa(
+        if (mb_strlen($key) > 255) {
+            return $this->refuse(
                 'A chave de idempotência passa de 255 caracteres.',
                 422,
             );
         }
 
-        $impressao = $this->impressaoDigital($request);
-        $reserva = $this->store->reserve($usuario->id, $chave, $impressao);
+        $fingerprint = $this->fingerprint($request);
+        $reserve = $this->store->reserve($user->id, $key, $fingerprint);
 
-        return match ($reserva->outcome) {
-            IdempotencyOutcome::Reserved => $this->processar($request, $next, $usuario->id, $chave, $impressao),
+        return match ($reserve->outcome) {
+            IdempotencyOutcome::Reserved => $this->process($request, $next, $user->id, $key, $fingerprint),
 
-            IdempotencyOutcome::Replayed => $this->repetir($reserva->status, $reserva->body),
+            IdempotencyOutcome::Replayed => $this->replay($reserve->status, $reserve->body),
 
-            IdempotencyOutcome::Conflict => $this->recusa(
+            IdempotencyOutcome::Conflict => $this->refuse(
                 'Esta chave de idempotência já foi usada para outra requisição.',
                 422,
             ),
 
-            IdempotencyOutcome::InFlight => $this->recusa(
+            IdempotencyOutcome::InFlight => $this->refuse(
                 'Uma requisição com esta chave de idempotência ainda está em andamento.',
                 409,
             ),
         };
     }
 
-    private function processar(Request $request, Closure $next, int $userId, string $chave, string $impressao): Response
+    private function process(Request $request, Closure $next, int $userId, string $key, string $fingerprint): Response
     {
-        $resposta = $next($request);
+        $response = $next($request);
 
         /*
          * Erro de servidor devolve a chave.
@@ -76,10 +76,10 @@ class IdempotentRequest
          * falha pelas 24 horas seguintes, que é o oposto do que ela existe para
          * fazer.
          */
-        if ($resposta->getStatusCode() >= 500) {
-            $this->store->release($userId, $chave);
+        if ($response->getStatusCode() >= 500) {
+            $this->store->release($userId, $key);
 
-            return $resposta;
+            return $response;
         }
 
         /*
@@ -88,21 +88,21 @@ class IdempotentRequest
          * idempotente exporta arquivo hoje; a guarda existe para o dia em que
          * alguém aplicar este middleware numa que exporte.
          */
-        if ($resposta->getContent() === false) {
-            $this->store->release($userId, $chave);
+        if ($response->getContent() === false) {
+            $this->store->release($userId, $key);
 
-            return $resposta;
+            return $response;
         }
 
         $this->store->store(
             $userId,
-            $chave,
-            $impressao,
-            $resposta->getStatusCode(),
-            $resposta->getContent(),
+            $key,
+            $fingerprint,
+            $response->getStatusCode(),
+            $response->getContent(),
         );
 
-        return $resposta;
+        return $response;
     }
 
     /**
@@ -112,16 +112,16 @@ class IdempotentRequest
      * precisa dele para funcionar — o corpo é idêntico —, mas precisa para
      * distinguir "pagou agora" de "já tinha pago" no log.
      */
-    private function repetir(int $status, string $body): Response
+    private function replay(int $status, string $body): Response
     {
         return response($body, $status)
             ->header('Content-Type', 'application/json')
             ->header('Idempotent-Replay', 'true');
     }
 
-    private function recusa(string $mensagem, int $status): Response
+    private function refuse(string $message, int $status): Response
     {
-        return response()->json(['message' => $mensagem], $status);
+        return response()->json(['message' => $message], $status);
     }
 
     /**
@@ -131,29 +131,29 @@ class IdempotentRequest
      * mesma chave em outra cobrança é outro pedido — e os dados enviados,
      * ordenados para que a ordem das chaves do JSON não mude a impressão.
      */
-    private function impressaoDigital(Request $request): string
+    private function fingerprint(Request $request): string
     {
         return hash('sha256', (string) json_encode([
             $request->method(),
             $request->path(),
-            $this->ordenar($request->all()),
+            $this->sort($request->all()),
         ]));
     }
 
     /**
-     * @param  array<mixed>  $dados
+     * @param  array<mixed>  $data
      * @return array<mixed>
      */
-    private function ordenar(array $dados): array
+    private function sort(array $data): array
     {
-        ksort($dados);
+        ksort($data);
 
-        foreach ($dados as $chave => $valor) {
-            if (is_array($valor)) {
-                $dados[$chave] = $this->ordenar($valor);
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = $this->sort($value);
             }
         }
 
-        return $dados;
+        return $data;
     }
 }

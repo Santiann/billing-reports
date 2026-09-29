@@ -26,13 +26,13 @@ class CustomerCsvImportTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    private function csv(string $conteudo, string $nome = 'clientes.csv'): UploadedFile
+    private function csv(string $content, string $nome = 'clientes.csv'): UploadedFile
     {
-        return UploadedFile::fake()->createWithContent($nome, $conteudo);
+        return UploadedFile::fake()->createWithContent($nome, $content);
     }
 
     /** Três válidas e duas inválidas — o critério de aceite do bloco. */
-    private function arquivoMisto(): UploadedFile
+    private function mixedFile(): UploadedFile
     {
         return $this->csv(<<<'CSV'
         nome;documento;email;status
@@ -60,7 +60,7 @@ class CustomerCsvImportTest extends TestCase
         $this->actingAsUser();
 
         $this->postJson('/api/customers/import?preview=1', [
-            'file' => $this->arquivoMisto(),
+            'file' => $this->mixedFile(),
         ])->assertOk();
 
         $this->assertSame(0, Customer::query()->count());
@@ -71,7 +71,7 @@ class CustomerCsvImportTest extends TestCase
         $this->actingAsUser();
 
         $this->postJson('/api/customers/import?preview=1', [
-            'file' => $this->arquivoMisto(),
+            'file' => $this->mixedFile(),
         ])
             ->assertOk()
             ->assertJsonPath('total_rows', 5)
@@ -85,16 +85,16 @@ class CustomerCsvImportTest extends TestCase
     {
         $this->actingAsUser();
 
-        $resposta = $this->postJson('/api/customers/import?preview=1', [
-            'file' => $this->arquivoMisto(),
+        $response = $this->postJson('/api/customers/import?preview=1', [
+            'file' => $this->mixedFile(),
         ])->assertOk();
 
-        $primeira = $resposta->json('sample.0');
+        $firstOne = $response->json('sample.0');
 
-        $this->assertSame('Comércio Silva LTDA', $primeira['name']);
-        $this->assertSame('12345678000190', $primeira['document']);
+        $this->assertSame('Comércio Silva LTDA', $firstOne['name']);
+        $this->assertSame('12345678000190', $firstOne['document']);
         // "ativo" do arquivo vira o valor que o banco guarda.
-        $this->assertSame('active', $primeira['status']);
+        $this->assertSame('active', $firstOne['status']);
     }
 
     // --- importação ---------------------------------------------------
@@ -103,39 +103,39 @@ class CustomerCsvImportTest extends TestCase
     {
         $this->actingAsUser();
 
-        $resposta = $this->postJson('/api/customers/import', [
-            'file' => $this->arquivoMisto(),
+        $response = $this->postJson('/api/customers/import', [
+            'file' => $this->mixedFile(),
         ])->assertOk();
 
         $this->assertSame(3, Customer::query()->count());
-        $resposta->assertJsonPath('imported_count', 3);
-        $resposta->assertJsonPath('error_count', 2);
+        $response->assertJsonPath('imported_count', 3);
+        $response->assertJsonPath('error_count', 2);
 
-        $erros = collect($resposta->json('errors'));
+        $errors = collect($response->json('errors'));
 
         // A linha é a do ARQUIVO, contando o cabeçalho: quem abre no Excel
         // precisa ir direto na linha certa.
-        $this->assertSame([4, 6], $erros->pluck('line')->all());
-        $this->assertStringContainsString('CPF', $erros[0]['messages'][0]);
-        $this->assertStringContainsString('e-mail', $erros[1]['messages'][0]);
+        $this->assertSame([4, 6], $errors->pluck('line')->all());
+        $this->assertStringContainsString('CPF', $errors[0]['messages'][0]);
+        $this->assertStringContainsString('e-mail', $errors[1]['messages'][0]);
     }
 
     public function test_the_error_carries_the_raw_row_for_the_user_to_recognize(): void
     {
         $this->actingAsUser();
 
-        $erro = $this->postJson('/api/customers/import', [
-            'file' => $this->arquivoMisto(),
+        $error = $this->postJson('/api/customers/import', [
+            'file' => $this->mixedFile(),
         ])->assertOk()->json('errors.0');
 
-        $this->assertSame('Documento Curto ME', $erro['values']['name']);
+        $this->assertSame('Documento Curto ME', $error['values']['name']);
     }
 
     public function test_a_document_repeated_within_the_file_is_inserted_once(): void
     {
         $this->actingAsUser();
 
-        $resposta = $this->postJson('/api/customers/import', [
+        $response = $this->postJson('/api/customers/import', [
             'file' => $this->csv(<<<'CSV'
             nome;documento;email;status
             Primeiro LTDA;12345678000190;primeiro@exemplo.test;ativo
@@ -144,10 +144,10 @@ class CustomerCsvImportTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, Customer::query()->count());
-        $resposta->assertJsonPath('imported_count', 1);
+        $response->assertJsonPath('imported_count', 1);
         $this->assertStringContainsString(
             'repetido',
-            mb_strtolower($resposta->json('errors.0.messages.0')),
+            mb_strtolower($response->json('errors.0.messages.0')),
         );
     }
 
@@ -156,7 +156,7 @@ class CustomerCsvImportTest extends TestCase
         $this->actingAsUser();
         Customer::factory()->create(['document' => '12345678000190']);
 
-        $resposta = $this->postJson('/api/customers/import', [
+        $response = $this->postJson('/api/customers/import', [
             'file' => $this->csv(<<<'CSV'
             nome;documento;email;status
             Novo LTDA;12345678000190;novo@exemplo.test;ativo
@@ -164,8 +164,8 @@ class CustomerCsvImportTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, Customer::query()->count());
-        $resposta->assertJsonPath('imported_count', 0);
-        $resposta->assertJsonPath('error_count', 1);
+        $response->assertJsonPath('imported_count', 0);
+        $response->assertJsonPath('error_count', 1);
     }
 
     // --- formato do arquivo -------------------------------------------
@@ -208,7 +208,7 @@ class CustomerCsvImportTest extends TestCase
             'file' => $this->csv("nome;telefone\nAcme LTDA;1199999999\n"),
         ])
             ->assertStatus(422)
-            ->assertJsonPath('errors.file.0', fn (string $mensagem) => str_contains($mensagem, 'documento'));
+            ->assertJsonPath('errors.file.0', fn (string $message) => str_contains($message, 'documento'));
     }
 
     public function test_refuses_a_file_that_is_not_csv(): void
@@ -230,20 +230,20 @@ class CustomerCsvImportTest extends TestCase
     {
         $this->actingAsUser();
 
-        $linhas = ['nome;documento;email;status'];
+        $rows = ['nome;documento;email;status'];
 
         for ($i = 1; $i <= 5_000; $i++) {
             $documento = str_pad((string) $i, 11, '0', STR_PAD_LEFT);
-            $linhas[] = "Cliente {$i};{$documento};cliente{$i}@exemplo.test;ativo";
+            $rows[] = "Cliente {$i};{$documento};cliente{$i}@exemplo.test;ativo";
         }
 
-        $antes = memory_get_peak_usage(true);
+        $before = memory_get_peak_usage(true);
 
         $this->postJson('/api/customers/import', [
-            'file' => $this->csv(implode("\n", $linhas)),
+            'file' => $this->csv(implode("\n", $rows)),
         ])->assertOk()->assertJsonPath('imported_count', 5_000);
 
-        $cresceu = (memory_get_peak_usage(true) - $antes) / 1024 / 1024;
+        $cresceu = (memory_get_peak_usage(true) - $before) / 1024 / 1024;
 
         $this->assertSame(5_000, Customer::query()->count());
         $this->assertLessThan(

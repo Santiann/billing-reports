@@ -42,25 +42,25 @@ final class IdempotencyStore
      */
     public function reserve(int $userId, string $key, string $fingerprint): IdempotencyReservation
     {
-        $agora = CarbonImmutable::now();
+        $now = CarbonImmutable::now();
 
         try {
             DB::table(self::TABLE)->insert([
                 'user_id' => $userId,
                 'key' => $key,
                 'fingerprint' => $fingerprint,
-                'created_at' => $agora,
-                'updated_at' => $agora,
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
 
-            $this->limparVencidas();
+            $this->clearExpired();
 
             return new IdempotencyReservation(IdempotencyOutcome::Reserved);
         } catch (UniqueConstraintViolationException) {
             // A chave já é de alguma requisição. Qual delas, o estado da linha diz.
         }
 
-        $registro = DB::table(self::TABLE)
+        $record = DB::table(self::TABLE)
             ->where('user_id', $userId)
             ->where('key', $key)
             ->first();
@@ -70,7 +70,7 @@ final class IdempotencyStore
          * as duas consultas. Nada está reservado, então a requisição segue — o
          * `store()` recria a linha no fim.
          */
-        if ($registro === null) {
+        if ($record === null) {
             return new IdempotencyReservation(IdempotencyOutcome::Reserved);
         }
 
@@ -82,13 +82,13 @@ final class IdempotencyStore
          * Vale também para a linha em voo que venceu — uma requisição que
          * morreu sem gravar resposta não pode travar a chave para sempre.
          */
-        if (CarbonImmutable::parse($registro->created_at)->addHours(self::TTL_HOURS)->isPast()) {
-            DB::table(self::TABLE)->where('id', $registro->id)->update([
+        if (CarbonImmutable::parse($record->created_at)->addHours(self::TTL_HOURS)->isPast()) {
+            DB::table(self::TABLE)->where('id', $record->id)->update([
                 'fingerprint' => $fingerprint,
                 'response_status' => null,
                 'response_body' => null,
-                'created_at' => $agora,
-                'updated_at' => $agora,
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
 
             return new IdempotencyReservation(IdempotencyOutcome::Reserved);
@@ -101,18 +101,18 @@ final class IdempotencyStore
          * que comparar contra nem o que devolver. A resposta honesta é "tente
          * de novo daqui a pouco", e é o 409 que impede as duas de processarem.
          */
-        if ($registro->response_status === null) {
+        if ($record->response_status === null) {
             return new IdempotencyReservation(IdempotencyOutcome::InFlight);
         }
 
-        if (! hash_equals($registro->fingerprint, $fingerprint)) {
+        if (! hash_equals($record->fingerprint, $fingerprint)) {
             return new IdempotencyReservation(IdempotencyOutcome::Conflict);
         }
 
         return new IdempotencyReservation(
             IdempotencyOutcome::Replayed,
-            (int) $registro->response_status,
-            (string) $registro->response_body,
+            (int) $record->response_status,
+            (string) $record->response_body,
         );
     }
 
@@ -125,7 +125,7 @@ final class IdempotencyStore
      */
     public function store(int $userId, string $key, string $fingerprint, int $status, string $body): void
     {
-        $agora = CarbonImmutable::now();
+        $now = CarbonImmutable::now();
 
         DB::table(self::TABLE)->updateOrInsert(
             ['user_id' => $userId, 'key' => $key],
@@ -133,8 +133,8 @@ final class IdempotencyStore
                 'fingerprint' => $fingerprint,
                 'response_status' => $status,
                 'response_body' => $body,
-                'created_at' => $agora,
-                'updated_at' => $agora,
+                'created_at' => $now,
+                'updated_at' => $now,
             ],
         );
     }
@@ -164,7 +164,7 @@ final class IdempotencyStore
      * Não é tarefa agendada porque este projeto não sobe worker: agendar seria
      * escrever uma limpeza que nunca roda.
      */
-    private function limparVencidas(): void
+    private function clearExpired(): void
     {
         Lottery::odds(1, 200)->winner(function (): void {
             DB::table(self::TABLE)

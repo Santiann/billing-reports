@@ -26,11 +26,11 @@ class ObservabilityTest extends TestCase
 
     public function test_the_response_carries_a_request_identifier(): void
     {
-        $identificador = $this->getJson('/api/health')
+        $identifier = $this->getJson('/api/health')
             ->assertOk()
             ->headers->get('X-Request-Id');
 
-        $this->assertNotEmpty($identificador);
+        $this->assertNotEmpty($identifier);
     }
 
     /**
@@ -58,15 +58,15 @@ class ObservabilityTest extends TestCase
      */
     public function test_the_log_line_is_json_with_the_identifier_and_the_user(): void
     {
-        $arquivo = tempnam(sys_get_temp_dir(), 'log-json-');
+        $file = tempnam(sys_get_temp_dir(), 'log-json-');
 
         config([
             'logging.default' => 'json',
-            'logging.channels.json.with.stream' => $arquivo,
+            'logging.channels.json.with.stream' => $file,
         ]);
 
-        $usuario = User::factory()->create();
-        Sanctum::actingAs($usuario);
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
 
         $this->withHeader('X-Request-Id', 'id-de-teste')
             ->postJson('/api/billings', [])
@@ -74,16 +74,16 @@ class ObservabilityTest extends TestCase
 
         Log::info('mensagem de prova');
 
-        $linhas = array_filter(explode("\n", (string) file_get_contents($arquivo)));
-        $ultima = json_decode((string) end($linhas), true);
+        $rows = array_filter(explode("\n", (string) file_get_contents($file)));
+        $ultima = json_decode((string) end($rows), true);
 
-        @unlink($arquivo);
+        @unlink($file);
 
         $this->assertIsArray($ultima, 'A linha de log não é JSON.');
         $this->assertSame('mensagem de prova', $ultima['message']);
         $this->assertSame('INFO', $ultima['level_name']);
         $this->assertSame('id-de-teste', $ultima['context']['request_id']);
-        $this->assertSame($usuario->id, $ultima['context']['user_id']);
+        $this->assertSame($user->id, $ultima['context']['user_id']);
         $this->assertSame('POST', $ultima['context']['method']);
         $this->assertSame('api/billings', $ultima['context']['path']);
     }
@@ -91,11 +91,11 @@ class ObservabilityTest extends TestCase
     /** Tentativa de login falha entra no log: é o rastro de força bruta. */
     public function test_a_failed_login_attempt_is_logged(): void
     {
-        $arquivo = tempnam(sys_get_temp_dir(), 'log-json-');
+        $file = tempnam(sys_get_temp_dir(), 'log-json-');
 
         config([
             'logging.default' => 'json',
-            'logging.channels.json.with.stream' => $arquivo,
+            'logging.channels.json.with.stream' => $file,
         ]);
 
         User::factory()->create(['email' => 'admin@billing.test']);
@@ -105,11 +105,11 @@ class ObservabilityTest extends TestCase
             'password' => 'errada',
         ])->assertUnauthorized();
 
-        $conteudo = (string) file_get_contents($arquivo);
-        @unlink($arquivo);
+        $content = (string) file_get_contents($file);
+        @unlink($file);
 
-        $this->assertStringContainsString('login.falhou', $conteudo);
-        $this->assertStringContainsString('admin@billing.test', $conteudo);
+        $this->assertStringContainsString('login.failed', $content);
+        $this->assertStringContainsString('admin@billing.test', $content);
     }
 
     // --- health -------------------------------------------------------

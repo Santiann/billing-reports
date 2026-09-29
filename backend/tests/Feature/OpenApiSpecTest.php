@@ -52,11 +52,11 @@ class OpenApiSpecTest extends TestCase
     /** @return array<string, mixed> */
     private function spec(): array
     {
-        $caminho = resource_path('openapi.yaml');
+        $path = resource_path('openapi.yaml');
 
-        $this->assertFileExists($caminho, 'A spec OpenAPI não existe.');
+        $this->assertFileExists($path, 'A spec OpenAPI não existe.');
 
-        return Yaml::parseFile($caminho);
+        return Yaml::parseFile($path);
     }
 
     /**
@@ -73,12 +73,12 @@ class OpenApiSpecTest extends TestCase
 
         /** @var RegisteredRoute $rota */
         foreach (Route::getRoutes() as $rota) {
-            foreach ($rota->methods() as $metodo) {
-                if (in_array($metodo, ['HEAD', 'OPTIONS'], true)) {
+            foreach ($rota->methods() as $method) {
+                if (in_array($method, ['HEAD', 'OPTIONS'], true)) {
                     continue;
                 }
 
-                $rotas[] = $metodo.' /'.ltrim($rota->uri(), '/');
+                $rotas[] = $method.' /'.ltrim($rota->uri(), '/');
             }
         }
 
@@ -94,10 +94,10 @@ class OpenApiSpecTest extends TestCase
     {
         $operacoes = [];
 
-        foreach ($this->spec()['paths'] as $caminho => $metodos) {
-            foreach (array_keys($metodos) as $metodo) {
-                if (in_array($metodo, self::VERBOS, true)) {
-                    $operacoes[] = strtoupper($metodo).' '.$caminho;
+        foreach ($this->spec()['paths'] as $path => $metodos) {
+            foreach (array_keys($metodos) as $method) {
+                if (in_array($method, self::VERBOS, true)) {
+                    $operacoes[] = strtoupper($method).' '.$path;
                 }
             }
         }
@@ -114,10 +114,10 @@ class OpenApiSpecTest extends TestCase
     {
         $operacoes = [];
 
-        foreach ($this->spec()['paths'] as $caminho => $metodos) {
-            foreach ($metodos as $metodo => $operacao) {
-                if (in_array($metodo, self::VERBOS, true)) {
-                    $operacoes[] = [strtoupper($metodo).' '.$caminho, $operacao];
+        foreach ($this->spec()['paths'] as $path => $metodos) {
+            foreach ($metodos as $method => $operation) {
+                if (in_array($method, self::VERBOS, true)) {
+                    $operacoes[] = [strtoupper($method).' '.$path, $operation];
                 }
             }
         }
@@ -129,16 +129,16 @@ class OpenApiSpecTest extends TestCase
     {
         $documentadas = $this->operacoesDaSpec();
 
-        $faltando = array_diff(
+        $missing = array_diff(
             $this->rotasRegistradas(),
             $documentadas,
             array_keys(self::FORA_DA_SPEC),
         );
 
-        $this->assertSame([], array_values($faltando), sprintf(
+        $this->assertSame([], array_values($missing), sprintf(
             "Rota registrada e não documentada:\n  %s\n"
             .'Documente na spec, ou declare em FORA_DA_SPEC por que ela não entra.',
-            implode("\n  ", $faltando),
+            implode("\n  ", $missing),
         ));
     }
 
@@ -166,11 +166,11 @@ class OpenApiSpecTest extends TestCase
      */
     public function test_every_operation_declares_responses(): void
     {
-        foreach ($this->operacoes() as [$onde, $operacao]) {
-            $this->assertNotEmpty($operacao['summary'] ?? null, "{$onde} sem summary.");
-            $this->assertNotEmpty($operacao['responses'] ?? null, "{$onde} sem respostas.");
+        foreach ($this->operacoes() as [$onde, $operation]) {
+            $this->assertNotEmpty($operation['summary'] ?? null, "{$onde} sem summary.");
+            $this->assertNotEmpty($operation['responses'] ?? null, "{$onde} sem respostas.");
             $this->assertNotEmpty(
-                $operacao['tags'] ?? null,
+                $operation['tags'] ?? null,
                 "{$onde} sem tag: o renderizador agruparia solto.",
             );
         }
@@ -182,15 +182,15 @@ class OpenApiSpecTest extends TestCase
      */
     public function test_an_authenticated_operation_documents_the_401(): void
     {
-        foreach ($this->operacoes() as [$onde, $operacao]) {
+        foreach ($this->operacoes() as [$onde, $operation]) {
             // `security: []` declara operação pública, como o login.
-            if (($operacao['security'] ?? null) === []) {
+            if (($operation['security'] ?? null) === []) {
                 continue;
             }
 
             $this->assertArrayHasKey(
                 401,
-                $operacao['responses'],
+                $operation['responses'],
                 "{$onde} é autenticada e não documenta o 401.",
             );
         }
@@ -203,17 +203,17 @@ class OpenApiSpecTest extends TestCase
      */
     public function test_the_pdf_cap_is_documented(): void
     {
-        $operacao = $this->spec()['paths']['/api/reports/billings/pdf']['get'];
+        $operation = $this->spec()['paths']['/api/reports/billings/pdf']['get'];
 
-        $this->assertArrayHasKey(422, $operacao['responses']);
+        $this->assertArrayHasKey(422, $operation['responses']);
 
-        $exemplo = $operacao['responses'][422]['content']['application/json']['example'] ?? [];
+        $example = $operation['responses'][422]['content']['application/json']['example'] ?? [];
 
-        $this->assertArrayHasKey('limit', $exemplo, 'O 422 do PDF precisa mostrar o limite.');
-        $this->assertArrayHasKey('count', $exemplo, 'O 422 do PDF precisa mostrar a contagem.');
+        $this->assertArrayHasKey('limit', $example, 'O 422 do PDF precisa mostrar o limite.');
+        $this->assertArrayHasKey('count', $example, 'O 422 do PDF precisa mostrar a contagem.');
         $this->assertSame(
             config('reports.pdf_max_rows'),
-            $exemplo['limit'],
+            $example['limit'],
             'O limite do exemplo divergiu de config/reports.php.',
         );
     }
@@ -224,21 +224,21 @@ class OpenApiSpecTest extends TestCase
      */
     public function test_the_success_responses_carry_an_example(): void
     {
-        foreach ($this->operacoes() as [$onde, $operacao]) {
-            foreach ($operacao['responses'] as $status => $resposta) {
-                if ($status < 200 || $status >= 300 || ! isset($resposta['content'])) {
+        foreach ($this->operacoes() as [$onde, $operation]) {
+            foreach ($operation['responses'] as $status => $response) {
+                if ($status < 200 || $status >= 300 || ! isset($response['content'])) {
                     continue;
                 }
 
-                foreach ($resposta['content'] as $tipo => $conteudo) {
+                foreach ($response['content'] as $type => $content) {
                     // Binário não tem exemplo em JSON: o PDF declara o formato,
                     // e é o que há para declarar.
-                    if (! str_contains($tipo, 'json')) {
+                    if (! str_contains($type, 'json')) {
                         continue;
                     }
 
                     $this->assertTrue(
-                        isset($conteudo['example']) || isset($conteudo['examples']),
+                        isset($content['example']) || isset($content['examples']),
                         "{$onde} responde {$status} sem exemplo.",
                     );
                 }

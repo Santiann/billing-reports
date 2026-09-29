@@ -12,21 +12,21 @@ class BillingImportController extends Controller
 {
     public function __invoke(ImportRequest $request, BillingCsvImport $import): JsonResponse
     {
-        $caminho = $request->file('file')->getRealPath();
+        $path = $request->file('file')->getRealPath();
 
         try {
-            $relatorio = $request->isPreview()
-                ? $import->preview($caminho)
-                : $import->import($caminho);
-        } catch (RuntimeException $erro) {
+            $report = $request->isPreview()
+                ? $import->preview($path)
+                : $import->import($path);
+        } catch (RuntimeException $error) {
             // Cabeçalho sem as colunas exigidas é erro do arquivo inteiro, não
             // de uma linha: não há o que importar parcialmente.
             return response()->json([
-                'message' => $erro->getMessage(),
-                'errors' => ['file' => [$erro->getMessage()]],
+                'message' => $error->getMessage(),
+                'errors' => ['file' => [$error->getMessage()]],
             ], 422);
         }
 
-        return response()->json($relatorio->toArray());
+        return response()->json($report->toArray());
     }
 }

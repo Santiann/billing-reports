@@ -25,9 +25,9 @@ class RequestId
 
         $request->headers->set(self::HEADER, $id);
 
-        $resposta = $next($request);
-        $resposta->headers->set(self::HEADER, $id);
+        $response = $next($request);
+        $response->headers->set(self::HEADER, $id);
 
-        return $resposta;
+        return $response;
     }
 }

@@ -34,13 +34,13 @@ class BillingAuditTrailTest extends TestCase
 
     private function comoUsuario(string $nome = 'Marina Costa', UserRole $perfil = UserRole::Admin): User
     {
-        $usuario = User::factory()->create(['name' => $nome, 'role' => $perfil]);
-        Sanctum::actingAs($usuario);
+        $user = User::factory()->create(['name' => $nome, 'role' => $perfil]);
+        Sanctum::actingAs($user);
 
-        return $usuario;
+        return $user;
     }
 
-    private function cobranca(): Billing
+    private function billing(): Billing
     {
         // Vencida há 30 dias a 2% ao mês: pagar hoje dá 1.020,00.
         return Billing::factory()->create([
@@ -52,17 +52,17 @@ class BillingAuditTrailTest extends TestCase
         ]);
     }
 
-    /** @param array<string, mixed> $mudancas */
-    private function editar(Billing $cobranca, array $mudancas)
+    /** @param array<string, mixed> $changes */
+    private function editar(Billing $billing, array $changes)
     {
-        return $this->putJson("/api/billings/{$cobranca->id}", [
-            'customer_id' => $cobranca->customer_id,
-            'description' => $cobranca->description,
-            'original_amount' => $cobranca->original_amount,
-            'monthly_interest_rate' => $cobranca->monthly_interest_rate,
-            'issue_date' => $cobranca->issue_date->toDateString(),
-            'due_date' => $cobranca->due_date->toDateString(),
-            ...$mudancas,
+        return $this->putJson("/api/billings/{$billing->id}", [
+            'customer_id' => $billing->customer_id,
+            'description' => $billing->description,
+            'original_amount' => $billing->original_amount,
+            'monthly_interest_rate' => $billing->monthly_interest_rate,
+            'issue_date' => $billing->issue_date->toDateString(),
+            'due_date' => $billing->due_date->toDateString(),
+            ...$changes,
         ]);
     }
 
@@ -80,20 +80,20 @@ class BillingAuditTrailTest extends TestCase
      */
     private function assertMudancas(array $esperado, array $gravado): void
     {
-        $ordenar = function (array $valores) use (&$ordenar): array {
-            ksort($valores);
+        $ordenar = function (array $values) use (&$ordenar): array {
+            ksort($values);
 
-            return array_map(fn ($v) => is_array($v) ? $ordenar($v) : $v, $valores);
+            return array_map(fn ($v) => is_array($v) ? $ordenar($v) : $v, $values);
         };
 
         $this->assertSame($ordenar($esperado), $ordenar($gravado));
     }
 
     /** @return Collection<int, BillingAudit> */
-    private function trilha(Billing $cobranca): Collection
+    private function trilha(Billing $billing): Collection
     {
         return BillingAudit::query()
-            ->where('billing_id', $cobranca->id)
+            ->where('billing_id', $billing->id)
             ->orderBy('id')
             ->get();
     }
@@ -103,19 +103,19 @@ class BillingAuditTrailTest extends TestCase
     public function test_an_edit_records_who_what_and_when(): void
     {
         $this->travelTo(self::AGORA);
-        $usuario = $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $user = $this->comoUsuario();
+        $billing = $this->billing();
 
-        $this->editar($cobranca, [
+        $this->editar($billing, [
             'description' => 'Mensalidade de maio — corrigida',
             'due_date' => '2026-05-20',
         ])->assertOk();
 
-        $trilha = $this->trilha($cobranca);
+        $trilha = $this->trilha($billing);
 
         $this->assertCount(1, $trilha);
         $this->assertSame('updated', $trilha[0]->event->value);
-        $this->assertSame($usuario->id, $trilha[0]->user_id);
+        $this->assertSame($user->id, $trilha[0]->user_id);
         $this->assertSame(self::AGORA, $trilha[0]->created_at->toDateTimeString());
         $this->assertMudancas([
             'description' => ['from' => 'Mensalidade de maio', 'to' => 'Mensalidade de maio — corrigida'],
@@ -134,26 +134,26 @@ class BillingAuditTrailTest extends TestCase
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
-        $this->editar($cobranca, [
+        $this->editar($billing, [
             'original_amount' => '1000',
             'monthly_interest_rate' => '0.02',
             'description' => 'Outra descrição',
         ])->assertOk();
 
-        $this->assertSame(['description'], array_keys($this->trilha($cobranca)[0]->changes));
+        $this->assertSame(['description'], array_keys($this->trilha($billing)[0]->changes));
     }
 
     public function test_an_edit_that_changes_nothing_records_nothing(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
-        $this->editar($cobranca, [])->assertOk();
+        $this->editar($billing, [])->assertOk();
 
-        $this->assertCount(0, $this->trilha($cobranca));
+        $this->assertCount(0, $this->trilha($billing));
     }
 
     // --- pagamento ----------------------------------------------------
@@ -168,16 +168,16 @@ class BillingAuditTrailTest extends TestCase
     public function test_a_payment_enters_the_trail_with_the_frozen_amounts(): void
     {
         $this->travelTo(self::AGORA);
-        $usuario = $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $user = $this->comoUsuario();
+        $billing = $this->billing();
 
-        $this->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
+        $this->postJson("/api/billings/{$billing->id}/payment")->assertOk();
 
-        $trilha = $this->trilha($cobranca);
+        $trilha = $this->trilha($billing);
 
         $this->assertCount(1, $trilha);
         $this->assertSame('paid', $trilha[0]->event->value);
-        $this->assertSame($usuario->id, $trilha[0]->user_id);
+        $this->assertSame($user->id, $trilha[0]->user_id);
         $this->assertMudancas([
             'status' => ['from' => 'pending', 'to' => 'paid'],
             'payment_date' => ['from' => null, 'to' => '2026-06-15'],
@@ -191,14 +191,14 @@ class BillingAuditTrailTest extends TestCase
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
-        $chave = ['Idempotency-Key' => '0c5e1f7a-2b8d-4e3c-9a61-7d4f2e8b1c05'];
+        $key = ['Idempotency-Key' => '0c5e1f7a-2b8d-4e3c-9a61-7d4f2e8b1c05'];
 
-        $this->withHeaders($chave)->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
-        $this->withHeaders($chave)->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
+        $this->withHeaders($key)->postJson("/api/billings/{$billing->id}/payment")->assertOk();
+        $this->withHeaders($key)->postJson("/api/billings/{$billing->id}/payment")->assertOk();
 
-        $this->assertCount(1, $this->trilha($cobranca));
+        $this->assertCount(1, $this->trilha($billing));
     }
 
     // --- o que não entra ----------------------------------------------
@@ -206,7 +206,7 @@ class BillingAuditTrailTest extends TestCase
     public function test_a_refused_operation_does_not_enter_the_trail(): void
     {
         $this->travelTo(self::AGORA);
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
         $this->comoUsuario();
 
@@ -214,16 +214,16 @@ class BillingAuditTrailTest extends TestCase
         // esse pagamento entra na trilha — legitimamente. Por isso a contagem
         // é tomada depois da preparação, e não comparada com zero.
         $paga = Billing::factory()->paid()->create();
-        $antes = BillingAudit::query()->count();
+        $before = BillingAudit::query()->count();
 
         // Recusada pela validação: cobrança paga não se edita.
         $this->editar($paga, ['description' => 'Tentativa'])->assertUnprocessable();
 
         // Recusada pelo perfil.
         $this->comoUsuario('Leitor', UserRole::Viewer);
-        $this->postJson("/api/billings/{$cobranca->id}/payment")->assertForbidden();
+        $this->postJson("/api/billings/{$billing->id}/payment")->assertForbidden();
 
-        $this->assertSame($antes, BillingAudit::query()->count());
+        $this->assertSame($before, BillingAudit::query()->count());
     }
 
     // --- atomicidade --------------------------------------------------
@@ -239,27 +239,27 @@ class BillingAuditTrailTest extends TestCase
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
         BillingAudit::creating(fn () => throw new RuntimeException('Falha simulada ao gravar a trilha.'));
 
-        $this->editar($cobranca, ['description' => 'Não pode ficar'])->assertServerError();
+        $this->editar($billing, ['description' => 'Não pode ficar'])->assertServerError();
 
-        $this->assertSame('Mensalidade de maio', $cobranca->fresh()->description);
+        $this->assertSame('Mensalidade de maio', $billing->fresh()->description);
     }
 
     public function test_without_the_trail_the_payment_does_not_happen(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
         BillingAudit::creating(fn () => throw new RuntimeException('Falha simulada ao gravar a trilha.'));
 
-        $this->postJson("/api/billings/{$cobranca->id}/payment")->assertServerError();
+        $this->postJson("/api/billings/{$billing->id}/payment")->assertServerError();
 
-        $this->assertSame('pending', $cobranca->fresh()->status->value);
-        $this->assertNull($cobranca->fresh()->paid_amount);
+        $this->assertSame('pending', $billing->fresh()->status->value);
+        $this->assertNull($billing->fresh()->paid_amount);
     }
 
     // --- imutabilidade ------------------------------------------------
@@ -269,24 +269,24 @@ class BillingAuditTrailTest extends TestCase
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
-        $this->editar($cobranca, ['description' => 'Corrigida'])->assertOk();
+        $billing = $this->billing();
+        $this->editar($billing, ['description' => 'Corrigida'])->assertOk();
 
         $this->expectException(LogicException::class);
 
-        $this->trilha($cobranca)[0]->update(['changes' => []]);
+        $this->trilha($billing)[0]->update(['changes' => []]);
     }
 
     public function test_the_trail_cannot_be_deleted(): void
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
-        $this->editar($cobranca, ['description' => 'Corrigida'])->assertOk();
+        $billing = $this->billing();
+        $this->editar($billing, ['description' => 'Corrigida'])->assertOk();
 
         $this->expectException(LogicException::class);
 
-        $this->trilha($cobranca)[0]->delete();
+        $this->trilha($billing)[0]->delete();
     }
 
     /**
@@ -296,11 +296,11 @@ class BillingAuditTrailTest extends TestCase
     public function test_a_change_with_no_authenticated_user_is_recorded_without_an_author(): void
     {
         $this->travelTo(self::AGORA);
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
-        $cobranca->update(['description' => 'Alterada pelo console']);
+        $billing->update(['description' => 'Alterada pelo console']);
 
-        $trilha = $this->trilha($cobranca);
+        $trilha = $this->trilha($billing);
 
         $this->assertCount(1, $trilha);
         $this->assertNull($trilha[0]->user_id);
@@ -312,12 +312,12 @@ class BillingAuditTrailTest extends TestCase
     {
         $this->travelTo(self::AGORA);
         $this->comoUsuario();
-        $cobranca = $this->cobranca();
+        $billing = $this->billing();
 
-        $this->editar($cobranca, ['due_date' => '2026-05-20'])->assertOk();
-        $this->postJson("/api/billings/{$cobranca->id}/payment")->assertOk();
+        $this->editar($billing, ['due_date' => '2026-05-20'])->assertOk();
+        $this->postJson("/api/billings/{$billing->id}/payment")->assertOk();
 
-        $this->getJson("/api/billings/{$cobranca->id}/audit")
+        $this->getJson("/api/billings/{$billing->id}/audit")
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.event', 'paid')
@@ -356,9 +356,9 @@ class BillingAuditTrailTest extends TestCase
 
         $encontrados = [];
 
-        foreach ((new Finder())->files()->in(app_path())->name('*.php') as $arquivo) {
-            if (preg_match($padrao, $arquivo->getContents()) === 1) {
-                $encontrados[] = $arquivo->getRelativePathname();
+        foreach ((new Finder())->files()->in(app_path())->name('*.php') as $file) {
+            if (preg_match($padrao, $file->getContents()) === 1) {
+                $encontrados[] = $file->getRelativePathname();
             }
         }
 

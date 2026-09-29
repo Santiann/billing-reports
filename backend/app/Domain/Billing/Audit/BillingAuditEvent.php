@@ -26,11 +26,11 @@ enum BillingAuditEvent: string
      * paga é pagamento, paga que volta a pendente é estorno, venha de onde
      * vier. Assim nenhum caminho novo consegue rotular errado.
      */
-    public static function fromTransition(?BillingStatus $antes, ?BillingStatus $depois): self
+    public static function fromTransition(?BillingStatus $before, ?BillingStatus $after): self
     {
         return match (true) {
-            $antes === BillingStatus::Pending && $depois === BillingStatus::Paid => self::Paid,
-            $antes === BillingStatus::Paid && $depois === BillingStatus::Pending => self::Reversed,
+            $before === BillingStatus::Pending && $after === BillingStatus::Paid => self::Paid,
+            $before === BillingStatus::Paid && $after === BillingStatus::Pending => self::Reversed,
             default => self::Updated,
         };
     }

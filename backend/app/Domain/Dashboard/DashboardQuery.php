@@ -9,174 +9,176 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
- * As duas consultas do dashboard.
+ * The dashboard's two queries.
  *
- * Tudo agrega no banco. Nenhuma delas traz linha para o PHP somar — sobre dois
- * milhões de cobranças isso não seria lento, seria impossível.
+ * Everything aggregates in the database. Neither one brings rows into PHP to be
+ * summed — over two million billings that would not be slow, it would be
+ * impossible.
  *
- * Os juros saem do InterestCalculator, como em todo o resto: o dashboard não
- * pode discordar do relatório sobre o mesmo recorte, e a única forma de
- * garantir isso é não ter uma segunda fórmula.
+ * Interest comes from InterestCalculator, as everywhere else: the dashboard
+ * cannot disagree with the report about the same scope, and the only way to
+ * guarantee that is to not have a second formula.
  */
 final class DashboardQuery
 {
-    /** Meses exibidos na série, incluindo o corrente. */
-    private const MESES = 12;
+    /** Months shown in the series, including the current one. */
+    private const MONTHS = 12;
 
-    private readonly CarbonImmutable $hoje;
+    private readonly CarbonImmutable $today;
 
     private readonly InterestCalculator $calculator;
 
-    public function __construct(CarbonInterface|string|null $hoje = null)
+    public function __construct(CarbonInterface|string|null $today = null)
     {
-        $this->hoje = $hoje === null
+        $this->today = $today === null
             ? CarbonImmutable::now()->startOfDay()
-            : CarbonImmutable::parse($hoje)->startOfDay();
+            : CarbonImmutable::parse($today)->startOfDay();
 
-        $this->calculator = new InterestCalculator($this->hoje);
+        $this->calculator = new InterestCalculator($this->today);
     }
 
     /**
-     * Indicadores do mês corrente, recortado por VENCIMENTO.
+     * Indicators for the current month, scoped by DUE DATE.
      *
-     * Vencimento e não emissão: o que interessa a quem abre o sistema é o que
-     * vence agora — o que entrou, o que falta entrar e o que já venceu.
+     * Due date and not issue date: what matters to whoever opens the system is
+     * what falls due now — what came in, what is still to come in, and what has
+     * already gone past due.
      *
      * @return array<string, mixed>
      */
     public function period(): array
     {
-        $inicio = $this->hoje->startOfMonth();
-        $fim = $inicio->addMonth();
+        $start = $this->today->startOfMonth();
+        $end = $start->addMonth();
 
-        $pendente = BillingStatus::Pending->value;
-        $atualizado = $this->calculator->updatedAmountSql();
+        $pending = BillingStatus::Pending->value;
+        $updated = $this->calculator->updatedAmountSql();
 
         /*
-         * O valor atualizado é calculado UMA vez por linha, numa derivada, e os
-         * juros saem dele por subtração.
+         * The updated amount is computed ONCE per row, in a derived table, and
+         * interest comes out of it by subtraction.
          *
-         * A versão direta somava `updatedAmountSql()` e `interestAmountSql()`
-         * lado a lado, e as duas carregam o mesmo POW — o MySQL o executava
-         * duas vezes em cada uma das 55.000 linhas do mês. Medido: 0,87s
-         * contra 0,45s.
+         * The direct version summed `updatedAmountSql()` and
+         * `interestAmountSql()` side by side, and both carry the same POW —
+         * MySQL ran it twice on each of the month's 55,000 rows. Measured:
+         * 0.87s against 0.45s.
          *
-         * A subtração vale porque a soma é só sobre PENDENTE, e para pendente
-         * juros é exatamente valor atualizado menos original. Em cobrança paga
-         * não valeria — lá os juros são a coluna congelada — e por isso ela
-         * entra com zero.
+         * The subtraction holds because the sum only covers PENDING, and for a
+         * pending billing interest is exactly updated amount minus original. It
+         * would not hold for a paid one — there interest is the frozen column —
+         * which is why a paid billing enters as zero.
          */
-        $linha = DB::table(DB::raw('('
+        $row = DB::table(DB::raw('('
             .'SELECT original_amount, paid_amount,'
-            ." CASE WHEN status = '{$pendente}' THEN {$atualizado} ELSE NULL END AS a_receber,"
-            ." {$this->calculator->overdueSql()} AS vencida"
+            ." CASE WHEN status = '{$pending}' THEN {$updated} ELSE NULL END AS receivable,"
+            ." {$this->calculator->overdueSql()} AS overdue"
             .' FROM billings'
             .' WHERE due_date >= ? AND due_date < ?'
-            .') AS mes'))
-            ->setBindings([$inicio->toDateString(), $fim->toDateString()])
+            .') AS month'))
+            ->setBindings([$start->toDateString(), $end->toDateString()])
             ->selectRaw(
                 'COUNT(*) AS total,'
                 .' COALESCE(SUM(original_amount), 0) AS original,'
-                // Recebido sai da coluna congelada, nunca de recálculo.
-                .' COALESCE(SUM(paid_amount), 0) AS recebido,'
-                .' COALESCE(SUM(a_receber), 0) AS a_receber,'
-                .' COALESCE(SUM(a_receber - original_amount), 0) AS juros,'
-                .' COALESCE(SUM(vencida), 0) AS vencidas',
+                // Received comes from the frozen column, never from a recompute.
+                .' COALESCE(SUM(paid_amount), 0) AS received,'
+                .' COALESCE(SUM(receivable), 0) AS receivable,'
+                .' COALESCE(SUM(receivable - original_amount), 0) AS interest,'
+                .' COALESCE(SUM(overdue), 0) AS overdue_count',
             )
             ->first();
 
         return [
-            'label' => $this->rotuloDoMes($inicio),
-            'start_date' => $inicio->toDateString(),
-            'end_date' => $fim->subDay()->toDateString(),
-            'count' => (int) $linha->total,
-            'original_amount' => $this->money($linha->original),
-            'received_amount' => $this->money($linha->recebido),
-            'pending_amount' => $this->money($linha->a_receber),
-            'interest_amount' => $this->money($linha->juros),
-            'overdue_count' => (int) $linha->vencidas,
+            'label' => $this->monthLabel($start),
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->subDay()->toDateString(),
+            'count' => (int) $row->total,
+            'original_amount' => $this->money($row->original),
+            'received_amount' => $this->money($row->received),
+            'pending_amount' => $this->money($row->receivable),
+            'interest_amount' => $this->money($row->interest),
+            'overdue_count' => (int) $row->overdue_count,
         ];
     }
 
     /**
-     * Faturado e recebido nos últimos doze meses, por vencimento.
+     * Billed and received over the last twelve months, by due date.
      *
-     * Doze faixas estreitas unidas por UNION ALL, e não um GROUP BY sobre o ano
-     * inteiro. A diferença não é de estilo, é de ordem de grandeza — medido
-     * contra 2.000.000 de cobranças:
+     * Twelve narrow ranges joined by UNION ALL, not a GROUP BY over the whole
+     * year. The difference is not stylistic, it is an order of magnitude —
+     * measured against 2,000,000 billings:
      *
-     *     GROUP BY DATE_FORMAT(due_date, '%Y-%m')  ->  1,75s
-     *     doze faixas em UNION ALL                 ->  0,33s
+     *     GROUP BY DATE_FORMAT(due_date, '%Y-%m')  ->  1.75s
+     *     twelve ranges in UNION ALL               ->  0.33s
      *
-     * O motivo está no EXPLAIN: a função sobre a coluna impede o MySQL de
-     * agrupar na ordem do índice, e ele monta tabela temporária com o ano
-     * inteiro (`Using temporary`). Cada faixa isolada é um range simples que o
-     * índice de cobertura responde sem tocar na tabela.
+     * The reason is in the EXPLAIN: the function over the column stops MySQL
+     * from grouping in index order, and it builds a temporary table with the
+     * whole year (`Using temporary`). Each isolated range is a simple range the
+     * covering index answers without touching the table.
      *
-     * `SUM(paid_amount)` soma direto, sem filtrar por status, porque valor pago
-     * só existe em cobrança paga — as duas formas dão o mesmo número e esta é
-     * mais curta. A equivalência não é suposição: há teste afirmando, nos dois
-     * sentidos, que nenhuma linha tem valor pago sem estar paga nem o
-     * contrário.
+     * `SUM(paid_amount)` sums directly, without filtering by status, because a
+     * paid amount only exists on a paid billing — both forms give the same
+     * number and this one is shorter. The equivalence is not an assumption:
+     * there is a test asserting, in both directions, that no row has a paid
+     * amount without being paid nor the other way round.
      *
      * @return array<int, array<string, mixed>>
      */
     public function monthly(): array
     {
-        $primeiro = $this->hoje->startOfMonth()->subMonths(self::MESES - 1);
+        $first = $this->today->startOfMonth()->subMonths(self::MONTHS - 1);
 
-        $partes = [];
-        $valores = [];
+        $parts = [];
+        $values = [];
 
-        for ($i = 0; $i < self::MESES; $i++) {
-            $mes = $primeiro->addMonths($i);
+        for ($i = 0; $i < self::MONTHS; $i++) {
+            $month = $first->addMonths($i);
 
-            $partes[] = 'SELECT ? AS mes, COUNT(*) AS total,'
+            $parts[] = 'SELECT ? AS month, COUNT(*) AS total,'
                 .' COALESCE(SUM(original_amount), 0) AS original,'
-                .' COALESCE(SUM(paid_amount), 0) AS recebido'
+                .' COALESCE(SUM(paid_amount), 0) AS received'
                 .' FROM billings WHERE due_date >= ? AND due_date < ?';
 
-            $valores[] = $mes->format('Y-m');
-            $valores[] = $mes->toDateString();
-            $valores[] = $mes->addMonth()->toDateString();
+            $values[] = $month->format('Y-m');
+            $values[] = $month->toDateString();
+            $values[] = $month->addMonth()->toDateString();
         }
 
-        $linhas = DB::select(implode(' UNION ALL ', $partes), $valores);
+        $rows = DB::select(implode(' UNION ALL ', $parts), $values);
 
-        return array_map(fn (object $linha) => [
-            'month' => $linha->mes,
-            'label' => $this->rotuloCurto($linha->mes),
-            'count' => (int) $linha->total,
-            'original_amount' => $this->money($linha->original),
-            'received_amount' => $this->money($linha->recebido),
-        ], $linhas);
+        return array_map(fn (object $row) => [
+            'month' => $row->month,
+            'label' => $this->shortLabel($row->month),
+            'count' => (int) $row->total,
+            'original_amount' => $this->money($row->original),
+            'received_amount' => $this->money($row->received),
+        ], $rows);
     }
 
-    private function rotuloDoMes(CarbonImmutable $mes): string
+    private function monthLabel(CarbonImmutable $month): string
     {
-        $meses = [
+        $months = [
             1 => 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
         ];
 
-        return $meses[$mes->month].' de '.$mes->year;
+        return $months[$month->month].' de '.$month->year;
     }
 
-    /** "2026-09" vira "set/26", que é o que cabe embaixo de uma barra. */
-    private function rotuloCurto(string $mes): string
+    /** "2026-09" becomes "set/26", which is what fits under a bar. */
+    private function shortLabel(string $month): string
     {
-        $curtos = [
+        $short = [
             1 => 'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
             'jul', 'ago', 'set', 'out', 'nov', 'dez',
         ];
 
-        [$ano, $numero] = explode('-', $mes);
+        [$year, $number] = explode('-', $month);
 
-        return $curtos[(int) $numero].'/'.substr($ano, 2);
+        return $short[(int) $number].'/'.substr($year, 2);
     }
 
-    private function money(mixed $valor): string
+    private function money(mixed $value): string
     {
-        return number_format((float) $valor, 2, '.', '');
+        return number_format((float) $value, 2, '.', '');
     }
 }

@@ -52,7 +52,7 @@ class BillingReportCsvExportTest extends TestCase
 
         $customer = Customer::factory()->create(['name' => 'Padaria Aurora']);
 
-        $conteudo = $this->exportar([
+        $content = $this->exportar([
             'date_field' => 'issue_date',
             'start_date' => '2026-01-01',
             'end_date' => '2026-03-31',
@@ -61,11 +61,11 @@ class BillingReportCsvExportTest extends TestCase
         ]);
 
         // O teste exige que o arquivo identifique período e filtros usados.
-        $this->assertStringContainsString('Data de emissão', $conteudo);
-        $this->assertStringContainsString('01/01/2026', $conteudo);
-        $this->assertStringContainsString('31/03/2026', $conteudo);
-        $this->assertStringContainsString('Padaria Aurora', $conteudo);
-        $this->assertStringContainsString('Paga', $conteudo);
+        $this->assertStringContainsString('Data de emissão', $content);
+        $this->assertStringContainsString('01/01/2026', $content);
+        $this->assertStringContainsString('31/03/2026', $content);
+        $this->assertStringContainsString('Padaria Aurora', $content);
+        $this->assertStringContainsString('Paga', $content);
     }
 
     public function test_the_header_reflects_each_period_basis_and_status(): void
@@ -100,13 +100,13 @@ class BillingReportCsvExportTest extends TestCase
     {
         $this->actingAsUser();
 
-        $conteudo = $this->exportar();
+        $content = $this->exportar();
 
         foreach ([
             'Cliente', 'Descrição', 'Emissão', 'Vencimento', 'Status',
             'Valor original', 'Juros', 'Valor atualizado', 'Valor pago',
-        ] as $coluna) {
-            $this->assertStringContainsString($coluna, $conteudo);
+        ] as $column) {
+            $this->assertStringContainsString($column, $content);
         }
     }
 
@@ -120,10 +120,10 @@ class BillingReportCsvExportTest extends TestCase
             'monthly_interest_rate' => '0.0200',
         ]);
 
-        $conteudo = $this->exportar();
-        $rodape = substr($conteudo, (int) strpos($conteudo, 'TOTAIS'));
+        $content = $this->exportar();
+        $rodape = substr($content, (int) strpos($content, 'TOTAIS'));
 
-        $this->assertStringContainsString('TOTAIS', $conteudo);
+        $this->assertStringContainsString('TOTAIS', $content);
         // 3 x 1000 original, 3 x 20 de juros, 3060 atualizado.
         $this->assertStringContainsString('3.000,00', $rodape);
         $this->assertStringContainsString('60,00', $rodape);
@@ -141,13 +141,13 @@ class BillingReportCsvExportTest extends TestCase
         Billing::factory()->count(2)->for($dentro)->create(['description' => 'Cobranca dentro']);
         Billing::factory()->count(5)->for($fora)->create(['description' => 'Cobranca fora']);
 
-        $conteudo = $this->exportar(['customer_id' => $dentro->id]);
+        $content = $this->exportar(['customer_id' => $dentro->id]);
 
         // Contar linhas não basta: é preciso afirmar que o que está fora do
         // filtro realmente não aparece.
-        $this->assertStringContainsString('Cobranca dentro', $conteudo);
-        $this->assertStringNotContainsString('Cobranca fora', $conteudo);
-        $this->assertStringNotContainsString('Cliente Excluido', $conteudo);
+        $this->assertStringContainsString('Cobranca dentro', $content);
+        $this->assertStringNotContainsString('Cobranca fora', $content);
+        $this->assertStringNotContainsString('Cliente Excluido', $content);
     }
 
     public function test_the_row_count_matches_the_filtered_set(): void
@@ -159,11 +159,11 @@ class BillingReportCsvExportTest extends TestCase
         Billing::factory()->count(7)->for($customer)->create();
         Billing::factory()->count(4)->create();
 
-        $linhas = $this->dataRows($this->exportar(['customer_id' => $customer->id]));
+        $rows = $this->dataRows($this->exportar(['customer_id' => $customer->id]));
 
         // Sete linhas de dados, e o totalizador — que vem de outra consulta —
         // concordando com esse número.
-        $this->assertCount(7, $linhas);
+        $this->assertCount(7, $rows);
         $this->assertSame('7', $this->totalsRow($this->exportar(['customer_id' => $customer->id]))[1]);
     }
 
@@ -174,13 +174,13 @@ class BillingReportCsvExportTest extends TestCase
      *
      * @return array<int, array<int, string>>
      */
-    private function dataRows(string $conteudo): array
+    private function dataRows(string $content): array
     {
-        $linhas = [];
+        $rows = [];
         $dentro = false;
 
-        foreach (explode("\n", trim($conteudo)) as $linha) {
-            $campos = str_getcsv(trim($linha), ';', '"', '\\');
+        foreach (explode("\n", trim($content)) as $row) {
+            $campos = str_getcsv(trim($row), ';', '"', '\\');
 
             if (($campos[0] ?? '') === 'Cliente' && ($campos[1] ?? '') === 'Descrição') {
                 $dentro = true;
@@ -192,24 +192,24 @@ class BillingReportCsvExportTest extends TestCase
                 break;
             }
 
-            if ($dentro && trim($linha) !== '') {
-                $linhas[] = $campos;
+            if ($dentro && trim($row) !== '') {
+                $rows[] = $campos;
             }
         }
 
-        return $linhas;
+        return $rows;
     }
 
     /**
      * @return array<int, string>
      */
-    private function totalsRow(string $conteudo): array
+    private function totalsRow(string $content): array
     {
-        $linhas = explode("\n", trim($conteudo));
+        $rows = explode("\n", trim($content));
 
-        foreach ($linhas as $i => $linha) {
-            if (str_starts_with(trim($linha), 'TOTAIS')) {
-                return str_getcsv(trim($linhas[$i + 1]), ';', '"', '\\');
+        foreach ($rows as $i => $row) {
+            if (str_starts_with(trim($row), 'TOTAIS')) {
+                return str_getcsv(trim($rows[$i + 1]), ';', '"', '\\');
             }
         }
 
@@ -225,17 +225,17 @@ class BillingReportCsvExportTest extends TestCase
         // exportação leva o conjunto inteiro.
         Billing::factory()->count(60)->create(['description' => 'Linha exportada']);
 
-        $conteudo = $this->exportar();
+        $content = $this->exportar();
 
-        $this->assertSame(60, substr_count($conteudo, 'Linha exportada'));
+        $this->assertSame(60, substr_count($content, 'Linha exportada'));
     }
 
     /**
-     * @param  array<string, mixed>  $filtros
+     * @param  array<string, mixed>  $filters
      */
-    private function exportar(array $filtros = []): string
+    private function exportar(array $filters = []): string
     {
-        $query = http_build_query($filtros);
+        $query = http_build_query($filters);
 
         $response = $this->get('/api/reports/billings/csv'.($query ? "?{$query}" : ''));
         $response->assertOk();

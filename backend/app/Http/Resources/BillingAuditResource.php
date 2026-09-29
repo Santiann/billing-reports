@@ -17,7 +17,7 @@ class BillingAuditResource extends JsonResource
      * A ordem é da ficha da cobrança, não a de gravação: numa entrada de
      * pagamento o status vem primeiro porque é ele que conta o que aconteceu.
      */
-    private const CAMPOS = [
+    private const FIELDS = [
         'status' => 'Status',
         'customer_id' => 'Cliente',
         'description' => 'Descrição',
@@ -43,7 +43,7 @@ class BillingAuditResource extends JsonResource
                 'id' => $this->user->id,
                 'name' => $this->user->name,
             ],
-            'changes' => $this->mudancas(),
+            'changes' => $this->changes(),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }
@@ -57,38 +57,38 @@ class BillingAuditResource extends JsonResource
      *
      * @return array<int, array<string, mixed>>
      */
-    private function mudancas(): array
+    private function changes(): array
     {
-        $mudancas = [];
-        $gravadas = $this->changes;
+        $changes = [];
+        $stored = $this->changes;
 
-        foreach (self::CAMPOS as $campo => $rotulo) {
-            if (array_key_exists($campo, $gravadas)) {
-                $mudancas[] = $this->mudanca($campo, $rotulo, $gravadas[$campo]);
-                unset($gravadas[$campo]);
+        foreach (self::FIELDS as $field => $label) {
+            if (array_key_exists($field, $stored)) {
+                $changes[] = $this->change($field, $label, $stored[$field]);
+                unset($stored[$field]);
             }
         }
 
         // Campo que ganhe coluna depois e ainda não tenha rótulo aparece com o
         // nome da coluna, em vez de sumir da trilha.
-        foreach ($gravadas as $campo => $valores) {
-            $mudancas[] = $this->mudanca($campo, $campo, $valores);
+        foreach ($stored as $field => $values) {
+            $changes[] = $this->change($field, $field, $values);
         }
 
-        return $mudancas;
+        return $changes;
     }
 
     /**
-     * @param  array{from: mixed, to: mixed}  $valores
+     * @param  array{from: mixed, to: mixed}  $values
      * @return array<string, mixed>
      */
-    private function mudanca(string $campo, string $rotulo, array $valores): array
+    private function change(string $field, string $label, array $values): array
     {
         return [
-            'field' => $campo,
-            'label' => $rotulo,
-            'from' => $valores['from'],
-            'to' => $valores['to'],
+            'field' => $field,
+            'label' => $label,
+            'from' => $values['from'],
+            'to' => $values['to'],
         ];
     }
 }

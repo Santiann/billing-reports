@@ -162,10 +162,10 @@ class InterestCalculatorTest extends TestCase
         // sem isto ele passaria mesmo com a regra errada.
         $this->travelTo('2027-01-01 09:30:00');
 
-        $depois = (new InterestCalculator())->for($billing->fresh());
+        $after = (new InterestCalculator())->for($billing->fresh());
 
-        $this->assertSame($congelado->updatedAmount, $depois->updatedAmount);
-        $this->assertSame($congelado->interestAmount, $depois->interestAmount);
+        $this->assertSame($congelado->updatedAmount, $after->updatedAmount);
+        $this->assertSame($congelado->interestAmount, $after->interestAmount);
     }
 
     public function test_a_paid_billing_freezes_on_the_sql_face_too(): void

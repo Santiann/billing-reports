@@ -33,13 +33,13 @@ class PaymentReversalTest extends TestCase
 
     private function comoAdmin(): User
     {
-        $usuario = User::factory()->create(['name' => 'Marina Costa']);
-        Sanctum::actingAs($usuario);
+        $user = User::factory()->create(['name' => 'Marina Costa']);
+        Sanctum::actingAs($user);
 
-        return $usuario;
+        return $user;
     }
 
-    private function cobranca(): Billing
+    private function billing(): Billing
     {
         return Billing::factory()->create([
             'original_amount' => '1000.00',
@@ -50,14 +50,14 @@ class PaymentReversalTest extends TestCase
     }
 
     /** Paga em 20/05 pelo serviço de produção, e volta o relógio para hoje. */
-    private function cobrancaPaga(): Billing
+    private function paidBilling(): Billing
     {
         $this->travelTo(self::PAGAMENTO);
-        $cobranca = $this->cobranca();
-        app(RegisterPayment::class)($cobranca);
+        $billing = $this->billing();
+        app(RegisterPayment::class)($billing);
         $this->travelTo(self::HOJE);
 
-        return $cobranca->fresh();
+        return $billing->fresh();
     }
 
     /**
@@ -70,33 +70,33 @@ class PaymentReversalTest extends TestCase
      *
      * @param  array<string, string>  $headers
      */
-    private function estornar(Billing $cobranca, array $headers = [])
+    private function reverse(Billing $billing, array $headers = [])
     {
-        return $this->postJson("/api/billings/{$cobranca->id}/reversal", [], $headers);
+        return $this->postJson("/api/billings/{$billing->id}/reversal", [], $headers);
     }
 
     /** @param array<string, string> $headers */
-    private function pagar(Billing $cobranca, array $headers = [])
+    private function pay(Billing $billing, array $headers = [])
     {
-        return $this->postJson("/api/billings/{$cobranca->id}/payment", [], $headers);
+        return $this->postJson("/api/billings/{$billing->id}/payment", [], $headers);
     }
 
     // --- a cobrança volta a pendente ----------------------------------
 
     public function test_a_reversal_returns_the_billing_to_pending(): void
     {
-        $cobranca = $this->cobrancaPaga();
+        $billing = $this->paidBilling();
         $this->comoAdmin();
 
-        $this->estornar($cobranca)
+        $this->reverse($billing)
             ->assertOk()
             ->assertJsonPath('data.status', 'pending')
             ->assertJsonPath('data.payment_date', null)
             ->assertJsonPath('data.paid_amount', null)
             ->assertJsonPath('data.paid_interest_amount', null);
 
-        $this->assertSame('pending', $cobranca->fresh()->status->value);
-        $this->assertNull($cobranca->fresh()->paid_amount);
+        $this->assertSame('pending', $billing->fresh()->status->value);
+        $this->assertNull($billing->fresh()->paid_amount);
     }
 
     public function test_only_a_paid_billing_can_be_reversed(): void
@@ -104,7 +104,7 @@ class PaymentReversalTest extends TestCase
         $this->travelTo(self::HOJE);
         $this->comoAdmin();
 
-        $this->estornar($this->cobranca())
+        $this->reverse($this->billing())
             ->assertUnprocessable()
             ->assertJsonValidationErrors('status');
     }
@@ -118,14 +118,14 @@ class PaymentReversalTest extends TestCase
      */
     public function test_the_reversed_payment_amounts_stay_in_the_trail(): void
     {
-        $cobranca = $this->cobrancaPaga();
+        $billing = $this->paidBilling();
         $this->comoAdmin();
 
-        $this->assertSame('1002.64', $cobranca->paid_amount);
+        $this->assertSame('1002.64', $billing->paid_amount);
 
-        $this->estornar($cobranca)->assertOk();
+        $this->reverse($billing)->assertOk();
 
-        $this->getJson("/api/billings/{$cobranca->id}/audit")
+        $this->getJson("/api/billings/{$billing->id}/audit")
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.event', 'reversed')
@@ -156,12 +156,12 @@ class PaymentReversalTest extends TestCase
      */
     public function test_a_reversed_billing_accrues_interest_again_from_the_original_due_date(): void
     {
-        $cobranca = $this->cobrancaPaga();
+        $billing = $this->paidBilling();
         $this->comoAdmin();
 
-        $this->estornar($cobranca)->assertOk();
+        $this->reverse($billing)->assertOk();
 
-        $this->getJson("/api/billings/{$cobranca->id}")
+        $this->getJson("/api/billings/{$billing->id}")
             ->assertOk()
             ->assertJsonPath('data.is_overdue', true)
             ->assertJsonPath('data.interest_amount', '20.00')
@@ -171,34 +171,34 @@ class PaymentReversalTest extends TestCase
     /** A face SQL tem que concordar: a listagem e o relatório calculam no SELECT. */
     public function test_after_a_reversal_the_three_screens_agree(): void
     {
-        $cobranca = $this->cobrancaPaga();
+        $billing = $this->paidBilling();
         $this->comoAdmin();
 
-        $this->estornar($cobranca)->assertOk();
+        $this->reverse($billing)->assertOk();
 
-        $isolada = $this->getJson("/api/billings/{$cobranca->id}")->json('data.updated_amount');
+        $isolada = $this->getJson("/api/billings/{$billing->id}")->json('data.updated_amount');
         $listagem = $this->getJson('/api/billings')->json('data.0.updated_amount');
-        $relatorio = $this->getJson('/api/reports/billings')->json('data.0.updated_amount');
+        $report = $this->getJson('/api/reports/billings')->json('data.0.updated_amount');
 
         $this->assertSame('1020.00', $isolada);
         $this->assertSame($isolada, $listagem);
-        $this->assertSame($isolada, $relatorio);
+        $this->assertSame($isolada, $report);
     }
 
     public function test_a_reversed_billing_can_be_paid_again_with_the_interest_of_the_new_date(): void
     {
-        $cobranca = $this->cobrancaPaga();
+        $billing = $this->paidBilling();
         $this->comoAdmin();
 
-        $this->estornar($cobranca)->assertOk();
+        $this->reverse($billing)->assertOk();
 
-        $this->pagar($cobranca)
+        $this->pay($billing)
             ->assertOk()
             ->assertJsonPath('data.payment_date', '2026-06-15')
             ->assertJsonPath('data.paid_amount', '1020.00')
             ->assertJsonPath('data.paid_interest_amount', '20.00');
 
-        $this->getJson("/api/billings/{$cobranca->id}/audit")
+        $this->getJson("/api/billings/{$billing->id}/audit")
             ->assertJsonCount(3, 'data')
             ->assertJsonPath('data.0.event', 'paid')
             ->assertJsonPath('data.1.event', 'reversed')
@@ -223,21 +223,21 @@ class PaymentReversalTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->comoAdmin();
-        $cobranca = $this->cobranca();
-        $chave = ['Idempotency-Key' => 'c2b6f0d4-1e7a-4f58-9c3d-5a8e2b7f4c10'];
+        $billing = $this->billing();
+        $key = ['Idempotency-Key' => 'c2b6f0d4-1e7a-4f58-9c3d-5a8e2b7f4c10'];
 
-        $this->pagar($cobranca, $chave)->assertOk();
+        $this->pay($billing, $key)->assertOk();
 
         $this->travelTo('2026-06-15 10:00:00');
-        $this->estornar($cobranca)->assertOk();
+        $this->reverse($billing)->assertOk();
 
         $this->travelTo('2026-06-15 10:30:00');
-        $this->pagar($cobranca, $chave)
+        $this->pay($billing, $key)
             ->assertOk()
             ->assertHeader('Idempotent-Replay', 'true');
 
-        $this->assertSame('pending', $cobranca->fresh()->status->value);
-        $this->assertSame(2, BillingAudit::query()->where('billing_id', $cobranca->id)->count());
+        $this->assertSame('pending', $billing->fresh()->status->value);
+        $this->assertSame(2, BillingAudit::query()->where('billing_id', $billing->id)->count());
     }
 
     /**
@@ -250,33 +250,33 @@ class PaymentReversalTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->comoAdmin();
-        $cobranca = $this->cobranca();
-        $chave = ['Idempotency-Key' => '9d41a7c3-6b2e-4a90-8f15-3e7c1b9d2a64'];
+        $billing = $this->billing();
+        $key = ['Idempotency-Key' => '9d41a7c3-6b2e-4a90-8f15-3e7c1b9d2a64'];
 
-        $this->pagar($cobranca)->assertOk();
-        $this->estornar($cobranca, $chave)->assertOk();
-        $this->pagar($cobranca)->assertOk();
+        $this->pay($billing)->assertOk();
+        $this->reverse($billing, $key)->assertOk();
+        $this->pay($billing)->assertOk();
 
-        $this->estornar($cobranca, $chave)
+        $this->reverse($billing, $key)
             ->assertOk()
             ->assertHeader('Idempotent-Replay', 'true');
 
-        $this->assertSame('paid', $cobranca->fresh()->status->value);
-        $this->assertSame(3, BillingAudit::query()->where('billing_id', $cobranca->id)->count());
+        $this->assertSame('paid', $billing->fresh()->status->value);
+        $this->assertSame(3, BillingAudit::query()->where('billing_id', $billing->id)->count());
     }
 
     // --- atomicidade --------------------------------------------------
 
     public function test_without_the_trail_the_reversal_does_not_happen(): void
     {
-        $cobranca = $this->cobrancaPaga();
+        $billing = $this->paidBilling();
         $this->comoAdmin();
 
         BillingAudit::creating(fn () => throw new RuntimeException('Falha simulada ao gravar a trilha.'));
 
-        $this->estornar($cobranca)->assertServerError();
+        $this->reverse($billing)->assertServerError();
 
-        $this->assertSame('paid', $cobranca->fresh()->status->value);
-        $this->assertSame('1002.64', $cobranca->fresh()->paid_amount);
+        $this->assertSame('paid', $billing->fresh()->status->value);
+        $this->assertSame('1002.64', $billing->fresh()->paid_amount);
     }
 }

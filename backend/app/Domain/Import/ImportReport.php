@@ -31,10 +31,10 @@ final class ImportReport
      * processo, que teria que segurar tudo em memória. A contagem continua
      * exata; o que para de crescer é a lista.
      */
-    public const MAX_ERROS = 50;
+    public const MAX_ERRORS = 50;
 
     /** Linhas mostradas na prévia. */
-    public const MAX_AMOSTRA = 10;
+    public const MAX_SAMPLE = 10;
 
     /**
      * @param  array<int, string>  $messages
@@ -42,7 +42,7 @@ final class ImportReport
      */
     public function addError(int $line, array $messages, array $values): void
     {
-        if (count($this->errors) < self::MAX_ERROS) {
+        if (count($this->errors) < self::MAX_ERRORS) {
             $this->errors[] = [
                 'line' => $line,
                 'messages' => array_values($messages),
@@ -51,11 +51,11 @@ final class ImportReport
         }
     }
 
-    /** @param array<string, mixed> $valores */
-    public function addSample(array $valores): void
+    /** @param array<string, mixed> $values */
+    public function addSample(array $values): void
     {
-        if (count($this->sample) < self::MAX_AMOSTRA) {
-            $this->sample[] = $valores;
+        if (count($this->sample) < self::MAX_SAMPLE) {
+            $this->sample[] = $values;
         }
     }
 

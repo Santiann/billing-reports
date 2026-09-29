@@ -25,7 +25,7 @@ class ReportExplainCommandTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function cobrancas(int $quantidade = 3): void
+    private function billings(int $quantidade = 3): void
     {
         Billing::factory()->count($quantidade)->create();
     }
@@ -34,7 +34,7 @@ class ReportExplainCommandTest extends TestCase
 
     public function test_explains_the_report_queries(): void
     {
-        $this->cobrancas();
+        $this->billings();
 
         $this->artisan('report:explain')
             ->assertExitCode(0)
@@ -46,7 +46,7 @@ class ReportExplainCommandTest extends TestCase
     /** O SQL vai impresso: é o que permite conferir se é o que se pensava. */
     public function test_prints_the_sql_and_the_plan_of_each_query(): void
     {
-        $this->cobrancas();
+        $this->billings();
 
         $this->artisan('report:explain')
             ->assertExitCode(0)
@@ -81,7 +81,7 @@ class ReportExplainCommandTest extends TestCase
      */
     public function test_the_totals_cache_does_not_hide_the_aggregation(): void
     {
-        $this->cobrancas();
+        $this->billings();
 
         // Aquece o cache pelo mesmo caminho da API.
         app(BillingReportQuery::class)->totals(new BillingReportFilters());
@@ -96,7 +96,7 @@ class ReportExplainCommandTest extends TestCase
     /** Com `--analyze`, o MySQL executa e devolve o tempo real por operação. */
     public function test_analyze_brings_the_actual_time_of_each_operation(): void
     {
-        $this->cobrancas();
+        $this->billings();
 
         $this->artisan('report:explain', ['--analyze' => true])
             ->assertExitCode(0)
@@ -112,7 +112,7 @@ class ReportExplainCommandTest extends TestCase
      */
     public function test_literals_also_explains_with_the_values_inlined(): void
     {
-        $this->cobrancas();
+        $this->billings();
 
         $this->artisan('report:explain', [
             '--start' => '2026-01-01',

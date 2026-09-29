@@ -69,19 +69,19 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
         $listagem = $this->getJson('/api/billings')->assertOk()->json('data.0');
 
         // Relatório: face SQL, por outro caminho de consulta.
-        $relatorio = $this->getJson('/api/reports/billings')->assertOk()->json('data.0');
+        $report = $this->getJson('/api/reports/billings')->assertOk()->json('data.0');
 
-        foreach (['updated_amount', 'interest_amount'] as $campo) {
+        foreach (['updated_amount', 'interest_amount'] as $field) {
             $this->assertSame(
-                $isolada[$campo],
-                $listagem[$campo],
-                "Cobrança isolada e listagem divergiram em {$campo}.",
+                $isolada[$field],
+                $listagem[$field],
+                "Cobrança isolada e listagem divergiram em {$field}.",
             );
 
             $this->assertSame(
-                $isolada[$campo],
-                $relatorio[$campo],
-                "Cobrança isolada e relatório divergiram em {$campo}.",
+                $isolada[$field],
+                $report[$field],
+                "Cobrança isolada e relatório divergiram em {$field}.",
             );
         }
     }
@@ -96,19 +96,19 @@ class InterestConsistencyAcrossEndpointsTest extends TestCase
             'monthly_interest_rate' => '0.0200',
         ]);
 
-        $resposta = $this->getJson('/api/reports/billings?per_page=100')->assertOk();
+        $response = $this->getJson('/api/reports/billings?per_page=100')->assertOk();
 
         // O totalizador vem de uma consulta de agregação separada. Somar as
         // linhas exibidas e comparar é o único jeito de provar que as duas
         // consultas falam do mesmo conjunto e da mesma regra.
         $somaDasLinhas = array_sum(array_map(
-            fn (array $linha) => (float) $linha['updated_amount'],
-            $resposta->json('data'),
+            fn (array $row) => (float) $row['updated_amount'],
+            $response->json('data'),
         ));
 
         $this->assertSame(
             number_format($somaDasLinhas, 2, '.', ''),
-            $resposta->json('totals.updated_amount'),
+            $response->json('totals.updated_amount'),
         );
     }
 

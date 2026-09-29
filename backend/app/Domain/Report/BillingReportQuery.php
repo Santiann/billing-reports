@@ -76,21 +76,21 @@ final class BillingReportQuery
      */
     public function totals(BillingReportFilters $filters): array
     {
-        $versao = $this->version->current();
+        $currentVersion = $this->version->current();
         $data = $this->calculator->referenceDate()->toDateString();
-        $chave = self::CACHE_PREFIX.hash('sha256', (string) json_encode($filters->scope()));
+        $key = self::CACHE_PREFIX.hash('sha256', (string) json_encode($filters->scope()));
 
-        $guardado = Cache::get($chave);
+        $kept = Cache::get($key);
 
-        if (is_array($guardado) && $guardado['version'] === $versao && $guardado['date'] === $data) {
-            return $guardado['totals'];
+        if (is_array($kept) && $kept['version'] === $currentVersion && $kept['date'] === $data) {
+            return $kept['totals'];
         }
 
-        $totais = $this->computeTotals($filters);
+        $totals = $this->computeTotals($filters);
 
-        Cache::put($chave, ['version' => $versao, 'date' => $data, 'totals' => $totais], now()->addDay());
+        Cache::put($key, ['version' => $currentVersion, 'date' => $data, 'totals' => $totals], now()->addDay());
 
-        return $totais;
+        return $totals;
     }
 
     /**

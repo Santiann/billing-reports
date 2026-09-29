@@ -159,12 +159,12 @@ class BillingVolumeSeederTest extends TestCase
     {
         $this->semear();
 
-        $totais = (new BillingReportQuery())->totals(
+        $totals = (new BillingReportQuery())->totals(
             new BillingReportFilters(status: 'paid'),
         );
 
-        $this->assertGreaterThan(0, (float) $totais['paid_amount'], 'Recebido zerado.');
-        $this->assertGreaterThan(0, (float) $totais['interest_amount'], 'Juros recebidos zerados.');
+        $this->assertGreaterThan(0, (float) $totals['paid_amount'], 'Recebido zerado.');
+        $this->assertGreaterThan(0, (float) $totals['interest_amount'], 'Juros recebidos zerados.');
     }
 
     /**
@@ -180,9 +180,9 @@ class BillingVolumeSeederTest extends TestCase
     {
         $ddl = [];
 
-        DB::listen(function ($consulta) use (&$ddl): void {
-            if (preg_match('/^\s*(alter|create|drop)\b/i', $consulta->sql)) {
-                $ddl[] = $consulta->sql;
+        DB::listen(function ($query) use (&$ddl): void {
+            if (preg_match('/^\s*(alter|create|drop)\b/i', $query->sql)) {
+                $ddl[] = $query->sql;
             }
         });
 

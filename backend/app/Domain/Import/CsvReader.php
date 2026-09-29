@@ -27,11 +27,11 @@ final class CsvReader
     private const BOM = "\xEF\xBB\xBF";
 
     /**
-     * @param  array<string, array<int, string>>  $colunas  campo => apelidos aceitos
+     * @param  array<string, array<int, string>>  $columns  campo => apelidos aceitos
      */
     public function __construct(
-        private readonly array $colunas,
-        private readonly array $obrigatorias,
+        private readonly array $columns,
+        private readonly array $required,
     ) {}
 
     /**
@@ -44,39 +44,39 @@ final class CsvReader
      *
      * @throws RuntimeException quando o cabeçalho não tem as colunas exigidas
      */
-    public function rows(string $caminho): Generator
+    public function rows(string $path): Generator
     {
-        $arquivo = fopen($caminho, 'rb');
+        $file = fopen($path, 'rb');
 
-        if ($arquivo === false) {
+        if ($file === false) {
             throw new RuntimeException('Não foi possível abrir o arquivo enviado.');
         }
 
         try {
-            $separador = $this->separador($arquivo);
-            $cabecalho = fgetcsv($arquivo, 0, $separador);
+            $separator = $this->separator($file);
+            $header = fgetcsv($file, 0, $separator);
 
-            if ($cabecalho === false) {
+            if ($header === false) {
                 throw new RuntimeException('O arquivo está vazio.');
             }
 
-            $mapa = $this->mapear($cabecalho);
-            $linha = 1;
+            $map = $this->map($header);
+            $row = 1;
 
-            while (($valores = fgetcsv($arquivo, 0, $separador)) !== false) {
-                $linha++;
+            while (($values = fgetcsv($file, 0, $separator)) !== false) {
+                $row++;
 
                 // fgetcsv devolve [null] para linha em branco, inclusive a do
                 // fim do arquivo. Pular é o que evita um "erro na linha 6" que
                 // o usuário não consegue ver na planilha.
-                if ($valores === [null] || $this->vazia($valores)) {
+                if ($values === [null] || $this->isEmptyRow($values)) {
                     continue;
                 }
 
-                yield [$linha, $this->associar($mapa, $valores)];
+                yield [$row, $this->combine($map, $values)];
             }
         } finally {
-            fclose($arquivo);
+            fclose($file);
         }
     }
 
@@ -87,78 +87,78 @@ final class CsvReader
      * aspas é raro o bastante para não valer o custo: o que decide é qual dos
      * dois aparece mais.
      *
-     * @param  resource  $arquivo
+     * @param  resource  $file
      */
-    private function separador($arquivo): string
+    private function separator($file): string
     {
-        $primeira = fgets($arquivo);
-        rewind($arquivo);
+        $firstOne = fgets($file);
+        rewind($file);
 
-        if ($primeira === false) {
+        if ($firstOne === false) {
             return ';';
         }
 
-        return substr_count($primeira, ';') >= substr_count($primeira, ',') ? ';' : ',';
+        return substr_count($firstOne, ';') >= substr_count($firstOne, ',') ? ';' : ',';
     }
 
     /**
      * Liga cada posição do cabeçalho a um campo.
      *
-     * @param  array<int, string|null>  $cabecalho
+     * @param  array<int, string|null>  $header
      * @return array<int, string>
      */
-    private function mapear(array $cabecalho): array
+    private function map(array $header): array
     {
-        $mapa = [];
+        $map = [];
 
-        foreach ($cabecalho as $posicao => $titulo) {
-            $normalizado = $this->normalizar((string) ($titulo ?? ''));
+        foreach ($header as $position => $title) {
+            $normalized = $this->normalize((string) ($title ?? ''));
 
-            foreach ($this->colunas as $campo => $apelidos) {
-                if (in_array($normalizado, $apelidos, true)) {
-                    $mapa[$posicao] = $campo;
+            foreach ($this->columns as $field => $aliases) {
+                if (in_array($normalized, $aliases, true)) {
+                    $map[$position] = $field;
                     break;
                 }
             }
         }
 
-        $faltando = array_diff($this->obrigatorias, array_values($mapa));
+        $missing = array_diff($this->required, array_values($map));
 
-        if ($faltando !== []) {
+        if ($missing !== []) {
             throw new RuntimeException(sprintf(
                 'O arquivo precisa das colunas: %s. Cabeçalho recebido: %s.',
                 // O nome que o usuário precisa DIGITAR, não o nome interno do
                 // campo: dizer que falta "document" manda procurar no arquivo
                 // uma palavra que o cabeçalho dele nunca vai ter.
-                implode(', ', array_map(fn (string $campo) => $this->colunas[$campo][0], $faltando)),
-                implode(', ', array_map(fn ($t) => (string) $t, $cabecalho)),
+                implode(', ', array_map(fn (string $field) => $this->columns[$field][0], $missing)),
+                implode(', ', array_map(fn ($t) => (string) $t, $header)),
             ));
         }
 
-        return $mapa;
+        return $map;
     }
 
     /**
-     * @param  array<int, string>  $mapa
-     * @param  array<int, string|null>  $valores
+     * @param  array<int, string>  $map
+     * @param  array<int, string|null>  $values
      * @return array<string, string>
      */
-    private function associar(array $mapa, array $valores): array
+    private function combine(array $map, array $values): array
     {
-        $linha = [];
+        $row = [];
 
-        foreach ($mapa as $posicao => $campo) {
-            $linha[$campo] = trim((string) ($valores[$posicao] ?? ''));
+        foreach ($map as $position => $field) {
+            $row[$field] = trim((string) ($values[$position] ?? ''));
         }
 
-        return $linha;
+        return $row;
     }
 
-    /** @param array<int, string|null> $valores */
-    private function vazia(array $valores): bool
+    /** @param array<int, string|null> $values */
+    private function isEmptyRow(array $values): bool
     {
-        foreach ($valores as $valor) {
-            if (trim((string) $valor) !== '') {
+        foreach ($values as $value) {
+            if (trim((string) $value) !== '') {
                 return false;
             }
         }
@@ -167,15 +167,15 @@ final class CsvReader
     }
 
     /** Sem BOM, sem acento, sem caixa: "E-mail" e "email" são a mesma coluna. */
-    private function normalizar(string $titulo): string
+    private function normalize(string $title): string
     {
-        $limpo = str_replace(self::BOM, '', $titulo);
-        $semAcento = iconv('UTF-8', 'ASCII//TRANSLIT', $limpo);
+        $clean = str_replace(self::BOM, '', $title);
+        $withoutAccent = iconv('UTF-8', 'ASCII//TRANSLIT', $clean);
 
         return preg_replace(
             '/[^a-z0-9]/',
             '',
-            mb_strtolower($semAcento === false ? $limpo : $semAcento),
+            mb_strtolower($withoutAccent === false ? $clean : $withoutAccent),
         ) ?? '';
     }
 }

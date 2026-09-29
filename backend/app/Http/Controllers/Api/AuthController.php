@@ -22,17 +22,17 @@ class AuthController extends Controller
          * contá-la deixaria um cliente com bug de formulário trancar o próprio
          * usuário.
          */
-        $segundos = $throttle->bloqueadoPor($request);
+        $seconds = $throttle->blockedFor($request);
 
-        if ($segundos !== null) {
-            Log::warning('login.bloqueado', [
+        if ($seconds !== null) {
+            Log::warning('login.blocked', [
                 'email' => $request->validated('email'),
-                'retry_after' => $segundos,
+                'retry_after' => $seconds,
             ]);
 
             return response()->json([
-                'message' => "Muitas tentativas de login. Tente de novo em {$segundos} segundos.",
-            ], 429)->header('Retry-After', (string) $segundos);
+                'message' => "Muitas tentativas de login. Tente de novo em {$seconds} segundos.",
+            ], 429)->header('Retry-After', (string) $seconds);
         }
 
         $user = User::where('email', $request->validated('email'))->first();
@@ -41,17 +41,17 @@ class AuthController extends Controller
         // Mensagem única para e-mail inexistente e senha errada, para não
         // revelar quais e-mails existem.
         if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
-            $throttle->registrar($request);
+            $throttle->record($request);
 
             // O e-mail tentado vai para o log: sem ele não há como distinguir
             // uma pessoa que errou a senha de uma varredura de contas, que é a
             // pergunta que se faz ao investigar.
-            Log::warning('login.falhou', ['email' => $request->validated('email')]);
+            Log::warning('login.failed', ['email' => $request->validated('email')]);
 
             return response()->json(['message' => 'Credenciais inválidas.'], 401);
         }
 
-        $throttle->limpar($request);
+        $throttle->clear($request);
 
         Log::info('login.ok', ['user_id' => $user->id]);
 

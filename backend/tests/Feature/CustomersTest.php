@@ -58,10 +58,10 @@ class CustomersTest extends TestCase
         $this->actingAsUser();
         Customer::factory()->count(25)->create();
 
-        $primeira = $this->getJson('/api/customers?per_page=10&page=1')->json('data.*.id');
+        $firstOne = $this->getJson('/api/customers?per_page=10&page=1')->json('data.*.id');
         $segunda = $this->getJson('/api/customers?per_page=10&page=2')->json('data.*.id');
 
-        $this->assertEmpty(array_intersect($primeira, $segunda));
+        $this->assertEmpty(array_intersect($firstOne, $segunda));
     }
 
     public function test_per_page_is_capped(): void

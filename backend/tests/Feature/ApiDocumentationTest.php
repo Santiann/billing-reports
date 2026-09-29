@@ -26,11 +26,11 @@ class ApiDocumentationTest extends TestCase
 
     public function test_the_root_serves_the_documentation_without_authentication(): void
     {
-        $resposta = $this->get('/');
+        $response = $this->get('/');
 
-        $resposta->assertOk();
-        $resposta->assertHeader('content-type', 'text/html; charset=UTF-8');
-        $resposta->assertSee('Gerador de Relatórios', false);
+        $response->assertOk();
+        $response->assertHeader('content-type', 'text/html; charset=UTF-8');
+        $response->assertSee('Gerador de Relatórios', false);
     }
 
     /** A welcome do Laravel não pode ter sobrado. */
@@ -43,28 +43,28 @@ class ApiDocumentationTest extends TestCase
     {
         $html = $this->get('/')->getContent();
 
-        foreach ($this->spec()['paths'] as $caminho => $metodos) {
+        foreach ($this->spec()['paths'] as $path => $metodos) {
             $this->assertStringContainsString(
-                $caminho,
+                $path,
                 $html,
-                "A documentação não lista a rota {$caminho}.",
+                "A documentação não lista a rota {$path}.",
             );
 
-            foreach ($metodos as $metodo => $operacao) {
-                if ($metodo === 'parameters') {
+            foreach ($metodos as $method => $operation) {
+                if ($method === 'parameters') {
                     continue;
                 }
 
                 $this->assertStringContainsString(
-                    strtoupper($metodo),
+                    strtoupper($method),
                     $html,
-                    "A documentação não lista o método {$metodo} de {$caminho}.",
+                    "A documentação não lista o método {$method} de {$path}.",
                 );
 
                 $this->assertStringContainsString(
-                    e($operacao['summary']),
+                    e($operation['summary']),
                     $html,
-                    "A documentação não traz o resumo de {$metodo} {$caminho}.",
+                    "A documentação não traz o resumo de {$method} {$path}.",
                 );
             }
         }
@@ -123,10 +123,10 @@ class ApiDocumentationTest extends TestCase
      */
     public function test_serves_the_raw_spec_for_download(): void
     {
-        $resposta = $this->get('/openapi.yaml');
+        $response = $this->get('/openapi.yaml');
 
-        $resposta->assertOk();
-        $resposta->assertHeader('content-type', 'application/yaml');
-        $this->assertStringContainsString('openapi: 3.1.0', $resposta->getContent());
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/yaml');
+        $this->assertStringContainsString('openapi: 3.1.0', $response->getContent());
     }
 }

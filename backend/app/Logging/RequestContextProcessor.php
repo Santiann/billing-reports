@@ -26,10 +26,10 @@ final class RequestContextProcessor implements ProcessorInterface
 {
     public function __invoke(LogRecord $record): LogRecord
     {
-        $contexto = ['user_id' => Auth::hasUser() ? Auth::id() : null];
+        $context = ['user_id' => Auth::hasUser() ? Auth::id() : null];
 
         $request = request();
-        $identificador = $request->headers->get(RequestId::HEADER);
+        $identifier = $request->headers->get(RequestId::HEADER);
 
         /*
          * A presença do cabeçalho é o que diz que houve requisição HTTP.
@@ -40,9 +40,9 @@ final class RequestContextProcessor implements ProcessorInterface
          * `Request` sintético, com método GET e caminho "/", que seria ruído —
          * mas sem este cabeçalho, porque quem o põe é o middleware.
          */
-        if ($identificador !== null) {
-            $contexto += [
-                'request_id' => $identificador,
+        if ($identifier !== null) {
+            $context += [
+                'request_id' => $identifier,
                 'method' => $request->method(),
                 'path' => $request->path(),
                 'ip' => $request->ip(),
@@ -51,6 +51,6 @@ final class RequestContextProcessor implements ProcessorInterface
 
         // O contexto de quem chamou vence: se alguém logou um `user_id`
         // explícito, é porque quis falar daquele usuário, não do autenticado.
-        return $record->with(context: [...$contexto, ...$record->context]);
+        return $record->with(context: [...$context, ...$record->context]);
     }
 }

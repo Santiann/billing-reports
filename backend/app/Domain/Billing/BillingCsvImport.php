@@ -29,13 +29,13 @@ use Illuminate\Support\Facades\Validator;
  */
 final class BillingCsvImport
 {
-    private const LOTE = 500;
+    private const BATCH = 500;
 
     public function __construct(
-        private readonly BillingDataVersion $versao = new BillingDataVersion(),
+        private readonly BillingDataVersion $version = new BillingDataVersion(),
     ) {}
 
-    private const COLUNAS = [
+    private const COLUMNS = [
         'document' => ['documento', 'document', 'cliente', 'cpf', 'cnpj', 'cpfcnpj'],
         'description' => ['descricao', 'description', 'historico', 'referencia'],
         'original_amount' => ['valor', 'amount', 'valororiginal', 'originalamount'],
@@ -44,141 +44,141 @@ final class BillingCsvImport
         'due_date' => ['vencimento', 'datavencimento', 'duedate'],
     ];
 
-    public function preview(string $caminho): ImportReport
+    public function preview(string $path): ImportReport
     {
-        return $this->processar($caminho, gravar: false);
+        return $this->process($path, store: false);
     }
 
-    public function import(string $caminho): ImportReport
+    public function import(string $path): ImportReport
     {
-        return $this->processar($caminho, gravar: true);
+        return $this->process($path, store: true);
     }
 
-    private function processar(string $caminho, bool $gravar): ImportReport
+    private function process(string $path, bool $store): ImportReport
     {
-        $leitor = new CsvReader(self::COLUNAS, [
+        $reader = new CsvReader(self::COLUMNS, [
             'document', 'description', 'original_amount', 'issue_date', 'due_date',
         ]);
 
-        $relatorio = new ImportReport();
-        $lote = [];
+        $report = new ImportReport();
+        $batch = [];
 
-        foreach ($leitor->rows($caminho) as [$linha, $valores]) {
-            $relatorio->totalRows++;
+        foreach ($reader->rows($path) as [$row, $values]) {
+            $report->totalRows++;
 
-            $normalizado = $this->normalizar($valores);
-            $erros = $this->validar($normalizado);
+            $normalized = $this->normalize($values);
+            $errors = $this->validate($normalized);
 
-            if ($erros !== []) {
-                $relatorio->addError($linha, $erros, $valores);
+            if ($errors !== []) {
+                $report->addError($row, $errors, $values);
 
                 continue;
             }
 
             // A linha só é contada como válida depois que o cliente é
             // encontrado, e isso acontece no fechamento do lote.
-            $lote[$linha] = $normalizado;
+            $batch[$row] = $normalized;
 
-            if (count($lote) >= self::LOTE) {
-                $this->descarregar($lote, $relatorio, $gravar);
-                $lote = [];
+            if (count($batch) >= self::BATCH) {
+                $this->flush($batch, $report, $store);
+                $batch = [];
             }
         }
 
-        if ($lote !== []) {
-            $this->descarregar($lote, $relatorio, $gravar);
+        if ($batch !== []) {
+            $this->flush($batch, $report, $store);
         }
 
-        return $relatorio;
+        return $report;
     }
 
     /**
      * Fecha um lote: resolve os clientes e grava o que sobrou.
      *
-     * @param  array<int, array<string, string>>  $lote  linha => valores
+     * @param  array<int, array<string, string>>  $batch  linha => valores
      */
-    private function descarregar(array $lote, ImportReport $relatorio, bool $gravar): void
+    private function flush(array $batch, ImportReport $report, bool $store): void
     {
-        $clientes = Customer::query()
-            ->whereIn('document', array_unique(array_column($lote, 'document')))
+        $customers = Customer::query()
+            ->whereIn('document', array_unique(array_column($batch, 'document')))
             ->pluck('id', 'document');
 
-        $agora = now();
-        $inserir = [];
+        $now = now();
+        $insert = [];
 
-        foreach ($lote as $linha => $valores) {
-            $clienteId = $clientes[$valores['document']] ?? null;
+        foreach ($batch as $row => $values) {
+            $customerId = $customers[$values['document']] ?? null;
 
-            if ($clienteId === null) {
-                $relatorio->addError(
-                    $linha,
+            if ($customerId === null) {
+                $report->addError(
+                    $row,
                     ['Nenhum cliente cadastrado com este documento.'],
                     // As mesmas chaves que um erro de validação devolve: a tela
                     // exibe o registro por uma delas, e trocar o nome do campo
                     // aqui faria metade dos erros aparecer sem identificação.
-                    ['document' => $valores['document'], 'description' => $valores['description']],
+                    ['document' => $values['document'], 'description' => $values['description']],
                 );
 
                 continue;
             }
 
-            $relatorio->validCount++;
+            $report->validCount++;
 
-            $cobranca = [
-                'customer_id' => $clienteId,
-                'description' => $valores['description'],
-                'original_amount' => $valores['original_amount'],
-                'monthly_interest_rate' => $valores['monthly_interest_rate'],
-                'issue_date' => $valores['issue_date'],
-                'due_date' => $valores['due_date'],
+            $billing = [
+                'customer_id' => $customerId,
+                'description' => $values['description'],
+                'original_amount' => $values['original_amount'],
+                'monthly_interest_rate' => $values['monthly_interest_rate'],
+                'issue_date' => $values['issue_date'],
+                'due_date' => $values['due_date'],
                 // Nasce pendente, sem exceção. O arquivo não decide isto.
                 'status' => BillingStatus::Pending->value,
                 'payment_date' => null,
                 'paid_amount' => null,
                 'paid_interest_amount' => null,
-                'created_at' => $agora,
-                'updated_at' => $agora,
+                'created_at' => $now,
+                'updated_at' => $now,
             ];
 
-            $relatorio->addSample([
-                'document' => $valores['document'],
-                'description' => $valores['description'],
-                'original_amount' => $valores['original_amount'],
-                'monthly_interest_rate' => $valores['monthly_interest_rate'],
-                'issue_date' => $valores['issue_date'],
-                'due_date' => $valores['due_date'],
+            $report->addSample([
+                'document' => $values['document'],
+                'description' => $values['description'],
+                'original_amount' => $values['original_amount'],
+                'monthly_interest_rate' => $values['monthly_interest_rate'],
+                'issue_date' => $values['issue_date'],
+                'due_date' => $values['due_date'],
             ]);
 
-            $inserir[] = $cobranca;
+            $insert[] = $billing;
         }
 
-        if ($gravar && $inserir !== []) {
+        if ($store && $insert !== []) {
             // O insert em lote não passa pelo Eloquent, então não dispara o
             // observer: a versão dos dados sobe aqui, na mesma transação do lote.
-            DB::transaction(function () use ($inserir): void {
-                DB::table('billings')->insert($inserir);
-                $this->versao->bump();
+            DB::transaction(function () use ($insert): void {
+                DB::table('billings')->insert($insert);
+                $this->version->bump();
             });
 
-            $relatorio->importedCount += count($inserir);
+            $report->importedCount += count($insert);
         }
     }
 
     /**
-     * @param  array<string, string>  $valores
+     * @param  array<string, string>  $values
      * @return array<string, string>
      */
-    private function normalizar(array $valores): array
+    private function normalize(array $values): array
     {
         return [
-            'document' => preg_replace('/\D/', '', $valores['document'] ?? '') ?? '',
-            'description' => trim($valores['description'] ?? ''),
-            'original_amount' => $this->numero($valores['original_amount'] ?? ''),
+            'document' => preg_replace('/\D/', '', $values['document'] ?? '') ?? '',
+            'description' => trim($values['description'] ?? ''),
+            'original_amount' => $this->normalizeNumber($values['original_amount'] ?? ''),
             // Taxa ausente vira zero: cobrança sem juros é cobrança legítima, e
             // exigir a coluna recusaria arquivo de quem não cobra juros.
-            'monthly_interest_rate' => $this->numero($valores['monthly_interest_rate'] ?? '0'),
-            'issue_date' => $this->data($valores['issue_date'] ?? ''),
-            'due_date' => $this->data($valores['due_date'] ?? ''),
+            'monthly_interest_rate' => $this->normalizeNumber($values['monthly_interest_rate'] ?? '0'),
+            'issue_date' => $this->data($values['issue_date'] ?? ''),
+            'due_date' => $this->data($values['due_date'] ?? ''),
         ];
     }
 
@@ -190,19 +190,19 @@ final class BillingCsvImport
      * simples: se tem vírgula, ela é o separador decimal e o ponto é de
      * milhar.
      */
-    private function numero(string $valor): string
+    private function normalizeNumber(string $value): string
     {
-        $limpo = trim($valor);
+        $clean = trim($value);
 
-        if ($limpo === '') {
+        if ($clean === '') {
             return '0';
         }
 
-        if (str_contains($limpo, ',')) {
-            $limpo = str_replace(['.', ','], ['', '.'], $limpo);
+        if (str_contains($clean, ',')) {
+            $clean = str_replace(['.', ','], ['', '.'], $clean);
         }
 
-        return $limpo;
+        return $clean;
     }
 
     /**
@@ -218,28 +218,28 @@ final class BillingCsvImport
      * 32/13/2026 e rolam para o mês seguinte. Sem ela, data inválida viraria
      * cobrança com vencimento errado em vez de erro na linha.
      */
-    private function data(string $valor): string
+    private function data(string $value): string
     {
-        $limpo = trim($valor);
+        $clean = trim($value);
 
-        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $formato) {
-            $data = DateTimeImmutable::createFromFormat($formato, $limpo);
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $format) {
+            $data = DateTimeImmutable::createFromFormat($format, $clean);
 
-            if ($data !== false && $data->format($formato) === $limpo) {
+            if ($data !== false && $data->format($format) === $clean) {
                 return $data->format('Y-m-d');
             }
         }
 
-        return $limpo;
+        return $clean;
     }
 
     /**
-     * @param  array<string, string>  $valores
+     * @param  array<string, string>  $values
      * @return array<int, string>
      */
-    private function validar(array $valores): array
+    private function validate(array $values): array
     {
-        $validador = Validator::make($valores, [
+        $validator = Validator::make($values, [
             'document' => ['required', 'string', 'regex:/^(\d{11}|\d{14})$/'],
             'description' => ['required', 'string', 'max:255'],
             'original_amount' => ['required', 'numeric', 'min:0.01', 'max:9999999999.99'],
@@ -253,6 +253,6 @@ final class BillingCsvImport
             'due_date.after_or_equal' => 'O vencimento não pode ser anterior à emissão.',
         ]);
 
-        return $validador->fails() ? $validador->errors()->all() : [];
+        return $validator->fails() ? $validator->errors()->all() : [];
     }
 }

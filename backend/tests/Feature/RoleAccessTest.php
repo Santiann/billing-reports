@@ -36,11 +36,11 @@ class RoleAccessTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => UserRole::Admin]));
     }
 
-    private function comIds(string $rota, Billing $cobranca): string
+    private function comIds(string $rota, Billing $billing): string
     {
         return str_replace(
             ['{cliente}', '{cobranca}'],
-            [(string) $cobranca->customer_id, (string) $cobranca->id],
+            [(string) $billing->customer_id, (string) $billing->id],
             $rota,
         );
     }
@@ -69,14 +69,14 @@ class RoleAccessTest extends TestCase
     }
 
     #[DataProvider('endpointsDeEscrita')]
-    public function test_the_read_only_role_cannot_write(string $metodo, string $rota): void
+    public function test_the_read_only_role_cannot_write(string $method, string $rota): void
     {
         $this->comoConsulta();
 
         // Os registros existem para o 403 não se confundir com um 404.
-        $cobranca = Billing::factory()->create();
+        $billing = Billing::factory()->create();
 
-        $this->json($metodo, $this->comIds($rota, $cobranca), [])->assertForbidden();
+        $this->json($method, $this->comIds($rota, $billing), [])->assertForbidden();
     }
 
     /**
@@ -125,9 +125,9 @@ class RoleAccessTest extends TestCase
     public function test_the_read_only_role_reads_everything(string $rota): void
     {
         $this->comoConsulta();
-        $cobranca = Billing::factory()->create();
+        $billing = Billing::factory()->create();
 
-        $this->getJson($this->comIds($rota, $cobranca))->assertOk();
+        $this->getJson($this->comIds($rota, $billing))->assertOk();
     }
 
     /** Exportar é leitura: o arquivo é o mesmo relatório em outro formato. */
@@ -162,13 +162,13 @@ class RoleAccessTest extends TestCase
      */
     public function test_the_default_role_is_the_least_privileged(): void
     {
-        $usuario = User::query()->create([
+        $user = User::query()->create([
             'name' => 'Sem perfil',
             'email' => 'sem-perfil@exemplo.test',
             'password' => 'password',
         ]);
 
-        $this->assertSame(UserRole::Viewer, $usuario->fresh()->role);
+        $this->assertSame(UserRole::Viewer, $user->fresh()->role);
     }
 
     /** Sem token, o 401 continua vindo antes do 403. */

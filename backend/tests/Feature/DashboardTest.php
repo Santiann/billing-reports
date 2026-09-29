@@ -93,12 +93,12 @@ class DashboardTest extends TestCase
             'due_date' => '2026-09-20',
         ]);
 
-        $resposta = $this->getJson('/api/dashboard')->assertOk();
+        $response = $this->getJson('/api/dashboard')->assertOk();
 
-        $this->assertSame(1, $resposta->json('period.overdue_count'));
+        $this->assertSame(1, $response->json('period.overdue_count'));
 
         // 1000 * 1.02^(2/30) = 1001.32 -> 1,32 de juros. A de 500 não entra.
-        $this->assertSame('1.32', $resposta->json('period.interest_amount'));
+        $this->assertSame('1.32', $response->json('period.interest_amount'));
     }
 
     /**
@@ -120,12 +120,12 @@ class DashboardTest extends TestCase
         // Paga com 2 dias de atraso: 1000 * 1.02^(2/30) = 1001.32.
         app(RegisterPayment::class)($billing, '2026-09-12');
 
-        $resposta = $this->getJson('/api/dashboard')->assertOk();
+        $response = $this->getJson('/api/dashboard')->assertOk();
 
-        $this->assertSame('1001.32', $resposta->json('period.received_amount'));
+        $this->assertSame('1001.32', $response->json('period.received_amount'));
         // Paga não é vencida, e não entra nos juros a receber.
-        $this->assertSame(0, $resposta->json('period.overdue_count'));
-        $this->assertSame('0.00', $resposta->json('period.interest_amount'));
+        $this->assertSame(0, $response->json('period.overdue_count'));
+        $this->assertSame('0.00', $response->json('period.interest_amount'));
     }
 
     /**
@@ -145,12 +145,12 @@ class DashboardTest extends TestCase
         ]);
         app(RegisterPayment::class)($billing, '2026-09-12');
 
-        $antes = $this->getJson('/api/dashboard')->json('period.received_amount');
+        $before = $this->getJson('/api/dashboard')->json('period.received_amount');
 
         // Ainda dentro do mesmo mês, para o recorte não mudar.
         $this->travelTo('2026-09-30 23:00:00');
 
-        $this->assertSame($antes, $this->getJson('/api/dashboard')->json('period.received_amount'));
+        $this->assertSame($before, $this->getJson('/api/dashboard')->json('period.received_amount'));
     }
 
     public function test_the_series_brings_twelve_months_ending_in_the_current_one(): void

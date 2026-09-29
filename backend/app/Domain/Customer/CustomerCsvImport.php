@@ -31,9 +31,9 @@ use Illuminate\Support\Facades\Validator;
 final class CustomerCsvImport
 {
     /** Linhas por INSERT, e por consulta de unicidade. */
-    private const LOTE = 500;
+    private const BATCH = 500;
 
-    private const COLUNAS = [
+    private const COLUMNS = [
         'name' => ['nome', 'name', 'razaosocial', 'cliente'],
         'document' => ['documento', 'document', 'cpf', 'cnpj', 'cpfcnpj'],
         'email' => ['email', 'mail'],
@@ -49,62 +49,62 @@ final class CustomerCsvImport
         '' => 'active',
     ];
 
-    public function preview(string $caminho): ImportReport
+    public function preview(string $path): ImportReport
     {
-        return $this->processar($caminho, gravar: false);
+        return $this->process($path, store: false);
     }
 
-    public function import(string $caminho): ImportReport
+    public function import(string $path): ImportReport
     {
-        return $this->processar($caminho, gravar: true);
+        return $this->process($path, store: true);
     }
 
-    private function processar(string $caminho, bool $gravar): ImportReport
+    private function process(string $path, bool $store): ImportReport
     {
-        $leitor = new CsvReader(self::COLUNAS, ['name', 'document', 'email']);
-        $relatorio = new ImportReport();
+        $reader = new CsvReader(self::COLUMNS, ['name', 'document', 'email']);
+        $report = new ImportReport();
 
         /** @var array<string, int> documento => linha em que apareceu */
-        $vistos = [];
-        $lote = [];
-        $agora = now();
+        $seen = [];
+        $batch = [];
+        $now = now();
 
-        foreach ($leitor->rows($caminho) as [$linha, $valores]) {
-            $relatorio->totalRows++;
+        foreach ($reader->rows($path) as [$row, $values]) {
+            $report->totalRows++;
 
-            $normalizado = $this->normalizar($valores);
-            $erros = $this->validar($normalizado);
+            $normalized = $this->normalize($values);
+            $errors = $this->validate($normalized);
 
-            if (isset($vistos[$normalizado['document']])) {
-                $erros[] = sprintf(
+            if (isset($seen[$normalized['document']])) {
+                $errors[] = sprintf(
                     'Documento repetido no arquivo: já apareceu na linha %d.',
-                    $vistos[$normalizado['document']],
+                    $seen[$normalized['document']],
                 );
             }
 
-            if ($erros !== []) {
-                $relatorio->addError($linha, $erros, $valores);
+            if ($errors !== []) {
+                $report->addError($row, $errors, $values);
 
                 continue;
             }
 
-            $vistos[$normalizado['document']] = $linha;
-            $relatorio->validCount++;
-            $relatorio->addSample($normalizado);
+            $seen[$normalized['document']] = $row;
+            $report->validCount++;
+            $report->addSample($normalized);
 
-            $lote[$linha] = $normalizado + ['created_at' => $agora, 'updated_at' => $agora];
+            $batch[$row] = $normalized + ['created_at' => $now, 'updated_at' => $now];
 
-            if (count($lote) >= self::LOTE) {
-                $this->descarregar($lote, $relatorio, $gravar);
-                $lote = [];
+            if (count($batch) >= self::BATCH) {
+                $this->flush($batch, $report, $store);
+                $batch = [];
             }
         }
 
-        if ($lote !== []) {
-            $this->descarregar($lote, $relatorio, $gravar);
+        if ($batch !== []) {
+            $this->flush($batch, $report, $store);
         }
 
-        return $relatorio;
+        return $report;
     }
 
     /**
@@ -113,65 +113,65 @@ final class CustomerCsvImport
      * A checagem acontece aqui, e não linha a linha, porque uma consulta por
      * linha transformaria um arquivo de dez mil clientes em dez mil consultas.
      *
-     * @param  array<int, array<string, mixed>>  $lote  linha => valores
+     * @param  array<int, array<string, mixed>>  $batch  linha => valores
      */
-    private function descarregar(array $lote, ImportReport $relatorio, bool $gravar): void
+    private function flush(array $batch, ImportReport $report, bool $store): void
     {
-        $documentos = array_column($lote, 'document');
+        $documents = array_column($batch, 'document');
 
         $existentes = Customer::query()
-            ->whereIn('document', $documentos)
+            ->whereIn('document', $documents)
             ->pluck('document')
             ->flip();
 
-        $inserir = [];
+        $insert = [];
 
-        foreach ($lote as $linha => $valores) {
-            if ($existentes->has($valores['document'])) {
-                $relatorio->validCount--;
-                $relatorio->addError(
-                    $linha,
+        foreach ($batch as $row => $values) {
+            if ($existentes->has($values['document'])) {
+                $report->validCount--;
+                $report->addError(
+                    $row,
                     ['Já existe um cliente com este documento.'],
-                    ['name' => $valores['name'], 'document' => $valores['document']],
+                    ['name' => $values['name'], 'document' => $values['document']],
                 );
 
                 continue;
             }
 
-            $inserir[] = $valores;
+            $insert[] = $values;
         }
 
-        if ($gravar && $inserir !== []) {
-            DB::table('customers')->insert($inserir);
-            $relatorio->importedCount += count($inserir);
+        if ($store && $insert !== []) {
+            DB::table('customers')->insert($insert);
+            $report->importedCount += count($insert);
         }
     }
 
     /**
-     * @param  array<string, string>  $valores
+     * @param  array<string, string>  $values
      * @return array<string, string>
      */
-    private function normalizar(array $valores): array
+    private function normalize(array $values): array
     {
-        $status = mb_strtolower(trim($valores['status'] ?? ''));
+        $status = mb_strtolower(trim($values['status'] ?? ''));
 
         return [
-            'name' => trim($valores['name'] ?? ''),
+            'name' => trim($values['name'] ?? ''),
             // Só dígitos, como na tela: a busca não pode depender da máscara
             // que veio na planilha.
-            'document' => preg_replace('/\D/', '', $valores['document'] ?? '') ?? '',
-            'email' => mb_strtolower(trim($valores['email'] ?? '')),
+            'document' => preg_replace('/\D/', '', $values['document'] ?? '') ?? '',
+            'email' => mb_strtolower(trim($values['email'] ?? '')),
             'status' => self::STATUS[$status] ?? $status,
         ];
     }
 
     /**
-     * @param  array<string, string>  $valores
+     * @param  array<string, string>  $values
      * @return array<int, string>
      */
-    private function validar(array $valores): array
+    private function validate(array $values): array
     {
-        $validador = Validator::make($valores, [
+        $validator = Validator::make($values, [
             'name' => ['required', 'string', 'max:255'],
             'document' => ['required', 'string', 'regex:/^(\d{11}|\d{14})$/'],
             'email' => ['required', 'email', 'max:255'],
@@ -181,6 +181,6 @@ final class CustomerCsvImport
             'status.in' => 'O status deve ser ativo ou inativo.',
         ]);
 
-        return $validador->fails() ? $validador->errors()->all() : [];
+        return $validator->fails() ? $validator->errors()->all() : [];
     }
 }

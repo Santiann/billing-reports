@@ -27,27 +27,27 @@ class HealthController extends Controller
 {
     public function __invoke(): JsonResponse
     {
-        $checagens = [
-            'database' => $this->checar(fn () => DB::connection()->select('select 1')),
-            'cache' => $this->checar(fn () => Cache::get('health')),
+        $checks = [
+            'database' => $this->check(fn () => DB::connection()->select('select 1')),
+            'cache' => $this->check(fn () => Cache::get('health')),
         ];
 
-        $saudavel = ! in_array(false, array_column($checagens, 'ok'), true);
+        $healthy = ! in_array(false, array_column($checks, 'ok'), true);
 
         return response()->json([
-            'status' => $saudavel ? 'ok' : 'degraded',
-            'checks' => $checagens,
-        ], $saudavel ? 200 : 503);
+            'status' => $healthy ? 'ok' : 'degraded',
+            'checks' => $checks,
+        ], $healthy ? 200 : 503);
     }
 
     /** @return array<string, mixed> */
-    private function checar(Closure $checagem): array
+    private function check(Closure $check): array
     {
-        $inicio = microtime(true);
+        $start = microtime(true);
 
         try {
-            $checagem();
-        } catch (Throwable $erro) {
+            $check();
+        } catch (Throwable $error) {
             /*
              * A mensagem do driver fica no LOG, não na resposta.
              *
@@ -57,11 +57,11 @@ class HealthController extends Controller
              * detalhe é quem opera, e tem o log estruturado com o identificador
              * da requisição para achá-lo.
              */
-            Log::error('health.falhou', ['erro' => $erro->getMessage()]);
+            Log::error('health.failed', ['erro' => $error->getMessage()]);
 
             return ['ok' => false, 'error' => 'não respondeu'];
         }
 
-        return ['ok' => true, 'duration_ms' => round((microtime(true) - $inicio) * 1000, 2)];
+        return ['ok' => true, 'duration_ms' => round((microtime(true) - $start) * 1000, 2)];
     }
 }

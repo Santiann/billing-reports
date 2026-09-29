@@ -58,12 +58,12 @@ class LoginRateLimitTest extends TestCase
             $this->tentar('admin@billing.test');
         }
 
-        $resposta = $this->tentar('admin@billing.test')->assertStatus(429);
+        $response = $this->tentar('admin@billing.test')->assertStatus(429);
 
-        $this->assertNotEmpty($resposta->headers->get('Retry-After'));
+        $this->assertNotEmpty($response->headers->get('Retry-After'));
         $this->assertStringContainsString(
             'tentativas',
-            mb_strtolower((string) $resposta->json('message')),
+            mb_strtolower((string) $response->json('message')),
         );
     }
 

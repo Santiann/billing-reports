@@ -34,12 +34,12 @@ class BillingCsvImportTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
     }
 
-    private function csv(string $conteudo): UploadedFile
+    private function csv(string $content): UploadedFile
     {
-        return UploadedFile::fake()->createWithContent('cobrancas.csv', $conteudo);
+        return UploadedFile::fake()->createWithContent('cobrancas.csv', $content);
     }
 
-    private function cliente(string $documento): Customer
+    private function customer(string $documento): Customer
     {
         return Customer::factory()->create(['document' => $documento]);
     }
@@ -56,7 +56,7 @@ class BillingCsvImportTest extends TestCase
     public function test_the_preview_writes_nothing(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import?preview=1', [
             'file' => $this->csv(<<<'CSV'
@@ -73,7 +73,7 @@ class BillingCsvImportTest extends TestCase
     public function test_the_customer_is_resolved_by_document(): void
     {
         $this->actingAsUser();
-        $cliente = $this->cliente('12345678000190');
+        $cliente = $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -89,7 +89,7 @@ class BillingCsvImportTest extends TestCase
     public function test_a_formatted_document_still_finds_the_customer(): void
     {
         $this->actingAsUser();
-        $cliente = $this->cliente('12345678000190');
+        $cliente = $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -104,9 +104,9 @@ class BillingCsvImportTest extends TestCase
     public function test_a_missing_customer_fails_only_its_own_row(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
-        $resposta = $this->postJson('/api/billings/import', [
+        $response = $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
             documento;descricao;valor;taxa;emissao;vencimento
             12345678000190;Entra;1500,00;0,02;2026-07-10;2026-08-09
@@ -115,11 +115,11 @@ class BillingCsvImportTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, Billing::query()->count());
-        $resposta->assertJsonPath('imported_count', 1);
-        $resposta->assertJsonPath('errors.0.line', 3);
+        $response->assertJsonPath('imported_count', 1);
+        $response->assertJsonPath('errors.0.line', 3);
         $this->assertStringContainsString(
             'cliente',
-            mb_strtolower($resposta->json('errors.0.messages.0')),
+            mb_strtolower($response->json('errors.0.messages.0')),
         );
     }
 
@@ -128,7 +128,7 @@ class BillingCsvImportTest extends TestCase
     public function test_an_imported_billing_is_born_pending(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -137,12 +137,12 @@ class BillingCsvImportTest extends TestCase
             CSV),
         ])->assertOk();
 
-        $cobranca = Billing::query()->firstOrFail();
+        $billing = Billing::query()->firstOrFail();
 
-        $this->assertSame(BillingStatus::Pending, $cobranca->status);
-        $this->assertNull($cobranca->payment_date);
-        $this->assertNull($cobranca->paid_amount);
-        $this->assertNull($cobranca->paid_interest_amount);
+        $this->assertSame(BillingStatus::Pending, $billing->status);
+        $this->assertNull($billing->payment_date);
+        $this->assertNull($billing->paid_amount);
+        $this->assertNull($billing->paid_interest_amount);
     }
 
     /**
@@ -153,7 +153,7 @@ class BillingCsvImportTest extends TestCase
     public function test_status_and_payment_coming_from_the_file_are_ignored(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -162,10 +162,10 @@ class BillingCsvImportTest extends TestCase
             CSV),
         ])->assertOk()->assertJsonPath('imported_count', 1);
 
-        $cobranca = Billing::query()->firstOrFail();
+        $billing = Billing::query()->firstOrFail();
 
-        $this->assertSame(BillingStatus::Pending, $cobranca->status);
-        $this->assertNull($cobranca->paid_amount);
+        $this->assertSame(BillingStatus::Pending, $billing->status);
+        $this->assertNull($billing->paid_amount);
     }
 
     // --- formatos que vêm de planilha ---------------------------------
@@ -173,7 +173,7 @@ class BillingCsvImportTest extends TestCase
     public function test_accepts_an_amount_in_brazilian_format(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -182,16 +182,16 @@ class BillingCsvImportTest extends TestCase
             CSV),
         ])->assertOk()->assertJsonPath('imported_count', 1);
 
-        $cobranca = Billing::query()->firstOrFail();
+        $billing = Billing::query()->firstOrFail();
 
-        $this->assertSame('1234.56', $cobranca->original_amount);
-        $this->assertSame('0.0350', $cobranca->monthly_interest_rate);
+        $this->assertSame('1234.56', $billing->original_amount);
+        $this->assertSame('0.0350', $billing->monthly_interest_rate);
     }
 
     public function test_accepts_a_date_in_brazilian_format(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -200,18 +200,18 @@ class BillingCsvImportTest extends TestCase
             CSV),
         ])->assertOk()->assertJsonPath('imported_count', 1);
 
-        $cobranca = Billing::query()->firstOrFail();
+        $billing = Billing::query()->firstOrFail();
 
-        $this->assertSame('2026-07-10', $cobranca->issue_date->toDateString());
-        $this->assertSame('2026-08-09', $cobranca->due_date->toDateString());
+        $this->assertSame('2026-07-10', $billing->issue_date->toDateString());
+        $this->assertSame('2026-08-09', $billing->due_date->toDateString());
     }
 
     public function test_a_due_date_before_the_issue_date_is_refused(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
-        $resposta = $this->postJson('/api/billings/import', [
+        $response = $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
             documento;descricao;valor;taxa;emissao;vencimento
             12345678000190;Invertida;1500,00;0,02;2026-08-09;2026-07-10
@@ -219,7 +219,7 @@ class BillingCsvImportTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(0, Billing::query()->count());
-        $resposta->assertJsonPath('error_count', 1);
+        $response->assertJsonPath('error_count', 1);
     }
 
     public function test_a_file_missing_the_required_columns_is_refused_whole(): void
@@ -239,7 +239,7 @@ class BillingCsvImportTest extends TestCase
     public function test_identical_rows_create_two_billings(): void
     {
         $this->actingAsUser();
-        $this->cliente('12345678000190');
+        $this->customer('12345678000190');
 
         $this->postJson('/api/billings/import', [
             'file' => $this->csv(<<<'CSV'
@@ -261,25 +261,25 @@ class BillingCsvImportTest extends TestCase
     {
         $this->actingAsUser();
 
-        $documentos = [];
+        $documents = [];
 
         for ($i = 1; $i <= 100; $i++) {
             $documento = str_pad((string) $i, 14, '0', STR_PAD_LEFT);
-            $this->cliente($documento);
-            $documentos[] = $documento;
+            $this->customer($documento);
+            $documents[] = $documento;
         }
 
-        $linhas = ['documento;descricao;valor;taxa;emissao;vencimento'];
+        $rows = ['documento;descricao;valor;taxa;emissao;vencimento'];
 
         for ($i = 0; $i < 1_000; $i++) {
-            $documento = $documentos[$i % 100];
-            $linhas[] = "{$documento};Mensalidade {$i};1000,00;0,02;2026-07-10;2026-08-09";
+            $documento = $documents[$i % 100];
+            $rows[] = "{$documento};Mensalidade {$i};1000,00;0,02;2026-07-10;2026-08-09";
         }
 
         DB::enableQueryLog();
 
         $this->postJson('/api/billings/import', [
-            'file' => $this->csv(implode("\n", $linhas)),
+            'file' => $this->csv(implode("\n", $rows)),
         ])->assertOk()->assertJsonPath('imported_count', 1_000);
 
         $consultas = count(DB::getQueryLog());

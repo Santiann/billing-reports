@@ -31,13 +31,13 @@ class PaymentIdempotencyTest extends TestCase
 
     private function actingAsUser(): User
     {
-        $usuario = User::factory()->create();
-        Sanctum::actingAs($usuario);
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
 
-        return $usuario;
+        return $user;
     }
 
-    private function cobrancaVencida(): Billing
+    private function overdueBilling(): Billing
     {
         // Vencida há 30 dias a 2% ao mês: 1000 * 1.02 = 1020,00.
         return Billing::factory()->create([
@@ -48,11 +48,11 @@ class PaymentIdempotencyTest extends TestCase
         ]);
     }
 
-    /** @param array<string, mixed> $corpo */
-    private function pagar(Billing $cobranca, ?string $chave, array $corpo = [])
+    /** @param array<string, mixed> $body */
+    private function pay(Billing $billing, ?string $key, array $body = [])
     {
-        return $this->withHeaders($chave === null ? [] : ['Idempotency-Key' => $chave])
-            ->postJson("/api/billings/{$cobranca->id}/payment", $corpo);
+        return $this->withHeaders($key === null ? [] : ['Idempotency-Key' => $key])
+            ->postJson("/api/billings/{$billing->id}/payment", $body);
     }
 
     // --- o caso que motiva tudo ---------------------------------------
@@ -61,13 +61,13 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $primeira = $this->pagar($cobranca, self::CHAVE)->assertOk();
-        $segunda = $this->pagar($cobranca, self::CHAVE)->assertOk();
+        $firstOne = $this->pay($billing, self::CHAVE)->assertOk();
+        $segunda = $this->pay($billing, self::CHAVE)->assertOk();
 
         // Mesmo corpo, byte a byte: é o resultado guardado, não um recálculo.
-        $this->assertSame($primeira->json(), $segunda->json());
+        $this->assertSame($firstOne->json(), $segunda->json());
         $this->assertSame('1020.00', $segunda->json('data.paid_amount'));
     }
 
@@ -75,16 +75,16 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $this->pagar($cobranca, self::CHAVE)->assertOk();
-        $this->pagar($cobranca, self::CHAVE)->assertOk();
+        $this->pay($billing, self::CHAVE)->assertOk();
+        $this->pay($billing, self::CHAVE)->assertOk();
 
-        $cobranca->refresh();
+        $billing->refresh();
 
-        $this->assertSame(BillingStatus::Paid, $cobranca->status);
-        $this->assertSame('1020.00', $cobranca->paid_amount);
-        $this->assertSame('20.00', $cobranca->paid_interest_amount);
+        $this->assertSame(BillingStatus::Paid, $billing->status);
+        $this->assertSame('1020.00', $billing->paid_amount);
+        $this->assertSame('20.00', $billing->paid_interest_amount);
     }
 
     /**
@@ -95,18 +95,18 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $primeira = $this->pagar($cobranca, self::CHAVE)->assertOk();
+        $firstOne = $this->pay($billing, self::CHAVE)->assertOk();
 
         // Vinte e três horas depois — dentro da validade da chave, e já no dia
         // seguinte: recalcular daria 31 dias de atraso, R$ 1.020,67.
         $this->travelTo('2026-06-16 08:30:00');
-        $segunda = $this->pagar($cobranca, self::CHAVE)->assertOk();
+        $segunda = $this->pay($billing, self::CHAVE)->assertOk();
 
-        $this->assertSame('1020.00', $primeira->json('data.paid_amount'));
+        $this->assertSame('1020.00', $firstOne->json('data.paid_amount'));
         $this->assertSame('1020.00', $segunda->json('data.paid_amount'));
-        $this->assertSame('2026-06-15', $cobranca->refresh()->payment_date->toDateString());
+        $this->assertSame('2026-06-15', $billing->refresh()->payment_date->toDateString());
     }
 
     // --- o que NÃO muda -----------------------------------------------
@@ -120,10 +120,10 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $this->pagar($cobranca, null)->assertOk();
-        $this->pagar($cobranca, null)->assertStatus(422);
+        $this->pay($billing, null)->assertOk();
+        $this->pay($billing, null)->assertStatus(422);
     }
 
     /** Chave nova sobre cobrança já paga também é 422: a operação é outra. */
@@ -131,10 +131,10 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $this->pagar($cobranca, self::CHAVE)->assertOk();
-        $this->pagar($cobranca, 'outra-chave-completamente-diferente')->assertStatus(422);
+        $this->pay($billing, self::CHAVE)->assertOk();
+        $this->pay($billing, 'outra-chave-completamente-diferente')->assertStatus(422);
     }
 
     /** O erro também é guardado: repetir uma chamada que falhou repete a falha. */
@@ -142,15 +142,15 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
         // Data futura é recusada pela validação.
-        $corpo = ['payment_date' => '2027-01-01'];
+        $body = ['payment_date' => '2027-01-01'];
 
-        $primeira = $this->pagar($cobranca, self::CHAVE, $corpo)->assertStatus(422);
-        $segunda = $this->pagar($cobranca, self::CHAVE, $corpo)->assertStatus(422);
+        $firstOne = $this->pay($billing, self::CHAVE, $body)->assertStatus(422);
+        $segunda = $this->pay($billing, self::CHAVE, $body)->assertStatus(422);
 
-        $this->assertSame($primeira->json(), $segunda->json());
+        $this->assertSame($firstOne->json(), $segunda->json());
     }
 
     // --- uso errado da chave ------------------------------------------
@@ -163,11 +163,11 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $this->pagar($cobranca, self::CHAVE, ['paid_amount' => '1000.00'])->assertOk();
+        $this->pay($billing, self::CHAVE, ['paid_amount' => '1000.00'])->assertOk();
 
-        $this->pagar($cobranca, self::CHAVE, ['paid_amount' => '999.00'])
+        $this->pay($billing, self::CHAVE, ['paid_amount' => '999.00'])
             ->assertStatus(422)
             ->assertJsonPath('message', fn (string $m) => str_contains(mb_strtolower($m), 'chave'));
     }
@@ -177,8 +177,8 @@ class PaymentIdempotencyTest extends TestCase
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
 
-        $this->pagar($this->cobrancaVencida(), self::CHAVE)->assertOk();
-        $this->pagar($this->cobrancaVencida(), self::CHAVE)->assertStatus(422);
+        $this->pay($this->overdueBilling(), self::CHAVE)->assertOk();
+        $this->pay($this->overdueBilling(), self::CHAVE)->assertStatus(422);
     }
 
     /** A chave é de quem a usou: outro usuário com a mesma chave não é repetição. */
@@ -186,14 +186,14 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $this->pagar($cobranca, self::CHAVE)->assertOk();
+        $this->pay($billing, self::CHAVE)->assertOk();
 
         // Outro usuário, mesma chave: não recebe a resposta guardada do
         // primeiro — recebe o 422 de cobrança já paga, que é a verdade.
         $this->actingAsUser();
-        $this->pagar($cobranca, self::CHAVE)->assertStatus(422);
+        $this->pay($billing, self::CHAVE)->assertStatus(422);
     }
 
     /**
@@ -203,13 +203,13 @@ class PaymentIdempotencyTest extends TestCase
     public function test_a_concurrent_call_with_the_same_key_responds_409(): void
     {
         $this->travelTo(self::HOJE);
-        $usuario = $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $user = $this->actingAsUser();
+        $billing = $this->overdueBilling();
 
         // Simula a primeira requisição ainda em voo: a chave está reservada e
         // a resposta ainda não foi gravada.
         DB::table('idempotency_keys')->insert([
-            'user_id' => $usuario->id,
+            'user_id' => $user->id,
             'key' => self::CHAVE,
             'fingerprint' => hash('sha256', 'qualquer'),
             'response_status' => null,
@@ -218,7 +218,7 @@ class PaymentIdempotencyTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->pagar($cobranca, self::CHAVE)->assertStatus(409);
+        $this->pay($billing, self::CHAVE)->assertStatus(409);
     }
 
     /** Chave vencida é chave nova: guardar resposta para sempre não é opção. */
@@ -226,12 +226,12 @@ class PaymentIdempotencyTest extends TestCase
     {
         $this->travelTo(self::HOJE);
         $this->actingAsUser();
-        $cobranca = $this->cobrancaVencida();
+        $billing = $this->overdueBilling();
 
-        $this->pagar($cobranca, self::CHAVE)->assertOk();
+        $this->pay($billing, self::CHAVE)->assertOk();
 
         // Passado o prazo, a chave não vale mais e a cobrança já está paga.
         $this->travelTo('2026-06-17 09:30:00');
-        $this->pagar($cobranca, self::CHAVE)->assertStatus(422);
+        $this->pay($billing, self::CHAVE)->assertStatus(422);
     }
 }
