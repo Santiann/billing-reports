@@ -1,146 +1,145 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
- * Sufixo único por chamada.
+ * Unique suffix per call.
  *
- * Os testes escrevem no banco de desenvolvimento, que não é limpo entre
- * execuções — e o documento do cliente tem unique. Sem sufixo único, a segunda
- * execução do dia falharia por conflito, que é a pior forma de intermitência:
- * a que só aparece na segunda vez.
+ * These tests write to the development database, which is not cleaned between
+ * runs — and the customer document is unique. Without a unique suffix the
+ * second run of the day would fail on a conflict, which is the worst kind of
+ * flakiness: the kind that only shows up the second time.
  */
-export function sufixo(): string {
+export function suffix(): string {
   return String(Date.now()).slice(-9);
 }
 
 /**
- * Espera o React assumir o elemento antes de interagir com ele.
+ * Waits for React to take over the element before interacting with it.
  *
- * Não é zelo: a primeira execução desta suíte falhou em 8 de 10 testes por
- * causa disso. O formulário de login é controlado (`value` + `onChange`), e
- * antes da hidratação o React ainda não assumiu nada — preencher grava no DOM
- * um valor que a hidratação descarta, e clicar dispara o envio NATIVO do
- * formulário, que recarrega a página limpa. O retrato de falha do Playwright
- * mostrava exatamente isso: formulário vazio, sem mensagem de erro.
+ * This is not fussiness: the first run of this suite failed 8 of 10 tests
+ * because of it. The login form is controlled (`value` + `onChange`), and before
+ * hydration React has not taken over anything — filling it writes a value into
+ * the DOM that hydration then discards, and clicking fires the form's NATIVE
+ * submit, which reloads the page clean. Playwright's failure screenshot showed
+ * exactly that: an empty form with no error message.
  *
- * O sinal é a chave que o React DOM pendura no nó quando passa a tratar os
- * eventos dele. É API interna do React, e por isso só aparece aqui, no teste —
- * nunca no código da aplicação. A alternativa era `waitForTimeout`, que troca
- * uma corrida por uma aposta.
+ * The signal is the key React DOM hangs on the node once it starts handling its
+ * events. It is React internal API, which is why it only appears here, in the
+ * tests — never in application code. The alternative was `waitForTimeout`,
+ * which trades a race for a bet.
  *
- * O elemento sondado precisa pertencer a um componente CLIENTE. O formulário
- * de tema da casca, por exemplo, é renderizado no servidor e nunca receberia
- * essas chaves.
+ * The probed element has to belong to a CLIENT component. The shell's theme
+ * form, for instance, is server rendered and would never get these keys.
  */
-export async function aguardarHidratacao(alvo: Locator): Promise<void> {
+export async function waitForHydration(target: Locator): Promise<void> {
   await expect(async () => {
-    const hidratado = await alvo.evaluate((elemento) =>
-      Object.keys(elemento).some((chave) => chave.startsWith("__react")),
+    const hydrated = await target.evaluate((element) =>
+      Object.keys(element).some((key) => key.startsWith("__react")),
     );
 
-    expect(hidratado, "o React ainda não assumiu este elemento").toBe(true);
+    expect(hydrated, "React has not taken over this element yet").toBe(true);
   }).toPass({ timeout: 45_000, intervals: [200, 500, 1_000] });
 }
 
 export async function login(
   page: Page,
   email = "admin@billing.test",
-  senha = "password",
+  password = "password",
 ): Promise<void> {
   await page.goto("/login");
 
-  const entrar = page.getByRole("button", { name: "Entrar" });
-  await aguardarHidratacao(entrar);
+  const signIn = page.getByRole("button", { name: "Entrar" });
+  await waitForHydration(signIn);
 
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha").fill(senha);
-  await entrar.click();
+  await page.getByLabel("Senha").fill(password);
+  await signIn.click();
 
-  // O middleware manda para a raiz, que é o dashboard de quem tem sessão.
+  // The middleware sends you to the root, which is the dashboard for a session.
   await expect(page.getByRole("link", { name: "Cobranças" })).toBeVisible();
 }
 
-export type ClienteCriado = { id: string; nome: string; documento: string };
+export type CreatedCustomer = { id: string; name: string; document: string };
 
-/** Cadastra um cliente pela tela e devolve o que a URL do redirect informa. */
-export async function criarCliente(page: Page): Promise<ClienteCriado> {
-  const id = sufixo();
-  const nome = `Cliente E2E ${id}`;
-  const documento = `${id}00`;
+/** Creates a customer through the UI and returns what the redirect URL says. */
+export async function createCustomer(page: Page): Promise<CreatedCustomer> {
+  const id = suffix();
+  const name = `Cliente E2E ${id}`;
+  const document = `${id}00`;
 
   await page.goto("/clientes/novo");
-  await aguardarHidratacao(page.getByRole("button", { name: "Cadastrar" }));
+  await waitForHydration(page.getByRole("button", { name: "Cadastrar" }));
 
-  await page.getByLabel("Nome").fill(nome);
-  await page.getByLabel("Documento").fill(documento);
+  await page.getByLabel("Nome").fill(name);
+  await page.getByLabel("Documento").fill(document);
   await page.getByLabel("E-mail").fill(`e2e-${id}@exemplo.test`);
   await page.getByRole("button", { name: "Cadastrar" }).click();
 
   /*
-   * A action redireciona para a LISTA, não para a ficha — então o id não está
-   * na URL. Ele vem da ficha, alcançada pela busca, que de quebra exercita o
-   * filtro que a tela oferece.
+   * The action redirects to the LIST, not to the detail page — so the id is not
+   * in the URL. It comes from the detail page, reached through the search, which
+   * exercises the filter the screen offers as a bonus.
    */
   await expect(page.getByText("Cliente cadastrado com sucesso.")).toBeVisible();
 
-  await page.goto(`/clientes?search=${documento}`);
-  await page.getByRole("link", { name: nome }).click();
-  await expect(page.getByRole("heading", { name: nome })).toBeVisible();
+  await page.goto(`/clientes?search=${document}`);
+  await page.getByRole("link", { name }).click();
+  await expect(page.getByRole("heading", { name })).toBeVisible();
 
-  const encontrado = /\/clientes\/(\d+)/.exec(page.url());
-  expect(encontrado, `URL inesperada na ficha do cliente: ${page.url()}`).not.toBeNull();
+  const found = /\/clientes\/(\d+)/.exec(page.url());
+  expect(found, `unexpected URL on the customer detail page: ${page.url()}`).not.toBeNull();
 
-  return { id: encontrado![1], nome, documento };
+  return { id: found![1], name, document };
 }
 
-export type CobrancaCriada = { id: string; descricao: string };
+export type CreatedBilling = { id: string; description: string };
 
 /**
- * Cadastra uma cobrança vencida há 30 dias, a 2% ao mês.
+ * Creates a billing 30 days overdue, at 2% a month.
  *
- * Vencida de propósito: é o caso que tem juros para calcular, e portanto o que
- * o registro de pagamento tem para congelar.
+ * Overdue on purpose: it is the case that has interest to compute, and therefore
+ * the one that recording a payment has something to freeze.
  */
-export async function criarCobranca(
+export async function createBilling(
   page: Page,
-  cliente: ClienteCriado,
-): Promise<CobrancaCriada> {
-  const hoje = new Date();
-  const vencimento = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const emissao = new Date(hoje.getTime() - 60 * 24 * 60 * 60 * 1000);
-  const iso = (data: Date) => data.toISOString().slice(0, 10);
+  customer: CreatedCustomer,
+): Promise<CreatedBilling> {
+  const today = new Date();
+  const dueDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const issueDate = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const iso = (date: Date) => date.toISOString().slice(0, 10);
 
-  const descricao = `Cobrança E2E ${sufixo()}`;
+  const description = `Cobrança E2E ${suffix()}`;
 
   await page.goto("/cobrancas/nova");
 
-  // O seletor de cliente é um combobox próprio: busca no servidor e escolhe
-  // numa lista, em vez de um <select> com a base inteira. Ele é todo estado de
-  // cliente, então sem hidratação não abre.
-  const seletor = page.getByRole("combobox");
-  await aguardarHidratacao(seletor);
-  await seletor.click();
-  await seletor.fill(cliente.nome);
+  // The customer picker is a combobox of its own: it searches on the server and
+  // picks from a list, rather than a <select> holding the whole base. It is all
+  // client state, so it does not open without hydration.
+  const picker = page.getByRole("combobox");
+  await waitForHydration(picker);
+  await picker.click();
+  await picker.fill(customer.name);
   await page
     .getByRole("listbox")
-    .getByRole("button", { name: new RegExp(cliente.documento) })
+    .getByRole("button", { name: new RegExp(customer.document) })
     .click();
 
-  await page.getByLabel("Descrição").fill(descricao);
+  await page.getByLabel("Descrição").fill(description);
   await page.getByLabel("Valor original (R$)").fill("1000.00");
   await page.getByLabel("Taxa de juros mensal").fill("0.02");
-  await page.getByLabel("Data de emissão").fill(iso(emissao));
-  await page.getByLabel("Data de vencimento").fill(iso(vencimento));
+  await page.getByLabel("Data de emissão").fill(iso(issueDate));
+  await page.getByLabel("Data de vencimento").fill(iso(dueDate));
   await page.getByRole("button", { name: "Cadastrar" }).click();
 
-  // Mesma coisa da cobrança: a action volta para a lista.
+  // Same as the customer: the action goes back to the list.
   await expect(page.getByText("Cobrança cadastrada com sucesso.")).toBeVisible();
 
-  await page.goto(`/cobrancas?search=${encodeURIComponent(descricao)}`);
-  await page.getByRole("link", { name: descricao }).click();
-  await expect(page.getByRole("heading", { name: descricao })).toBeVisible();
+  await page.goto(`/cobrancas?search=${encodeURIComponent(description)}`);
+  await page.getByRole("link", { name: description }).click();
+  await expect(page.getByRole("heading", { name: description })).toBeVisible();
 
-  const encontrado = /\/cobrancas\/(\d+)/.exec(page.url());
-  expect(encontrado, `URL inesperada na ficha da cobrança: ${page.url()}`).not.toBeNull();
+  const found = /\/cobrancas\/(\d+)/.exec(page.url());
+  expect(found, `unexpected URL on the billing detail page: ${page.url()}`).not.toBeNull();
 
-  return { id: encontrado![1], descricao };
+  return { id: found![1], description };
 }

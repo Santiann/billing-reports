@@ -1,29 +1,30 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Os testes de ponta a ponta rodam contra a stack do Compose, não contra um
- * servidor que o Playwright sobe.
+ * The end-to-end tests run against the Compose stack, not against a server
+ * Playwright brings up.
  *
- * É deliberado: o que se quer provar é que a aplicação funciona como ela é
- * entregue — Next falando com o nginx pelo nome do serviço, sessão em cookie
- * httpOnly, MySQL de verdade. Um `webServer` do Playwright subiria um Next
- * isolado, sem backend, e os fluxos de cadastro e pagamento não existiriam.
+ * That is deliberate: what we want to prove is that the application works as it
+ * is delivered — Next talking to nginx by service name, the session in an
+ * httpOnly cookie, a real MySQL. A Playwright `webServer` would start an
+ * isolated Next with no backend, and the create and payment flows would not
+ * exist.
  *
- * `E2E_BASE_URL` muda conforme de onde se roda: `http://frontend:3000` dentro
- * da rede do Compose, `http://localhost:3000` a partir do host.
+ * `E2E_BASE_URL` changes with where you run from: `http://frontend:3000` inside
+ * the Compose network, `http://localhost:3000` from the host.
  */
 export default defineConfig({
   testDir: "./e2e",
 
-  // Compila as rotas uma vez, antes da suíte. Ver o arquivo.
+  // Compiles the routes once, before the suite. See the file.
   globalSetup: "./e2e/global-setup.ts",
 
   /*
-   * Um worker, e sem paralelismo.
+   * One worker, and no parallelism.
    *
-   * Os testes escrevem no MESMO banco de desenvolvimento, e dois deles
-   * cadastrando cliente ao mesmo tempo disputariam a unique do documento. O
-   * ganho de paralelizar seis testes não paga a intermitência.
+   * The tests write to the SAME development database, and two of them creating
+   * a customer at once would contend over the document's unique index. The gain
+   * from parallelising six tests does not pay for the flakiness.
    */
   workers: 1,
   fullyParallel: false,
@@ -32,12 +33,13 @@ export default defineConfig({
   retries: 0,
 
   /*
-   * Folga alta de propósito.
+   * Generous slack on purpose.
    *
-   * O alvo é o servidor de desenvolvimento, e mesmo com o aquecimento do
-   * `globalSetup` uma tela recompila quando um arquivo muda. Limite curto aqui
-   * produz falha que não é da aplicação — foi o que aconteceu na terceira
-   * execução desta suíte, com o login ainda em voo quando a asserção expirou.
+   * The target is the development server, and even with the `globalSetup` warm
+   * up a screen recompiles when a file changes. A short limit here produces a
+   * failure that is not the application's — which is what happened on the third
+   * run of this suite, with the login still in flight when the assertion timed
+   * out.
    */
   timeout: 150_000,
   expect: { timeout: 30_000 },
@@ -56,17 +58,18 @@ export default defineConfig({
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: /responsivo\.spec\.ts/,
+      testIgnore: /responsive\.spec\.ts/,
     },
     {
       /*
-       * 360px é o critério de aceite da especificação para a navegação em telas
-       * pequenas. Só o arquivo de responsividade roda aqui: repetir os fluxos
-       * de escrita em outra viewport duplicaria o tempo sem provar nada novo.
+       * 360px is the acceptance criterion in the brief for navigation on small
+       * screens. Only the responsiveness file runs here: repeating the write
+       * flows in another viewport would double the time without proving
+       * anything new.
        */
       name: "mobile-360",
       use: { ...devices["Desktop Chrome"], viewport: { width: 360, height: 740 } },
-      testMatch: /responsivo\.spec\.ts/,
+      testMatch: /responsive\.spec\.ts/,
     },
   ],
 });
